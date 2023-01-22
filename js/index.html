@@ -81,7 +81,6 @@
     shapes.push({path:{}, x:50, y:120, type:"ring", player:"black", active:false});
     shapes.push({path:{}, x:50, y:160, type:"ring", player:"white", active:false});
 
-
     // specify dimensions for the triangles in the grid
     // for now outside, so they can be set depending on possible canvas size
     let S = 45
@@ -292,7 +291,7 @@
 
             if (s.player == "black"){ 
                 
-                ctx.strokeStyle = "#0C0C0C";
+                ctx.strokeStyle = "#1A1A1A";
                 ctx.lineWidth = circle_lineWidth;            
                 
                 let ring_path = new Path2D()
@@ -343,8 +342,6 @@
         ctx.restore();
 
     };
-
-
 
     // CAPTURE MOUSE MOVE AND DO SOMETHING
     // https://bencentra.com/code/2014/12/05/html5-canvas-touch-events.html
@@ -416,12 +413,8 @@
                     shapes[active_ring].x = drop_coord.x;
                     shapes[active_ring].y = drop_coord.y;
                     refresh_state();
-                };
-
-                
+                };  
             };
-            
-            
         });
 
     canvas.addEventListener("mouseup", 
@@ -522,49 +515,6 @@
         });
 
    
-
-
-
-
-
-
-    /*
-    // function for drawing marker/ring at specific point by row/col
-    function draw_some()
-    for (let j = 1; j <= mm_points_rows; j++) {
-        for (let k = 1; k <= mm_points_cols; k++) {
-
-            let point = mm_points[j-1][k-1];
-
-            if (point == 1) {
-
-                // ACTIVE POINTS COORDINATES
-                // we move by x = (H * k) & y = H for each new column
-                // we also move by y = S/2 in between each row (active and non-active points)
-                
-                let apoint_x = H * k;
-                let apoint_y = H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
-
-                // draw circles (for interaction) in each active point
-                ctx.beginPath();
-                ctx.arc(apoint_x, apoint_y, S*0.45, 0, 2*Math.PI);
-                ctx.closePath(); 
-                ctx.strokeStyle = "#666";
-                ctx.globalAlpha = 0.5;
-                ctx.lineWidth = 0.5;
-                ctx.stroke();
-                ctx.restore();
-
-            }
-
-        }
-    }
-
-
-
-    */
-
-
 
 
 </script>
