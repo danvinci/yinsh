@@ -1,0 +1,572 @@
+<html>
+
+<body> 
+
+<canvas width="500" height="500" id="board"></canvas>
+<script> 
+
+    // matrix of active points on the grid
+    const mm_points = [
+        [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0], 
+        [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0], 
+        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+        [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0], 
+        [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0] 
+        ];
+
+    const mm_points_rows = mm_points.length;
+    const mm_points_cols = mm_points[0].length;
+
+    // helper function to extract array columns from matrix
+    function getCol(matrix, n_col){
+        return matrix.map(v => v[n_col]);
+    }
+
+    // helper function to know how many triangles we should draw
+    function numTriangles(array) {
+        let counter = 0;
+        for (item of array.flat()) {
+            if (item) {
+                counter++;
+            }
+        }
+        return counter - 1;
+    }
+
+    // initialize canvas
+    var canvas = document.getElementById('board'); 
+    var ctx = canvas.getContext('2d', { alpha: true }); 
+
+    // NOTE:
+    // pre-draw board and store it for later 
+
+
+    /* SAVE FOR LATER
+    // TAKEN FROM https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Optimizing_canvas
+    // Get the DPR and size of the canvas
+    const dpr = window.devicePixelRatio;
+    const rect = canvas.getBoundingClientRect();
+
+    // Set the "actual" size of the canvas
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+
+    // Scale the context to ensure correct drawing operations
+    ctx.scale(dpr, dpr);
+
+    // Set the "drawn" size of the canvas
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
+    */
+
+    // initialize array for markers and rings
+    let shapes = [];
+    let capture_zones = [];
+
+    // add random rings in array of shapes
+    shapes.push({path:{}, x:50, y:120, type:"ring", player:"black", active:false});
+    shapes.push({path:{}, x:50, y:160, type:"ring", player:"white", active:false});
+
+
+    // specify dimensions for the triangles in the grid
+    // for now outside, so they can be set depending on possible canvas size
+    let S = 45
+    let H = Math.round(S * Math.sqrt(3)/2)
+    
+    // board and initial state drawn for the first time
+    // this function is then called by the single events when they change the state
+    refresh_state();
+
+    function refresh_state(){
+        ctx.save();
+        
+        // clears everything and re-draws board
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw board
+        draw_board();
+
+        // keep capture zones up
+        setup_capture_zones()
+
+        // Re-draw latest state
+        for(let i=0; i<shapes.length; i++){
+            draw_shape(shapes[i]);};
+
+        ctx.restore();
+
+    }
+  
+    function draw_board(){
+
+       ctx.save();
+        /* RECIPE
+        - get to first starting point for column
+        - draw triangle, if first extra bit
+            -- only if next colum is bigger
+        - translate down
+        - draw triangle
+        - repeat
+        - drawn triangle, if last extra bit 
+            -- only if next colum is bigger
+        - column before last, 2 vertical strokes
+        - last column, 3 vertical strokes
+
+        */
+
+        // drawing settings
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = '#2C68DC';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.65;
+
+
+        for (let k = 1; k <= mm_points_cols-1; k++) {
+            
+            // number of triangles we're expected to draw for each column
+            triangle_ToDraw = numTriangles(getCol(mm_points, k-1));
+            triangle_Drew = 0;
+
+            // move right for each new column
+            ctx.translate(H*k,H);
+
+            // going down the individual columns
+            for (let j = 1; j <= mm_points_rows; j++) {
+                
+                let point = mm_points[j-1][k-1];
+
+                // manual handling of last column 
+                if (k == mm_points_cols-1 && (j == 4 || j > 13) ){point = 0;}
+                
+
+                // if point is not active just translate down
+                if (point == 0) {
+                    ctx.translate(0,S/2);
+                
+                // DRAWING LOOP!
+                // draw triangle but only if we're not done drawing them all
+                } else if (point == 1 && triangle_Drew < triangle_ToDraw) {
+                    ctx.beginPath();
+                    ctx.moveTo(0,0); // starting point for drawing
+                    ctx.lineTo(0,S); // first point down
+                    ctx.lineTo(H,S/2); // mid-point to the right
+                    ctx.closePath(); // close shape
+                    ctx.stroke();
+                    triangle_Drew ++;
+
+                    
+                    // check if the next column has more triangles
+                    let mustDraw_stick = triangle_ToDraw < numTriangles(getCol(mm_points, k));
+                    
+                    // we do this for all columns except last
+                    if (mustDraw_stick && k < mm_points_cols) {
+
+                        // first triangle bridging up
+                        if (triangle_Drew == 1){
+                            ctx.beginPath();
+                            ctx.moveTo(0,0); 
+                            ctx.lineTo(H,-S/2); 
+                            //ctx.strokeStyle = "#FA5537";
+                            ctx.stroke();
+                            
+                            //ctx.strokeStyle = colT;
+                        }
+
+                        // last triangle bridging down
+                        if (triangle_Drew == triangle_ToDraw){
+                            ctx.beginPath();
+                            ctx.moveTo(0,S);
+                            ctx.lineTo(H,S+S/2);
+                            //ctx.strokeStyle = "#32CBFF";
+                            ctx.stroke();
+                            
+                            //ctx.strokeStyle = colT; // reset color
+                        }
+
+                    }
+
+                    // draw vertical strokes 
+                    // last column, last triangle done (+2 hack as we disqualify points above)
+                    if (k == mm_points_cols-1 && triangle_ToDraw == triangle_Drew + 2) {
+                        // stroke down
+                        ctx.beginPath();
+                        ctx.moveTo(0,S); 
+                        ctx.lineTo(0,2*S); 
+                        //ctx.strokeStyle = "#C21313";
+                        ctx.stroke();
+                        
+                        // stroke up
+                        ctx.beginPath();
+                        ctx.moveTo(0,-3*S); 
+                        ctx.lineTo(0,-4*S); 
+                        //ctx.strokeStyle = "#E79B33";
+                        ctx.stroke();
+                        
+                        // stroke up
+                        ctx.beginPath();
+                        ctx.moveTo(H,-S*2-S/2); 
+                        ctx.lineTo(H,S/2); 
+                        //ctx.strokeStyle = "#C21313";
+                        ctx.stroke();
+                        
+                        //ctx.strokeStyle = colT; // reset color 
+                    }
+                    
+                // move down (considering last active point when drawing)
+                ctx.translate(0,S/2);
+
+            
+                } // stop going down the column and drawing if you're done 
+                else if ( triangle_Drew == triangle_ToDraw) {
+                    break;
+                }
+            }
+            // reset canvas transformations before moving to next column
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+            
+        ctx.restore();
+    }
+
+    function setup_capture_zones(){
+        ctx.save();
+
+        ctx.globalAlpha = 0; // set transparency for circles
+        ctx.strokeStyle = "#666";
+        ctx.lineWidth = 0.5;
+        
+        // create circles for listening to click events on all intersections
+        for (let j = 1; j <= mm_points_rows; j++) {
+            for (let k = 1; k <= mm_points_cols; k++) {
+
+                // using indexes 1:N for accessing the matrix
+                let point = mm_points[j-1][k-1];
+
+                if (point == 1) {
+
+                    // ACTIVE POINTS COORDINATES
+                    // we move by x = (H * k) & y = H for each new column
+                    // we also move by y = S/2 in between each row (active and non-active points)
+                    
+                    let apoint_x = H * k;
+                    let apoint_y = H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
+                    
+                    // draw circles in each intersection point and add them to an array
+                    let capture_path = new Path2D()
+                    capture_path.arc(apoint_x, apoint_y, S*0.4, 0, 2*Math.PI);
+                    ctx.stroke(capture_path);
+
+                    // update path shape definition
+                    capture_zones.push({path: capture_path, x:apoint_x, y:apoint_y});
+                    
+
+                }
+            }
+        }
+
+        ctx.restore();
+    }
+
+    function draw_shape(s){
+        // expects to receive an input elements from the shapes array
+        ctx.save();
+
+        if (s.type == "ring"){
+
+            let inner = S*0.42;
+            let circle_lineWidth = inner/3;
+
+            if (s.player == "black"){ 
+                
+                ctx.strokeStyle = "#0C0C0C";
+                ctx.lineWidth = circle_lineWidth;            
+                
+                let ring_path = new Path2D()
+                ring_path.arc(s.x, s.y, inner, 0, 2*Math.PI);
+                ctx.stroke(ring_path);
+
+                // update path shape definition
+                s.path = ring_path;
+        
+            } else if (s.player == "white"){
+
+                
+
+                //inner white ~ light gray
+                ctx.strokeStyle = "#F6F7F6";
+                ctx.lineWidth = circle_lineWidth*0.95;            
+                
+                let ring_path = new Path2D()
+                ring_path.arc(s.x, s.y, inner, 0, 2*Math.PI);
+                ctx.stroke(ring_path);
+
+                // outer border
+                ctx.strokeStyle = "#000";
+                ctx.lineWidth = circle_lineWidth/10; 
+                
+                let outerB_path = new Path2D()
+                outerB_path.arc(s.x, s.y, inner*1.15, 0, 2*Math.PI);
+                ctx.stroke(outerB_path);
+                
+                ring_path.addPath(outerB_path);
+
+                // inner border
+                ctx.strokeStyle = "#000";
+                ctx.lineWidth = circle_lineWidth/10;  
+
+                let innerB_path = new Path2D()
+                innerB_path.arc(s.x, s.y, inner*0.85, 0, 2*Math.PI);
+                ctx.stroke(innerB_path);
+
+                ring_path.addPath(outerB_path);
+
+                // update path shape definition
+                s.path = ring_path;
+
+            };
+        };
+
+        ctx.restore();
+
+    };
+
+
+
+    // CAPTURE MOUSE MOVE AND DO SOMETHING
+    // https://bencentra.com/code/2014/12/05/html5-canvas-touch-events.html
+
+    // If a move is underway, need to drop the ring before doing something else
+    function check_active_ring() {
+        // if any ring is set to active, returns its index - otherwise "no"
+        // returning false/true clashes with returning 0/1 for shape index
+
+        to_return = "no_ring";
+        
+        for(let i=0; i<shapes.length; i++){
+            if (shapes[i].active == true){
+                to_return = i;
+                break;
+            };
+        };
+
+        //console.log(to_return);
+        return to_return;
+    };
+    
+    // function to return x,y of closest capture zone
+    function closest_snap(xp, yp){
+
+        to_return = "no_snap";
+
+        // test which capture zone the mouse is selecting and return its center coordinates
+        for(let i=0; i<capture_zones.length; i++){
+            if (ctx.isPointInPath(capture_zones[i].path, xp, yp)){
+                to_return = {x: capture_zones[i].x, y: capture_zones[i].y}; 
+            };
+        };
+
+        return to_return;
+
+    };
+
+    // Set up mouse events for drawing
+    let mousePos = { x:0, y:0 };
+    let some_var = false;
+    canvas.addEventListener("mousedown", 
+        function (evt) {
+            mousePos = getMousePos(canvas, evt);
+            console.log("down");
+
+            active_ring = check_active_ring();
+
+            // if no rings are already active
+            if (active_ring === "no_ring"){
+
+                // test which shape the mouse is selecting and set it to active
+                for(let i=0; i<shapes.length; i++){
+                    
+                    if (ctx.isPointInPath(shapes[i].path, mousePos.x, mousePos.y)){
+                        // set selected path to active if it's a ring
+                        if (shapes[i].type === "ring"){shapes[i].active = true;};
+                    };
+                };
+
+            } else {
+                // drop in place the currently active ring  
+                // the ring must snap to the grid!!
+                drop_coord = closest_snap(mousePos.x, mousePos.y);
+                console.log(drop_coord)
+
+                if (drop_coord !== "no_snap"){
+                    shapes[active_ring].active = false;
+                    shapes[active_ring].x = drop_coord.x;
+                    shapes[active_ring].y = drop_coord.y;
+                    refresh_state();
+                };
+
+                
+            };
+            
+            
+        });
+
+    canvas.addEventListener("mouseup", 
+        function (evt) {
+            some_var = false;
+            console.log("up");
+        });
+
+    canvas.addEventListener("mousemove", 
+        function (evt) {
+            mousePos = getMousePos(canvas, evt);
+            //console.log("move");
+
+            active_ring = check_active_ring();
+
+            // if a ring is active, let's drag it
+            if (active_ring != "no_ring"){
+
+                shapes[active_ring].x = mousePos.x;
+                shapes[active_ring].y = mousePos.y;
+                refresh_state();
+            };
+
+        });
+
+    // Get the position of the mouse relative to the canvas
+    function getMousePos(canvasDom, mouseEvent) {
+    var canvasRect = canvasDom.getBoundingClientRect();
+    return {
+        x: mouseEvent.clientX - canvasRect.left,
+        y: mouseEvent.clientY - canvasRect.top
+    };
+    }
+
+
+    // Set up touch events 
+    // Touch events are mapped to and dispatch mouse events, all events are handled from those!
+    canvas.addEventListener("touchstart", 
+        function (evt) {
+            //mousePos = getTouchPos(canvas, evt); //might be redundant
+            let touch = evt.touches[0];
+            let mouseEvent = new MouseEvent("mousedown", {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+                });
+            
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+    canvas.addEventListener("touchend", 
+        function (evt) {
+            let mouseEvent = new MouseEvent("mouseup", {});
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+    canvas.addEventListener("touchmove", 
+        function (evt) {
+            let touch = evt.touches[0];
+            let mouseEvent = new MouseEvent("mousemove", {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+    /* NOT SURE IF NEEDED, as we trigger the mouse evt and coordinates are adjusted already once
+    // Get the position of a touch relative to the canvas
+    function getTouchPos(canvasDom, touchEvent) {
+    var canvasRect = canvasDom.getBoundingClientRect();
+    return {
+        x: touchEvent.touches[0].clientX - canvasRect.left,
+        y: touchEvent.touches[0].clientY - canvasRect.top
+    };
+    }
+    */
+
+
+    // Prevent scrolling when touching the canvas given conflict with touch/drag gestures
+    document.body.addEventListener("touchstart", 
+        function (evt) {
+            if (evt.target == canvas) {
+                evt.preventDefault();
+            }
+        });
+
+    document.body.addEventListener("touchend", 
+        function (evt) {
+            if (evt.target == canvas) {
+                evt.preventDefault();
+            }
+        });
+
+    document.body.addEventListener("touchmove", 
+        function (evt) {
+            if (evt.target == canvas) {
+                evt.preventDefault();
+            }
+        });
+
+   
+
+
+
+
+
+
+    /*
+    // function for drawing marker/ring at specific point by row/col
+    function draw_some()
+    for (let j = 1; j <= mm_points_rows; j++) {
+        for (let k = 1; k <= mm_points_cols; k++) {
+
+            let point = mm_points[j-1][k-1];
+
+            if (point == 1) {
+
+                // ACTIVE POINTS COORDINATES
+                // we move by x = (H * k) & y = H for each new column
+                // we also move by y = S/2 in between each row (active and non-active points)
+                
+                let apoint_x = H * k;
+                let apoint_y = H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
+
+                // draw circles (for interaction) in each active point
+                ctx.beginPath();
+                ctx.arc(apoint_x, apoint_y, S*0.45, 0, 2*Math.PI);
+                ctx.closePath(); 
+                ctx.strokeStyle = "#666";
+                ctx.globalAlpha = 0.5;
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+                ctx.restore();
+
+            }
+
+        }
+    }
+
+
+
+    */
+
+
+
+
+</script>
+</body>
+</html>
