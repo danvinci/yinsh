@@ -1,11 +1,20 @@
 <html>
+<head>
+
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' sfxr.me; connect-src localhost:* ws://127.0.0.1:*;">
+<!--
+# more info on how CSP works
+https://content-security-policy.com/
+https://stackoverflow.com/questions/30280370/how-does-content-security-policy-csp-work
+-->
+</head>
 
 <body> 
 
-<canvas width="500" height="500" id="board"></canvas>
-
 <script src="https://sfxr.me/riffwave.js"></script>
-<script src="https://sfxr.me/sfxr.js"></script>
+<script src="https://sfxr.me/sfxr.js"></script>    
+
+<canvas width="500" height="500" id="board"></canvas>
 
 <script> 
 
@@ -471,6 +480,7 @@
                     shapes[active_ring].active = false;
                     shapes[active_ring].x = drop_coord.x;
                     shapes[active_ring].y = drop_coord.y;
+                    ping_jl_srv();
                     refresh_state();
                     sfxr.play(sound);
                     // need to check for FREE drop grids as well -> legality check?
@@ -575,6 +585,24 @@
             }
         });
 
+        
+
+    // trying to call the Julia server
+    async function ping_jl_srv(){
+        // https://stackoverflow.com/questions/48708449/promise-pending-why-is-it-still-pending-how-can-i-fix-this
+        // https://stackoverflow.com/questions/40385133/retrieve-data-from-a-readablestream-object
+        
+        response = await fetch('http://localhost:1016/api/yinsh/v1/simple_test', {
+            method: 'GET'
+        });
+
+        //console.log(response);
+
+        val = await response.json();
+        console.log(val);
+
+
+    };
    
 
     

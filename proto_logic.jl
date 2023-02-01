@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.20
+# v0.19.22
 
 using Markdown
 using InteractiveUtils
@@ -19,9 +19,6 @@ using PlutoUI
 
 # ╔═╡ 9505b0f0-91a2-46a8-90a5-d615c2acdbc1
 using Plots, PlotThemes;  plotly() ; theme(:default)
-
-# ╔═╡ f9a9821f-948b-4ddb-a79d-2b25e9ab1020
-using JuliaWebAPI
 
 # ╔═╡ 1f9da483-6b05-4867-a509-2c24b41cd5d6
 mm_yinsh = zeros(Int64, 19, 11)
@@ -513,18 +510,166 @@ search_loc_graph(draw_board() ,row_start, col_start, search_loc(mm_states, row_s
 search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, row_start_n,col_start_n))
 
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
-md"## Exposing endpoint "
+md"## Exposing function as web endpoint "
+
+# ╔═╡ f9a9821f-948b-4ddb-a79d-2b25e9ab1020
+# using JuliaWebAPI
+
+# ╔═╡ ba358040-22d6-4237-ad4f-1019cd8d2502
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	
+	using HTTP, JSON3, StructTypes, Sockets
+	
+	# modified Animal struct to associate with specific user
+	mutable struct Animal
+	    id::Int
+	    userId::Base.UUID
+	    type::String
+	    name::String
+	    Animal() = new()
+	end
+	
+	StructTypes.StructType(::Type{Animal}) = StructTypes.Mutable()
+	
+	# use a plain `Dict` as a "data store"
+	const ANIMALS = Dict{Int, Animal}()
+	const NEXT_ID = Ref(0)
+	function getNextId()
+	    id = NEXT_ID[]
+	    NEXT_ID[] += 1
+	    return id
+	end
+	
+	# "service" functions to actually do the work
+	function createAnimal(req::HTTP.Request)
+	    animal = JSON3.read(req.body, Animal)
+	    animal.id = getNextId()
+	    ANIMALS[animal.id] = animal
+	    return HTTP.Response(200, JSON3.write(animal))
+	end
+	
+	function getAnimal(req::HTTP.Request)
+	    animalId = HTTP.getparams(req)["id"]
+	    animal = ANIMALS[parse(Int, animalId)]
+	    return HTTP.Response(200, JSON3.write(animal))
+	end
+	
+	function updateAnimal(req::HTTP.Request)
+	    animal = JSON3.read(req.body, Animal)
+	    ANIMALS[animal.id] = animal
+	    return HTTP.Response(200, JSON3.write(animal))
+	end
+	
+	function deleteAnimal(req::HTTP.Request)
+	    animalId = HTTP.getparams(req)["id"]
+	    delete!(ANIMALS, animalId)
+	    return HTTP.Response(200)
+	end
+	
+	# define REST endpoints to dispatch to "service" functions
+	const ANIMAL_ROUTER = HTTP.Router()
+	HTTP.register!(ANIMAL_ROUTER, "POST", "/api/zoo/v1/animals", createAnimal)
+	# note the use of `*` to capture the path segment "variable" animal id
+	HTTP.register!(ANIMAL_ROUTER, "GET", "/api/zoo/v1/animals/{id}", getAnimal)
+	HTTP.register!(ANIMAL_ROUTER, "PUT", "/api/zoo/v1/animals", updateAnimal)
+	HTTP.register!(ANIMAL_ROUTER, "DELETE", "/api/zoo/v1/animals/{id}", deleteAnimal)
+	
+
+end
+  ╠═╡ =#
+
+# ╔═╡ 5a7ff16b-f40a-492a-a08a-2d7614551a59
+#=
+
+when a new game starts -> send request -> create unique game_id 
+
+create random board setup (rings) ?
+
+client sends board status -> store last status
+
+client wants to make a move from a starting position -> check game status and return allowed moves
+
+send coordinates within 19x11 -> pre-computed depending on drop-zone -> ring inherits from DZ
+
+# all of this should happen with websockets (1 per game)
+
+=#
+
+# ╔═╡ 0fe4eab7-0642-4c56-953b-0b019361e752
+# let's create a simple ping pong
+
+# ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
+port_test = 1016
+
+# ╔═╡ d3b0a36b-0578-40ad-8c96-bdad11e29a83
+begin
+
+	using HTTP, JSON3, Sockets
+
+	# CORS preflight headers: which requests are allowed 
+	# check this for more details ->
+	# https://github.com/JuliaWeb/HTTP.jl/blob/master/docs/examples/cors_server.jl
+	#= 
+	const CORS_OPT_HEADERS = [
+	    "Access-Control-Allow-Origin" => "*",
+	    "Access-Control-Allow-Headers" => "*",
+	    "Access-Control-Allow-Methods" => "POST, GET, OPTIONS"
+		]
+	=#
+
+	# CORS response headers: set access right of the client
+	const CORS_RES_HEADERS = ["Access-Control-Allow-Origin" => "*"]
+	
+	# service function
+	function respond_simple(req::HTTP.Request)
+		#req_string = JSON3.read(req.body, String)
+		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write("hello from the Julia Server"))
+	end
+
+
+	# define REST endpoints to dispatch calls to functions
+	const simple_router = HTTP.Router()
+	HTTP.register!(simple_router, "GET", "/api/yinsh/v1/simple_test", respond_simple)
+
+	# start server 
+	simple_srv = HTTP.serve!(simple_router, Sockets.localhost, port_test)
+	
+
+end
+
+# ╔═╡ 3a623d6d-0303-40ff-908c-c939c1b79813
+JSON3.write("hello")
+
+# ╔═╡ 6cea2ffe-5a77-48f7-abaa-cd35b22c5388
+# need to have an on_change metod so I can add/update the functions linked by the router and the web sever doesn't try to restart on the same port
+
+# ╔═╡ ba75ec53-ac2a-4ec1-9ae4-761025232021
+#HTTP.forceclose(simple_srv)
+
+# ╔═╡ 79de78ac-43ff-4772-83b6-e70bc0e8b6f3
+url_to_call = "http://localhost:$port_test/api/yinsh/v1/simple_test"
+
+# ╔═╡ 1f133935-db3b-45ee-8dec-0371198de79b
+resp_test = HTTP.get(url_to_call)
+
+# ╔═╡ d6db3a92-d8d6-4c1e-9897-034981641771
+String(resp_test.body)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-JuliaWebAPI = "480116ec-64ea-5dec-baca-db6b11e96e37"
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 PlotThemes = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 
 [compat]
-JuliaWebAPI = "~0.6.3"
+HTTP = "~1.7.4"
+JSON3 = "~1.12.0"
 PlotThemes = "~3.1.0"
 Plots = "~1.38.0"
 PlutoUI = "~0.7.49"
@@ -536,7 +681,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "c0e0ec11c636b8ebdc3208e3694ee6fc85c16727"
+project_hash = "416aad6f2e90d8805e024daaa6ee71507b9ec3aa"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -553,6 +698,11 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.BitFlags]]
+git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
+uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
+version = "0.1.7"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -577,6 +727,12 @@ deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
 git-tree-sha1 = "38f7a08f19d8810338d4f5085211c7dfa5d5bdd8"
 uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
 version = "0.1.4"
+
+[[deps.CodecZlib]]
+deps = ["TranscodingStreams", "Zlib_jll"]
+git-tree-sha1 = "9c209fb7536406834aa938fb149964b985de6c83"
+uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
+version = "0.7.1"
 
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "Random", "SnoopPrecompile"]
@@ -741,10 +897,10 @@ uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
 
 [[deps.HTTP]]
-deps = ["Base64", "Dates", "IniFile", "Logging", "MbedTLS", "NetworkOptions", "Sockets", "URIs"]
-git-tree-sha1 = "0fa77022fe4b511826b39c894c90daf5fce3334a"
+deps = ["Base64", "CodecZlib", "Dates", "IniFile", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
+git-tree-sha1 = "37e4657cd56b11abe3d10cd4a1ec5fbdb4180263"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "0.9.17"
+version = "1.7.4"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -808,17 +964,17 @@ git-tree-sha1 = "3c837543ddb02250ef42f4738347454f95079d4e"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 version = "0.21.3"
 
+[[deps.JSON3]]
+deps = ["Dates", "Mmap", "Parsers", "SnoopPrecompile", "StructTypes", "UUIDs"]
+git-tree-sha1 = "84b10656a41ef564c39d2d477d7236966d2b5683"
+uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+version = "1.12.0"
+
 [[deps.JpegTurbo_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "b53380851c6e6664204efb2e62cd24fa5c47e4ba"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "2.1.2+0"
-
-[[deps.JuliaWebAPI]]
-deps = ["Base64", "HTTP", "JSON", "Serialization", "Sockets", "ZMQ"]
-git-tree-sha1 = "406312059ce21c67826152ad6f3545c7fc9893ba"
-uuid = "480116ec-64ea-5dec-baca-db6b11e96e37"
-version = "0.6.3"
 
 [[deps.LAME_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -932,6 +1088,12 @@ version = "0.3.19"
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
+[[deps.LoggingExtras]]
+deps = ["Dates", "Logging"]
+git-tree-sha1 = "cedb76b37bc5a6c702ade66be44f831fa23c681e"
+uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
+version = "1.0.0"
+
 [[deps.MIMEs]]
 git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
 uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
@@ -1001,6 +1163,12 @@ version = "0.3.20+0"
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
 version = "0.8.1+0"
+
+[[deps.OpenSSL]]
+deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
+git-tree-sha1 = "6503b77492fd7fcb9379bf73cd31035670e3c509"
+uuid = "4d8831e6-92b7-49fb-bdf8-b643e874388c"
+version = "1.3.3"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1148,6 +1316,11 @@ git-tree-sha1 = "91eddf657aca81df9ae6ceb20b959ae5653ad1de"
 uuid = "992d4aef-0814-514b-bc4d-f2e9a6c4116f"
 version = "1.0.3"
 
+[[deps.SimpleBufferStream]]
+git-tree-sha1 = "874e8867b33a00e784c8a7e4b60afe9e037b74e1"
+uuid = "777ac1f9-54b0-4bf8-805c-2214025038e7"
+version = "1.1.0"
+
 [[deps.SnoopPrecompile]]
 deps = ["Preferences"]
 git-tree-sha1 = "e760a70afdcd461cf01a575947738d359234665c"
@@ -1189,6 +1362,12 @@ git-tree-sha1 = "d1bf48bfcc554a3761a133fe3a9bb01488e06916"
 uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 version = "0.33.21"
 
+[[deps.StructTypes]]
+deps = ["Dates", "UUIDs"]
+git-tree-sha1 = "ca4bccb03acf9faaf4137a9abc1881ed1841aa70"
+uuid = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
+version = "1.10.0"
+
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -1208,6 +1387,12 @@ version = "0.1.1"
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[[deps.TranscodingStreams]]
+deps = ["Random", "Test"]
+git-tree-sha1 = "94f38103c984f89cf77c402f2a68dbd870f8165f"
+uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
+version = "0.9.11"
 
 [[deps.Tricks]]
 git-tree-sha1 = "6bac775f2d42a611cdfcd1fb217ee719630c4175"
@@ -1387,18 +1572,6 @@ git-tree-sha1 = "79c31e7844f6ecf779705fbc12146eb190b7d845"
 uuid = "c5fb5394-a638-5e4d-96e5-b29de1b5cf10"
 version = "1.4.0+3"
 
-[[deps.ZMQ]]
-deps = ["FileWatching", "Sockets", "ZeroMQ_jll"]
-git-tree-sha1 = "356d2bdcc0bce90aabee1d1c0f6d6f301eda8f77"
-uuid = "c2297ded-f4af-51ae-bb23-16f91089e4e1"
-version = "1.2.2"
-
-[[deps.ZeroMQ_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "libsodium_jll"]
-git-tree-sha1 = "fe5c65a526f066fb3000da137d5785d9649a8a47"
-uuid = "8f1865be-045e-5c20-9c9f-bfbfb0764568"
-version = "4.3.4+0"
-
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
@@ -1444,12 +1617,6 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
 git-tree-sha1 = "94d180a6d2b5e55e447e2d27a29ed04fe79eb30c"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
 version = "1.6.38+0"
-
-[[deps.libsodium_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "848ab3d00fe39d6fbc2a8641048f8f272af1c51e"
-uuid = "a9144af2-ca23-56d9-984f-0d03f7b5ccf8"
-version = "1.0.20+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
@@ -1522,5 +1689,16 @@ version = "1.4.1+0"
 # ╠═52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═f9a9821f-948b-4ddb-a79d-2b25e9ab1020
+# ╠═ba358040-22d6-4237-ad4f-1019cd8d2502
+# ╠═5a7ff16b-f40a-492a-a08a-2d7614551a59
+# ╠═0fe4eab7-0642-4c56-953b-0b019361e752
+# ╠═3a623d6d-0303-40ff-908c-c939c1b79813
+# ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
+# ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
+# ╠═6cea2ffe-5a77-48f7-abaa-cd35b22c5388
+# ╠═ba75ec53-ac2a-4ec1-9ae4-761025232021
+# ╠═79de78ac-43ff-4772-83b6-e70bc0e8b6f3
+# ╠═1f133935-db3b-45ee-8dec-0371198de79b
+# ╠═d6db3a92-d8d6-4c1e-9897-034981641771
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
