@@ -123,9 +123,11 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     */
 
 
-    // initialize array for markers and rings
+    // initialize array for markers and rings + drop zones + highlight zones
     let shapes = [];
-    let capture_zones = [];
+    let drop_zones = [];
+    let highlight_zones = [];
+    let current_allowed_moves = [];
 
     // these values are used in shapes objects, status, and check conditions within functions - better centralize their definition
     const ring_id = "R";
@@ -147,7 +149,6 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     refresh_draw_state();
 
     function refresh_draw_state(){
-        ctx.save();
         
         // clears everything and re-draws board
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -155,20 +156,22 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         // Draw board
         draw_board();
 
-        // keep capture zones up
-        setup_capture_zones()
+        // keep drop zones up
+        setup_drop_zones() // should be split into inst and draw, here we only keep draw
+
+        // draw highlight zones
+        draw_highlight_zones()
 
         // Re-draw latest state
-        for(let i=0; i<shapes.length; i++){
-            draw_shape(shapes[i]);};
-
-        ctx.restore();
+        for(let i=0; i<shapes.length; i++){ // the draw shapes function should take care of all shapes
+            draw_shape(shapes[i]);
+        };
 
     }
   
         function draw_board(){
 
-        ctx.save();
+            ctx.save();
             /* RECIPE
             - get to first starting point for column
             - draw triangle, if first extra bit
@@ -297,11 +300,12 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             ctx.restore();
         }
 
-        function setup_capture_zones(){
+        function setup_drop_zones(){
             ctx.save();
 
-            ctx.globalAlpha = 0; // set transparency for circles
+            ctx.globalAlpha = 0.1; 
             ctx.strokeStyle = "#666";
+            ctx.fillStyle = "#666";
             ctx.lineWidth = 0.5;
             
             // create circles for listening to click events on all intersections
@@ -322,12 +326,13 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                         let apoint_y = H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
                         
                         // draw circles in each intersection point and add them to an array
-                        let capture_path = new Path2D()
-                        capture_path.arc(apoint_x, apoint_y, S*0.35, 0, 2*Math.PI);
-                        ctx.stroke(capture_path);
+                        let drop_path = new Path2D()
+                        drop_path.arc(apoint_x, apoint_y, S*0.35, 0, 2*Math.PI);
+                        ctx.fill(drop_path);
+                        ctx.stroke(drop_path);
 
                         // update path shape definition
-                        capture_zones.push({path: capture_path, x:apoint_x, y:apoint_y, m_row:j, m_col:k});
+                        drop_zones.push({path: drop_path, x:apoint_x, y:apoint_y, m_row:j, m_col:k, index: reshape_index(j,k)});
                         
 
                     }
@@ -335,7 +340,51 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             }
 
             ctx.restore();
-        }
+        };
+
+        function update_highlight_zones(empty = false){
+        // manipulates global variable of allowed moves for current ring
+
+            // if passed true, the array will be emptied
+            if (empty === true){
+                highlight_zones = [];
+
+            } else {
+                // for each linear id of the allowed moves (reads from global variable)
+                for (const id of current_allowed_moves.values()) {
+
+                    // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
+                    for(let i=0; i<drop_zones.length; i++){
+                        if (drop_zones[i].index == id) {
+
+                            // create shape + coordinates and store in the global array
+                            let h_path = new Path2D()
+                            h_path.arc(drop_zones[i].x, drop_zones[i].y, S*0.1, 0, 2*Math.PI);
+                            highlight_zones.push({path: h_path});
+                    
+                        };
+                    };        
+                };
+            }
+        };
+        
+        function draw_highlight_zones(){
+            ctx.save();
+
+            ctx.globalAlpha = 0.3; 
+            ctx.strokeStyle = "#000";
+            ctx.fillStyle = "#000";
+            ctx.lineWidth = 0.5;
+
+            for(let i=0; i<highlight_zones.length; i++){
+            
+                ctx.fill(highlight_zones[i].path); 
+                ctx.stroke(highlight_zones[i].path); 
+                
+            };        
+            
+            ctx.restore();
+        };
 
         function draw_shape(s){
         // expects to receive an input elements from the shapes array
@@ -401,6 +450,31 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     };
 
 
+    // instatiate event target for changes to drop zones objects (manages state and triggers drawing)
+    let highlight_moves_target = new EventTarget();
+
+
+    // calls function to update the array of allowed moves -> highlighted zones
+    highlight_moves_target.addEventListener("allowed_moves_ON", 
+        function (evt) {
+
+        // this function operates on the array of the highlighted zones =/= allowable moves array
+        // we map indexes to (x,y) coordinates
+        update_highlight_zones();
+        refresh_draw_state();
+
+    });
+
+    // empty array of highlighted zones once ring is dropped
+    highlight_moves_target.addEventListener("allowed_moves_OFF", 
+        function (evt) {
+
+        update_highlight_zones(empty = true);
+        refresh_draw_state();
+
+    });
+
+
     // Empty game state
     let game_state = Array(19*11).fill(""); 
 
@@ -422,11 +496,15 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         game_state[index] = value;
         console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
 
+        // create and dispatch event for the ring being dropped -> no zones to highlight
+        const allowedMoves_OFF_event = new CustomEvent("allowed_moves_OFF");
+        highlight_moves_target.dispatchEvent(allowedMoves_OFF_event);
+
     });
 
     // listens to ring picks and updates game state
     game_state_target.addEventListener("ring_picked", 
-        function (evt) {
+        async function (evt) {
 
         index = reshape_index(evt.detail.m_row, evt.detail.m_col);
         value = evt.detail.type.concat(evt.detail.player);
@@ -437,9 +515,21 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         row = evt.detail.m_row;
         col = evt.detail.m_col;
 
-        allowed_moves = server_allowed_moves(game_state, row, col);
+        const allowed_moves = await server_allowed_moves(game_state, row, col);
+
+        if (allowed_moves != "no_moves"){
+
+            // writes allowed moves to a global variable
+            current_allowed_moves = allowed_moves;
+
+            // create and dispatch event for the ring being picked and allowed moves being highlighted
+            const allowedMoves_ON_event = new CustomEvent("allowed_moves_ON");
+            highlight_moves_target.dispatchEvent(allowedMoves_ON_event);
+
+        };
 
     });
+
 
     // If a move is underway, need to drop the ring before doing something else
     function check_active_ring() {
@@ -459,19 +549,19 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         return to_return;
     };
     
-    // function to return x,y of closest capture zone
+    // function to return x,y of closest drop zone
     function closest_snap(xp, yp){
 
         to_return = "no_snap";
 
-        // test which capture zone the mouse is selecting and return its center coordinates
-        for(let i=0; i<capture_zones.length; i++){
-            if (ctx.isPointInPath(capture_zones[i].path, xp, yp)){
+        // test which drop zone the mouse is selecting and return its center coordinates
+        for(let i=0; i<drop_zones.length; i++){
+            if (ctx.isPointInPath(drop_zones[i].path, xp, yp)){
                 to_return = {
-                            x: capture_zones[i].x, 
-                            y: capture_zones[i].y,
-                            m_row: capture_zones[i].m_row,
-                            m_col: capture_zones[i].m_col
+                            x: drop_zones[i].x, 
+                            y: drop_zones[i].y,
+                            m_row: drop_zones[i].m_row,
+                            m_col: drop_zones[i].m_col
                             }; 
             };
         };
@@ -481,8 +571,8 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     };
 
     // IDEAS
-    // use capture zones to highlight allowable moves
-    // animate capture zones size/coloring/wave
+    // use drop zones to highlight allowable moves
+    // animate drop zones size/coloring/wave
 
 
     // CAPTURE MOUSE EVENTS AND DO SOMETHING
@@ -507,19 +597,16 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                     if (ctx.isPointInPath(shapes[i].path, mousePos.x, mousePos.y)){
                         if (shapes[i].type == ring_id){
                             
-                            
                             shapes[i].active = true;
 
                             // create and dispatch event for what the ring being picked up -> game state should change
                             const ringPick_event = new CustomEvent("ring_picked", { detail: shapes[i] });
                             game_state_target.dispatchEvent(ringPick_event);
-
-                            // here I should have a callback that then dispatches an event to the game drawing target
                             
                             // remove the element and put it back at the end of the array, so it's always drawn last => on top
                             // note: splice returns the array of removed elements
-                            shapes.push(shapes.splice(i,1)[0]);
-                            //console.log(shapes);
+                            shapes.push(shapes.splice(i,1)[0]); // this should be a separate concern, we shouldn't be doing it here 
+                            // -> fire the same event to the dispacther, to an array of targets OR fire the event and let the dispatcher orchestrate? or the game state handler do it? :/
                             
                             break; // otherwise it keeps looping and can encounter the same ring twice as we move it to the end
                         
@@ -557,10 +644,10 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                     //console.log(drop_coord);
 
                     // re-draw everything
-                    refresh_draw_state();
+                    refresh_draw_state(); // this might be an event to be fired and not a function call (?)
 
                     // play sound
-                    sfxr.play(sound);
+                    sfxr.play(sound); // this same as above
                 };  
             };
         });
@@ -684,21 +771,25 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         // note: passing the state could be redundant, only game id should be necessary
         
         // get allowed moves back from the server (array)
-        srv_allowed_moves = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
+        const srv_allowed_moves = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
         
         // parse and store allowed moves
         let allowed_moves = [];
 
         if (srv_allowed_moves.length > 0) {
             for (const move of srv_allowed_moves.values()) {
-                allowed_moves.push(move.I);
+                // note: reshaping could be moved to the server, as well as the length check -> keep the client dumb and lean
+                allowed_moves.push(reshape_index(move.I[0], move.I[1]));
             };
-        };
-        
-        console.log("Allowed moves: ");
-        console.log(allowed_moves);
 
-        return allowed_moves;
+            console.log("Allowed moves from the server: "); console.log(allowed_moves);
+            return allowed_moves;
+
+        } else {
+
+            console.log("no_moves");
+            return "no_moves";
+        };
 
     };
    
