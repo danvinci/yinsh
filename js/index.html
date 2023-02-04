@@ -143,6 +143,9 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     // for now outside, so they can be set depending on possible canvas size
     let S = 40;
     let H = Math.round(S * Math.sqrt(3)/2);
+
+    // initialize drop zones
+    init_drop_zones();
     
     // board and initial state drawn for the first time
     // this function is then called by the single events when they change the state
@@ -150,24 +153,23 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
     function refresh_draw_state(){
         
-        // clears everything and re-draws board
+        // clears everything
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         // Draw board
         draw_board();
 
         // keep drop zones up
-        setup_drop_zones() // should be split into inst and draw, here we only keep draw
+        draw_drop_zones();
 
         // draw highlight zones
-        draw_highlight_zones()
+        draw_highlight_zones();
 
         // Re-draw latest state
         for(let i=0; i<shapes.length; i++){ // the draw shapes function should take care of all shapes
-            draw_shape(shapes[i]);
+            draw_shape(shapes[i]); // also shapes could be pre-made and drawn when needed
         };
-
-    }
+    };
   
         function draw_board(){
 
@@ -188,9 +190,9 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
             // drawing settings
             ctx.lineJoin = "round";
-            ctx.strokeStyle = '#2C68DC';
+            ctx.strokeStyle = '#1e52b7';
             ctx.lineWidth = 2;
-            ctx.globalAlpha = 0.65;
+            ctx.globalAlpha = 0.6;
 
 
             for (let k = 1; k <= mm_points_cols-1; k++) {
@@ -300,15 +302,9 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             ctx.restore();
         }
 
-        function setup_drop_zones(){
-            ctx.save();
-
-            ctx.globalAlpha = 0.1; 
-            ctx.strokeStyle = "#666";
-            ctx.fillStyle = "#666";
-            ctx.lineWidth = 0.5;
+        function init_drop_zones(){
             
-            // create circles for listening to click events on all intersections
+            // create paths for listening to click events on all intersections
             for (let j = 1; j <= mm_points_rows; j++) {
                 for (let k = 1; k <= mm_points_cols; k++) {
 
@@ -325,20 +321,33 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                         let apoint_x = H * k;
                         let apoint_y = H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
                         
-                        // draw circles in each intersection point and add them to an array
+                        // create paths and add them to the global array
                         let drop_path = new Path2D()
                         drop_path.arc(apoint_x, apoint_y, S*0.35, 0, 2*Math.PI);
-                        ctx.fill(drop_path);
-                        ctx.stroke(drop_path);
 
-                        // update path shape definition
                         drop_zones.push({path: drop_path, x:apoint_x, y:apoint_y, m_row:j, m_col:k, index: reshape_index(j,k)});
-                        
 
                     }
                 }
             }
 
+        };
+
+        function draw_drop_zones(){
+            ctx.save();
+
+            ctx.globalAlpha = 0; 
+            //ctx.strokeStyle = "#666";
+            ctx.fillStyle = "#666";
+            //ctx.lineWidth = 0.5;
+
+            for(let i=0; i<drop_zones.length; i++){
+            
+                ctx.fill(drop_zones[i].path); 
+                //ctx.stroke(drop_zones[i].path); 
+            
+            };   
+            
             ctx.restore();
         };
 
@@ -371,10 +380,10 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         function draw_highlight_zones(){
             ctx.save();
 
-            ctx.globalAlpha = 0.3; 
-            ctx.strokeStyle = "#000";
-            ctx.fillStyle = "#000";
-            ctx.lineWidth = 0.5;
+            ctx.globalAlpha = 1; 
+            ctx.strokeStyle = "#1e52b7";
+            ctx.fillStyle = "#4277e0";
+            ctx.lineWidth = 1;
 
             for(let i=0; i<highlight_zones.length; i++){
             
