@@ -507,6 +507,9 @@ function search_loc(ref_board, row_start::Int, col_start::Int)
 
 		# append valid moves to array to be returned
 		append!(search_return, keepValid(ref_board, search_temp)) 
+
+		# also append initial location of the ring
+		append!(search_return, [CartesianIndex(row_start, col_start)])
 	end
 
 return search_return

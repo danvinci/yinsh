@@ -124,23 +124,21 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
 
     // initialize array for markers and rings + drop zones + highlight zones
-    let shapes = [];
+    let rings = [];
+    let markers = [];
     let drop_zones = [];
     let highlight_zones = [];
     let current_allowed_moves = [];
 
-    // these values are used in shapes objects, status, and check conditions within functions - better centralize their definition
+    // these values are used in defining rings/markers, log status, and check conditions within functions
     const ring_id = "R";
     const marker_id = "M";
     const player_black_id = "B";
     const player_white_id = "W";
 
-    //shapes.push({path:{}, x:50, y:120, m_row: 0, m_col: 0, type: ring_id, player: player_black_id, active:false});
-    //shapes.push({path:{}, x:50, y:160, m_row: 0, m_col: 0, type: ring_id, player: player_white_id, active:false});
-
     // specify dimensions for the triangles in the grid
     // for now outside, so they can be set depending on possible canvas size
-    let S = 40;
+    let S = 45;
     let H = Math.round(S * Math.sqrt(3)/2);
 
     // instatiate event target for changes to the game state
@@ -154,7 +152,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         function (evt) {
 
         index = reshape_index(evt.detail.m_row, evt.detail.m_col);
-        value = evt.detail.type.concat(evt.detail.player);
+        value = evt.detail.type.concat(evt.detail.player); // -> RB, RW, MB, MW
 
         game_state[index] = value;
         console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
@@ -163,6 +161,8 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         const allowedMoves_OFF_event = new CustomEvent("allowed_moves_OFF");
         highlight_moves_target.dispatchEvent(allowedMoves_OFF_event);
 
+        // check if any markers needs to be flipped
+
     });
 
     // listens to ring picks and updates game state
@@ -170,7 +170,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         async function (evt) {
 
         index = reshape_index(evt.detail.m_row, evt.detail.m_col);
-        value = evt.detail.type.concat(evt.detail.player);
+        value = evt.detail.type.concat(evt.detail.player); // -> RB, RW, MB, MW
 
         game_state[index] = "";
         console.log(`${value} picked from ${evt.detail.m_row}:${evt.detail.m_col} at -> ${index}`);
@@ -193,12 +193,24 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
     });
 
+    // listens to marker being initialized -> updates game state
+    game_state_target.addEventListener("marker_init", 
+        function (evt) {
+
+        index = reshape_index(evt.detail.m_row, evt.detail.m_col);
+        value = evt.detail.type.concat(evt.detail.player); // -> RB, RW, MB, MW
+
+        game_state[index] = value;
+        console.log(`${value} init at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
+
+    });
 
     // initialize drop zones
     init_drop_zones();
 
-    // add random rings to an array of shapes
+    // init random rings and markers
     init_rings();
+    init_markers();
     
     // board and initial state drawn for the first time
     // this function is then called by the single events when they change the state
@@ -218,11 +230,11 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         // draw highlight zones
         draw_highlight_zones();
 
-        // Re-draw latest state
-        for(let i=0; i<shapes.length; i++){ // the draw shapes function should take care of all shapes
-            draw_shape(shapes[i]); // also shapes could be pre-made and drawn when needed
-        };
-    };
+        // Re-draw all markers and rings
+        draw_markers();
+        draw_rings();
+
+    }; 
   
         function draw_board(){
 
@@ -454,68 +466,104 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             ctx.restore();
         };
 
-        function draw_shape(s){
-        // expects to receive an input elements from the shapes array
-        ctx.save();
+        function draw_rings(){
+            ctx.save();
 
-        if (s.type == ring_id ){
+            // reads the global rings object
+            for (const s of rings.values()) {
 
-            let inner = S*0.42;
-            let circle_lineWidth = inner/3;
+                let inner = S*0.42;
+                let ring_lineWidth = inner/3;
 
-            if (s.player == player_black_id){ 
-                
-                ctx.strokeStyle = "#1A1A1A";
-                ctx.lineWidth = circle_lineWidth;            
-                
-                let ring_path = new Path2D()
-                ring_path.arc(s.x, s.y, inner, 0, 2*Math.PI);
-                ctx.stroke(ring_path);
+                // draw black ring
+                if (s.player == player_black_id){ 
+                    
+                    ctx.strokeStyle = "#1A1A1A";
+                    ctx.lineWidth = ring_lineWidth;            
+                    
+                    let ring_path = new Path2D()
+                    ring_path.arc(s.x, s.y, inner, 0, 2*Math.PI);
+                    ctx.stroke(ring_path);
 
-                // update path shape definition
-                s.path = ring_path;
-        
-            } else if (s.player == player_white_id){
+                    // update path shape definition -> needed for rings (click within shape)
+                    s.path = ring_path;
+            
+                // draw white ring
+                } else if (s.player == player_white_id){
 
-                
+                    //inner white ~ light gray
+                    ctx.strokeStyle = "#F6F7F6";
+                    ctx.lineWidth = ring_lineWidth*0.95;            
+                    
+                    let ring_path = new Path2D()
+                    ring_path.arc(s.x, s.y, inner, 0, 2*Math.PI);
+                    ctx.stroke(ring_path);
 
-                //inner white ~ light gray
-                ctx.strokeStyle = "#F6F7F6";
-                ctx.lineWidth = circle_lineWidth*0.95;            
-                
-                let ring_path = new Path2D()
-                ring_path.arc(s.x, s.y, inner, 0, 2*Math.PI);
-                ctx.stroke(ring_path);
+                    // outer border
+                    ctx.strokeStyle = "#000";
+                    ctx.lineWidth = ring_lineWidth/10; 
+                    
+                    let outerB_path = new Path2D()
+                    outerB_path.arc(s.x, s.y, inner*1.15, 0, 2*Math.PI);
+                    ctx.stroke(outerB_path);
+                    
+                    ring_path.addPath(outerB_path);
 
-                // outer border
-                ctx.strokeStyle = "#000";
-                ctx.lineWidth = circle_lineWidth/10; 
-                
-                let outerB_path = new Path2D()
-                outerB_path.arc(s.x, s.y, inner*1.15, 0, 2*Math.PI);
-                ctx.stroke(outerB_path);
-                
-                ring_path.addPath(outerB_path);
+                    // inner border
+                    ctx.strokeStyle = "#000";
+                    ctx.lineWidth = ring_lineWidth/10;  
 
-                // inner border
-                ctx.strokeStyle = "#000";
-                ctx.lineWidth = circle_lineWidth/10;  
+                    let innerB_path = new Path2D()
+                    innerB_path.arc(s.x, s.y, inner*0.85, 0, 2*Math.PI);
+                    ctx.stroke(innerB_path);
 
-                let innerB_path = new Path2D()
-                innerB_path.arc(s.x, s.y, inner*0.85, 0, 2*Math.PI);
-                ctx.stroke(innerB_path);
+                    ring_path.addPath(outerB_path);
 
-                ring_path.addPath(outerB_path);
+                    // update path shape definition
+                    s.path = ring_path;
 
-                // update path shape definition
-                s.path = ring_path;
-
+                };
             };
+
+            ctx.restore();
         };
 
-        ctx.restore();
+        function draw_markers(){
+            ctx.save();
 
-    };
+            // reads the global markers object
+            for (const s of markers.values()) {
+
+                let inner = S*0.23;
+                let marker_lineWidth = inner/3;
+
+                // draw black marker
+                if (s.player == player_black_id){ 
+
+                    ctx.fillStyle = "#1A1A1A";
+                    
+                    let marker_path = new Path2D()
+                    marker_path.arc(s.x, s.y, inner, 0, 2*Math.PI);
+                    ctx.stroke(marker_path);
+                    ctx.fill(marker_path);
+            
+                // draw white marker
+                } else if (s.player == player_white_id){ 
+                    
+                    ctx.strokeStyle = "#000";
+                    ctx.fillStyle = "#F6F7F6";
+                    ctx.lineWidth = marker_lineWidth/2;            
+                    
+                    let marker_path = new Path2D()
+                    marker_path.arc(s.x, s.y, inner, 0, 2*Math.PI);
+                    ctx.stroke(marker_path);
+                    ctx.fill(marker_path);
+            
+                };
+            };
+
+            ctx.restore();
+        };
 
         function init_rings(){
 
@@ -524,7 +572,8 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
             for (const id of random_picks_ids.values()) {
                 const ref_drop_zone = drop_zones[id];   
-                let init_ring = {   path:{}, 
+                   
+                let init_ring = {   path: {},
                                     x: ref_drop_zone.x, 
                                     y: ref_drop_zone.y, 
                                     m_row: ref_drop_zone.m_row, 
@@ -534,7 +583,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                                     active: false
                                 };            
                 
-                shapes.push(init_ring);  
+                rings.push(init_ring);  
                             
                 // create and dispatch event for the ring being initiated (as if it was dropped) so that game state can be updated
                 const ringDrop_event = new CustomEvent("ring_dropped", { detail: init_ring });
@@ -544,8 +593,34 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             
         };
 
+        function init_markers(){
+
+            // pick N drop zones at random (note: it should be random)
+            random_picks_ids = [18, 35, 54, 77]; // max = 85
+
+            for (const id of random_picks_ids.values()) {
+                const ref_drop_zone = drop_zones[id];   
+                 
+                let init_marker = { x: ref_drop_zone.x, 
+                                    y: ref_drop_zone.y, 
+                                    m_row: ref_drop_zone.m_row, 
+                                    m_col: ref_drop_zone.m_col, 
+                                    type: marker_id, 
+                                    player: (id % 2 == 0) ? player_black_id : player_white_id 
+                                };            
+                
+                markers.push(init_marker);  
+                            
+                // create and dispatch event for the ring being initiated (as if it was dropped) so that game state can be updated
+                const markInit_event = new CustomEvent("marker_init", { detail: init_marker });
+                game_state_target.dispatchEvent(markInit_event);
+
+            };
+
+        };
+
     // instatiate event target for changes to drop zones objects (manages state and triggers drawing)
-    let highlight_moves_target = new EventTarget();
+    let highlight_moves_target = new EventTarget(); 
 
     // calls function to update the array of allowed moves -> highlighted zones
     highlight_moves_target.addEventListener("allowed_moves_ON", 
@@ -580,8 +655,8 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
         to_return = "no_ring";
         
-        for(let i=0; i<shapes.length; i++){
-            if (shapes[i].active == true){
+        for(let i=0; i<rings.length; i++){
+            if (rings[i].active == true){
                 to_return = i;
                 break;
             };
@@ -635,22 +710,22 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             if (active_ring === "no_ring"){
 
                 // test which shape the mouse is selecting and set it to active
-                for(let i=0; i<shapes.length; i++){
+                for(let i=0; i<rings.length; i++){
                     
                     // set selected path to active if it's a ring
-                    // this should go to dedicated function !!
-                    if (ctx.isPointInPath(shapes[i].path, mousePos.x, mousePos.y)){
-                        if (shapes[i].type == ring_id){
+                    // this should go into a dedicated function !!
+                    if (ctx.isPointInPath(rings[i].path, mousePos.x, mousePos.y)){
+                        if (rings[i].type == ring_id){
                             
-                            shapes[i].active = true;
+                            rings[i].active = true;
 
                             // create and dispatch event for what the ring being picked up -> game state should change
-                            const ringPick_event = new CustomEvent("ring_picked", { detail: shapes[i] });
+                            const ringPick_event = new CustomEvent("ring_picked", { detail: rings[i] });
                             game_state_target.dispatchEvent(ringPick_event);
                             
                             // remove the element and put it back at the end of the array, so it's always drawn last => on top
                             // note: splice returns the array of removed elements
-                            shapes.push(shapes.splice(i,1)[0]); // this should be a separate concern, we shouldn't be doing it here 
+                            rings.push(rings.splice(i,1)[0]); // this should be a separate concern, we shouldn't be doing it here 
                             // -> fire the same event to the dispacther, to an array of targets OR fire the event and let the dispatcher orchestrate? or the game state handler do it? :/
                             
                             break; // otherwise it keeps looping and can encounter the same ring twice as we move it to the end
@@ -671,18 +746,18 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                     if (valid_snap(drop_coord.index) == true){
 
                         // making the ring inactive again
-                        shapes[active_ring].active = false;
+                        rings[active_ring].active = false;
                     
                         // dropping it at the center of the drop zones (x/y are drawing)
-                        shapes[active_ring].x = drop_coord.x;
-                        shapes[active_ring].y = drop_coord.y;
+                        rings[active_ring].x = drop_coord.x;
+                        rings[active_ring].y = drop_coord.y;
 
                         // updating row/col location of the ring (row/col for state)
-                        shapes[active_ring].m_row = drop_coord.m_row;
-                        shapes[active_ring].m_col = drop_coord.m_col;
+                        rings[active_ring].m_row = drop_coord.m_row;
+                        rings[active_ring].m_col = drop_coord.m_col;
 
                         // create and dispatch event for the ring being dropped -> game state should change
-                        const ringDrop_event = new CustomEvent("ring_dropped", { detail: shapes[active_ring] });
+                        const ringDrop_event = new CustomEvent("ring_dropped", { detail: rings[active_ring] });
                         game_state_target.dispatchEvent(ringDrop_event);
 
                         // logging drop coordinates
@@ -718,8 +793,8 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             // if a ring is active, let's drag it -> refresh everything as you move it
             if (active_ring != "no_ring"){
 
-                shapes[active_ring].x = mousePos.x;
-                shapes[active_ring].y = mousePos.y;
+                rings[active_ring].x = mousePos.x;
+                rings[active_ring].y = mousePos.y;
                 refresh_draw_state();
             };
 
