@@ -20,6 +20,9 @@ using PlutoUI
 # ╔═╡ 9505b0f0-91a2-46a8-90a5-d615c2acdbc1
 using Plots, PlotThemes;  plotly() ; theme(:default)
 
+# ╔═╡ 64b1f98e-2e04-4db2-a827-4bc74ead76ab
+using JLD2
+
 # ╔═╡ 1f9da483-6b05-4867-a509-2c24b41cd5d6
 mm_yinsh = zeros(Int64, 19, 11)
 
@@ -438,8 +441,15 @@ end
 
 function search_loc(ref_board, row_start::Int, col_start::Int)
 
-	# checks that the starting point is valid
-	if bounds_check(row_start, col_start) == false return [] end
+	# checks that row/col are valid
+	if !(1<= row_start <= 19) && !(1<= col_start <= 11) 
+		return [] 
+
+	# checks that row/col match active points
+	elseif bounds_check(row_start, col_start) == false
+		return []
+	
+	end
 
 	# board bounds 
 	last_row = 19
@@ -512,74 +522,6 @@ search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_se
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
 md"## Exposing function as web endpoint "
 
-# ╔═╡ f9a9821f-948b-4ddb-a79d-2b25e9ab1020
-# using JuliaWebAPI
-
-# ╔═╡ ba358040-22d6-4237-ad4f-1019cd8d2502
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-	
-	using HTTP, JSON3, StructTypes, Sockets
-	
-	# modified Animal struct to associate with specific user
-	mutable struct Animal
-	    id::Int
-	    userId::Base.UUID
-	    type::String
-	    name::String
-	    Animal() = new()
-	end
-	
-	StructTypes.StructType(::Type{Animal}) = StructTypes.Mutable()
-	
-	# use a plain `Dict` as a "data store"
-	const ANIMALS = Dict{Int, Animal}()
-	const NEXT_ID = Ref(0)
-	function getNextId()
-	    id = NEXT_ID[]
-	    NEXT_ID[] += 1
-	    return id
-	end
-	
-	# "service" functions to actually do the work
-	function createAnimal(req::HTTP.Request)
-	    animal = JSON3.read(req.body, Animal)
-	    animal.id = getNextId()
-	    ANIMALS[animal.id] = animal
-	    return HTTP.Response(200, JSON3.write(animal))
-	end
-	
-	function getAnimal(req::HTTP.Request)
-	    animalId = HTTP.getparams(req)["id"]
-	    animal = ANIMALS[parse(Int, animalId)]
-	    return HTTP.Response(200, JSON3.write(animal))
-	end
-	
-	function updateAnimal(req::HTTP.Request)
-	    animal = JSON3.read(req.body, Animal)
-	    ANIMALS[animal.id] = animal
-	    return HTTP.Response(200, JSON3.write(animal))
-	end
-	
-	function deleteAnimal(req::HTTP.Request)
-	    animalId = HTTP.getparams(req)["id"]
-	    delete!(ANIMALS, animalId)
-	    return HTTP.Response(200)
-	end
-	
-	# define REST endpoints to dispatch to "service" functions
-	const ANIMAL_ROUTER = HTTP.Router()
-	HTTP.register!(ANIMAL_ROUTER, "POST", "/api/zoo/v1/animals", createAnimal)
-	# note the use of `*` to capture the path segment "variable" animal id
-	HTTP.register!(ANIMAL_ROUTER, "GET", "/api/zoo/v1/animals/{id}", getAnimal)
-	HTTP.register!(ANIMAL_ROUTER, "PUT", "/api/zoo/v1/animals", updateAnimal)
-	HTTP.register!(ANIMAL_ROUTER, "DELETE", "/api/zoo/v1/animals/{id}", deleteAnimal)
-	
-
-end
-  ╠═╡ =#
-
 # ╔═╡ 5a7ff16b-f40a-492a-a08a-2d7614551a59
 #=
 
@@ -601,7 +543,13 @@ send coordinates within 19x11 -> pre-computed depending on drop-zone -> ring inh
 # let's create a simple ping pong
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1016
+port_test = 1019
+
+# ╔═╡ a9afec7f-ee2c-484b-881f-9b24d62737c7
+#HTTP.forceclose(simple_srv)
+
+# ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
+global_states = []
 
 # ╔═╡ d3b0a36b-0578-40ad-8c96-bdad11e29a83
 begin
@@ -628,10 +576,29 @@ begin
 		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write("hello from the Julia Server"))
 	end
 
+	function allowed_moves(req::HTTP.Request)
+		# saves request to global states store
+		push!(global_states, req)
+
+		# parses request body to json
+		reqBody_json = JSON3.read(req.body)
+
+		# computes allowed moves
+		ok_moves = search_loc(
+								reshape(reqBody_json[:state], 19, 11), 		
+								reqBody_json[:row], 
+								reqBody_json[:col]
+								)
+		
+		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(ok_moves))
+	
+	end
+
 
 	# define REST endpoints to dispatch calls to functions
 	const simple_router = HTTP.Router()
 	HTTP.register!(simple_router, "GET", "/api/yinsh/v1/simple_test", respond_simple)
+	HTTP.register!(simple_router, "POST", "/api/yinsh/v1/allowed_moves", allowed_moves)
 
 	# start server 
 	simple_srv = HTTP.serve!(simple_router, Sockets.localhost, port_test)
@@ -641,6 +608,27 @@ end
 
 # ╔═╡ 3a623d6d-0303-40ff-908c-c939c1b79813
 JSON3.write("hello")
+
+# ╔═╡ b13e5c1d-454f-4c87-9523-863a7d5d843f
+global_states
+
+# ╔═╡ f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
+req_test = global_states[end]
+
+# ╔═╡ 4c983857-8532-487c-bcc4-8843c9a3cc31
+resp_js = JSON3.read(req_test.body)
+
+# ╔═╡ 943d4bc5-ad8e-41e5-842a-0fdb9a94f47d
+_moves = search_loc(reshape(resp_js[:state], 19, 11), resp_js[:row], resp_js[:col])
+
+# ╔═╡ 93748fcd-c1a6-40ce-85d4-9f02185fa23e
+JSON3.write(_moves)
+
+# ╔═╡ 042a313d-1063-4d74-8fff-2b4c83110686
+findall(x -> contains(x,"R"), client_state)
+
+# ╔═╡ 077fc01d-5bed-4a50-82ab-612ac33661ce
+[i for i in (resp_js[:state])]
 
 # ╔═╡ 6cea2ffe-5a77-48f7-abaa-cd35b22c5388
 # need to have an on_change metod so I can add/update the functions linked by the router and the web sever doesn't try to restart on the same port
@@ -657,10 +645,50 @@ resp_test = HTTP.get(url_to_call)
 # ╔═╡ d6db3a92-d8d6-4c1e-9897-034981641771
 String(resp_test.body)
 
+# ╔═╡ ca4a8229-3b34-4b5d-9807-27b840183109
+# could use JLD2 to write dicts to disk instead od using Redis etc
+
+# ╔═╡ b8ff58a8-dabe-4e03-baf2-0c351c66ecd7
+# write to disk
+
+# ╔═╡ ad8304c7-f06f-4b59-a981-64f45b2d5e39
+jldsave("states.jld2"; global_states)
+
+# ╔═╡ dea8b51d-b708-4d62-bd14-8814c188ad86
+read_states = jldopen("states.jld2")
+
+# ╔═╡ 53c3738b-c140-4634-87f1-4a8179fcab09
+mm_setup
+
+# ╔═╡ abee805b-5feb-4590-abff-2644e6df08d4
+mm_yinsh_01
+
+# ╔═╡ 660528bb-1a72-4a80-8bd7-91ef2859bdc9
+# how to represent status so that it can be easily passed back and forth between JS client and JL server?
+
+# javascript has 1-dimensional arrays -> array of array for matrix
+
+# ╔═╡ d0391bbc-8db3-423e-b7f8-0635a88cc304
+fa_test = findall(x -> x == 1, mm_yinsh_01)
+
+# ╔═╡ 2c541f2a-bb8f-4e2c-adc8-57180c6d68b6
+test_vofv = [[0,1,0,1,0],[0,0,1,0,1], [0,0,0,0,1]]
+
+# ╔═╡ 7deb21c9-89a2-435a-baf8-81e5a94f221c
+test_js = JSON3.write(mm_yinsh_01)
+
+# ╔═╡ a1e9d6a1-b1d6-4324-9cf9-ff64f38d6e2f
+JSON3.read(test_js)
+
+# ╔═╡ cb12ef36-ff94-4c2b-b1c5-57a23d1dad9d
+# maybe I'll need a custom parsing thingy
+# I could pass string with only valid points ?
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 PlotThemes = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
@@ -669,6 +697,7 @@ Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 
 [compat]
 HTTP = "~1.7.4"
+JLD2 = "~0.4.30"
 JSON3 = "~1.12.0"
 PlotThemes = "~3.1.0"
 Plots = "~1.38.0"
@@ -681,7 +710,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "416aad6f2e90d8805e024daaa6ee71507b9ec3aa"
+project_hash = "86f3bb7cc1018d00e608136ed5881f3c91cdfdbc"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -822,6 +851,12 @@ git-tree-sha1 = "74faea50c1d007c85837327f6775bea60b5492dd"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
 version = "4.4.2+2"
 
+[[deps.FileIO]]
+deps = ["Pkg", "Requires", "UUIDs"]
+git-tree-sha1 = "7be5f99f7d15578798f338f5433b6c432ea8037b"
+uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+version = "1.16.0"
+
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
@@ -945,6 +980,12 @@ version = "0.1.8"
 git-tree-sha1 = "7fd44fd4ff43fc60815f8e764c0f352b83c49151"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.1.1"
+
+[[deps.JLD2]]
+deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "Pkg", "Printf", "Reexport", "TranscodingStreams", "UUIDs"]
+git-tree-sha1 = "c3244ef42b7d4508c638339df1bdbf4353e144db"
+uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+version = "0.4.30"
 
 [[deps.JLFzf]]
 deps = ["Pipe", "REPL", "Random", "fzf_jll"]
@@ -1688,17 +1729,37 @@ version = "1.4.1+0"
 # ╠═bf2dce8c-f026-40e3-89db-d72edb0b041c
 # ╠═52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
-# ╠═f9a9821f-948b-4ddb-a79d-2b25e9ab1020
-# ╠═ba358040-22d6-4237-ad4f-1019cd8d2502
 # ╠═5a7ff16b-f40a-492a-a08a-2d7614551a59
 # ╠═0fe4eab7-0642-4c56-953b-0b019361e752
 # ╠═3a623d6d-0303-40ff-908c-c939c1b79813
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
+# ╠═a9afec7f-ee2c-484b-881f-9b24d62737c7
+# ╠═5a0a2a61-57e6-4044-ad00-c8f0f569159d
+# ╠═b13e5c1d-454f-4c87-9523-863a7d5d843f
+# ╠═f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
+# ╠═4c983857-8532-487c-bcc4-8843c9a3cc31
+# ╠═943d4bc5-ad8e-41e5-842a-0fdb9a94f47d
+# ╠═93748fcd-c1a6-40ce-85d4-9f02185fa23e
+# ╠═042a313d-1063-4d74-8fff-2b4c83110686
+# ╠═077fc01d-5bed-4a50-82ab-612ac33661ce
 # ╠═6cea2ffe-5a77-48f7-abaa-cd35b22c5388
 # ╠═ba75ec53-ac2a-4ec1-9ae4-761025232021
 # ╠═79de78ac-43ff-4772-83b6-e70bc0e8b6f3
 # ╠═1f133935-db3b-45ee-8dec-0371198de79b
 # ╠═d6db3a92-d8d6-4c1e-9897-034981641771
+# ╠═ca4a8229-3b34-4b5d-9807-27b840183109
+# ╠═b8ff58a8-dabe-4e03-baf2-0c351c66ecd7
+# ╠═64b1f98e-2e04-4db2-a827-4bc74ead76ab
+# ╠═ad8304c7-f06f-4b59-a981-64f45b2d5e39
+# ╠═dea8b51d-b708-4d62-bd14-8814c188ad86
+# ╠═53c3738b-c140-4634-87f1-4a8179fcab09
+# ╠═abee805b-5feb-4590-abff-2644e6df08d4
+# ╠═660528bb-1a72-4a80-8bd7-91ef2859bdc9
+# ╠═d0391bbc-8db3-423e-b7f8-0635a88cc304
+# ╠═2c541f2a-bb8f-4e2c-adc8-57180c6d68b6
+# ╠═7deb21c9-89a2-435a-baf8-81e5a94f221c
+# ╠═a1e9d6a1-b1d6-4324-9cf9-ff64f38d6e2f
+# ╠═cb12ef36-ff94-4c2b-b1c5-57a23d1dad9d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

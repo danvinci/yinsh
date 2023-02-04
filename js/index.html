@@ -41,8 +41,8 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0] 
         ];
 
-    const mm_points_rows = mm_points.length;
-    const mm_points_cols = mm_points[0].length;
+    const mm_points_rows = 19 // mm_points.length;
+    const mm_points_cols = 11 // mm_points[0].length;
 
     // helper function to extract array columns from matrix
     function getCol(matrix, n_col){
@@ -64,7 +64,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     var canvas = document.getElementById('board'); 
     var ctx = canvas.getContext('2d', { alpha: true }); 
 
-    /// Audio effects
+    // Audio effects
     const sound = {
                     "p_hpf_freq": 0.104,
                     "p_duty": 0.457,
@@ -122,13 +122,20 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     canvas.style.height = `${rect.height}px`;
     */
 
+
     // initialize array for markers and rings
     let shapes = [];
     let capture_zones = [];
 
+    // these values are used in shapes objects, status, and check conditions within functions - better centralize their definition
+    const ring_id = "R";
+    const marker_id = "M";
+    const player_black_id = "B";
+    const player_white_id = "W";
+
     // add random rings in array of shapes
-    shapes.push({path:{}, x:50, y:120, type:"ring", player:"black", active:false});
-    shapes.push({path:{}, x:50, y:160, type:"ring", player:"white", active:false});
+    shapes.push({path:{}, x:50, y:120, m_row: 0, m_col: 0, type: ring_id, player: player_black_id, active:false});
+    shapes.push({path:{}, x:50, y:160, m_row: 0, m_col: 0, type: ring_id, player: player_white_id, active:false});
 
     // specify dimensions for the triangles in the grid
     // for now outside, so they can be set depending on possible canvas size
@@ -137,9 +144,9 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     
     // board and initial state drawn for the first time
     // this function is then called by the single events when they change the state
-    refresh_state();
+    refresh_draw_state();
 
-    function refresh_state(){
+    function refresh_draw_state(){
         ctx.save();
         
         // clears everything and re-draws board
@@ -159,186 +166,187 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
     }
   
-    function draw_board(){
+        function draw_board(){
 
-       ctx.save();
-        /* RECIPE
-        - get to first starting point for column
-        - draw triangle, if first extra bit
-            -- only if next colum is bigger
-        - translate down
-        - draw triangle
-        - repeat
-        - drawn triangle, if last extra bit 
-            -- only if next colum is bigger
-        - column before last, 2 vertical strokes
-        - last column, 3 vertical strokes
-
-        */
-
-        // drawing settings
-        ctx.lineJoin = "round";
-        ctx.strokeStyle = '#2C68DC';
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.65;
-
-
-        for (let k = 1; k <= mm_points_cols-1; k++) {
-            
-            // number of triangles we're expected to draw for each column
-            triangle_ToDraw = numTriangles(getCol(mm_points, k-1));
-            triangle_Drew = 0;
-
-            // move right for each new column
-            ctx.translate(H*k,H);
-
-            // going down the individual columns
-            for (let j = 1; j <= mm_points_rows; j++) {
-                
-                let point = mm_points[j-1][k-1];
-
-                // manual handling of last column 
-                if (k == mm_points_cols-1 && (j == 4 || j > 13) ){point = 0;}
-                
-
-                // if point is not active just translate down
-                if (point == 0) {
-                    ctx.translate(0,S/2);
-                
-                // DRAWING LOOP!
-                // draw triangle but only if we're not done drawing them all
-                } else if (point == 1 && triangle_Drew < triangle_ToDraw) {
-                    ctx.beginPath();
-                    ctx.moveTo(0,0); // starting point for drawing
-                    ctx.lineTo(0,S); // first point down
-                    ctx.lineTo(H,S/2); // mid-point to the right
-                    ctx.closePath(); // close shape
-                    ctx.stroke();
-                    triangle_Drew ++;
-
-                    
-                    // check if the next column has more triangles
-                    let mustDraw_stick = triangle_ToDraw < numTriangles(getCol(mm_points, k));
-                    
-                    // we do this for all columns except last
-                    if (mustDraw_stick && k < mm_points_cols) {
-
-                        // first triangle bridging up
-                        if (triangle_Drew == 1){
-                            ctx.beginPath();
-                            ctx.moveTo(0,0); 
-                            ctx.lineTo(H,-S/2); 
-                            //ctx.strokeStyle = "#FA5537";
-                            ctx.stroke();
-                            
-                            //ctx.strokeStyle = colT;
-                        }
-
-                        // last triangle bridging down
-                        if (triangle_Drew == triangle_ToDraw){
-                            ctx.beginPath();
-                            ctx.moveTo(0,S);
-                            ctx.lineTo(H,S+S/2);
-                            //ctx.strokeStyle = "#32CBFF";
-                            ctx.stroke();
-                            
-                            //ctx.strokeStyle = colT; // reset color
-                        }
-
-                    }
-
-                    // draw vertical strokes 
-                    // last column, last triangle done (+2 hack as we disqualify points above)
-                    if (k == mm_points_cols-1 && triangle_ToDraw == triangle_Drew + 2) {
-                        // stroke down
-                        ctx.beginPath();
-                        ctx.moveTo(0,S); 
-                        ctx.lineTo(0,2*S); 
-                        //ctx.strokeStyle = "#C21313";
-                        ctx.stroke();
-                        
-                        // stroke up
-                        ctx.beginPath();
-                        ctx.moveTo(0,-3*S); 
-                        ctx.lineTo(0,-4*S); 
-                        //ctx.strokeStyle = "#E79B33";
-                        ctx.stroke();
-                        
-                        // stroke up
-                        ctx.beginPath();
-                        ctx.moveTo(H,-S*2-S/2); 
-                        ctx.lineTo(H,S/2); 
-                        //ctx.strokeStyle = "#C21313";
-                        ctx.stroke();
-                        
-                        //ctx.strokeStyle = colT; // reset color 
-                    }
-                    
-                // move down (considering last active point when drawing)
-                ctx.translate(0,S/2);
-
-            
-                } // stop going down the column and drawing if you're done 
-                else if ( triangle_Drew == triangle_ToDraw) {
-                    break;
-                }
-            }
-            // reset canvas transformations before moving to next column
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-        }
-            
-        ctx.restore();
-    }
-
-    function setup_capture_zones(){
         ctx.save();
+            /* RECIPE
+            - get to first starting point for column
+            - draw triangle, if first extra bit
+                -- only if next colum is bigger
+            - translate down
+            - draw triangle
+            - repeat
+            - drawn triangle, if last extra bit 
+                -- only if next colum is bigger
+            - column before last, 2 vertical strokes
+            - last column, 3 vertical strokes
 
-        ctx.globalAlpha = 0; // set transparency for circles
-        ctx.strokeStyle = "#666";
-        ctx.lineWidth = 0.5;
-        
-        // create circles for listening to click events on all intersections
-        for (let j = 1; j <= mm_points_rows; j++) {
-            for (let k = 1; k <= mm_points_cols; k++) {
+            */
 
-                // using indexes 1:N for accessing the matrix
-                let point = mm_points[j-1][k-1];
+            // drawing settings
+            ctx.lineJoin = "round";
+            ctx.strokeStyle = '#2C68DC';
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.65;
 
-                if (point == 1) {
 
-                    // ACTIVE POINTS COORDINATES
-                    // we move by x = (H * k) & y = H for each new column
-                    // we also move by y = S/2 in between each row (active and non-active points)
+            for (let k = 1; k <= mm_points_cols-1; k++) {
+                
+                // number of triangles we're expected to draw for each column
+                triangle_ToDraw = numTriangles(getCol(mm_points, k-1));
+                triangle_Drew = 0;
+
+                // move right for each new column
+                ctx.translate(H*k,H);
+
+                // going down the individual columns
+                for (let j = 1; j <= mm_points_rows; j++) {
                     
-                    let apoint_x = H * k;
-                    let apoint_y = H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
-                    
-                    // draw circles in each intersection point and add them to an array
-                    let capture_path = new Path2D()
-                    capture_path.arc(apoint_x, apoint_y, S*0.35, 0, 2*Math.PI);
-                    ctx.stroke(capture_path);
+                    let point = mm_points[j-1][k-1];
 
-                    // update path shape definition
-                    capture_zones.push({path: capture_path, x:apoint_x, y:apoint_y});
+                    // manual handling of last column 
+                    if (k == mm_points_cols-1 && (j == 4 || j > 13) ){point = 0;}
                     
 
+                    // if point is not active just translate down
+                    if (point == 0) {
+                        ctx.translate(0,S/2);
+                    
+                    // DRAWING LOOP!
+                    // draw triangle but only if we're not done drawing them all
+                    } else if (point == 1 && triangle_Drew < triangle_ToDraw) {
+                        ctx.beginPath();
+                        ctx.moveTo(0,0); // starting point for drawing
+                        ctx.lineTo(0,S); // first point down
+                        ctx.lineTo(H,S/2); // mid-point to the right
+                        ctx.closePath(); // close shape
+                        ctx.stroke();
+                        triangle_Drew ++;
+
+                        
+                        // check if the next column has more triangles
+                        let mustDraw_stick = triangle_ToDraw < numTriangles(getCol(mm_points, k));
+                        
+                        // we do this for all columns except last
+                        if (mustDraw_stick && k < mm_points_cols) {
+
+                            // first triangle bridging up
+                            if (triangle_Drew == 1){
+                                ctx.beginPath();
+                                ctx.moveTo(0,0); 
+                                ctx.lineTo(H,-S/2); 
+                                //ctx.strokeStyle = "#FA5537";
+                                ctx.stroke();
+                                
+                                //ctx.strokeStyle = colT;
+                            }
+
+                            // last triangle bridging down
+                            if (triangle_Drew == triangle_ToDraw){
+                                ctx.beginPath();
+                                ctx.moveTo(0,S);
+                                ctx.lineTo(H,S+S/2);
+                                //ctx.strokeStyle = "#32CBFF";
+                                ctx.stroke();
+                                
+                                //ctx.strokeStyle = colT; // reset color
+                            }
+
+                        }
+
+                        // draw vertical strokes 
+                        // last column, last triangle done (+2 hack as we disqualify points above)
+                        if (k == mm_points_cols-1 && triangle_ToDraw == triangle_Drew + 2) {
+                            // stroke down
+                            ctx.beginPath();
+                            ctx.moveTo(0,S); 
+                            ctx.lineTo(0,2*S); 
+                            //ctx.strokeStyle = "#C21313";
+                            ctx.stroke();
+                            
+                            // stroke up
+                            ctx.beginPath();
+                            ctx.moveTo(0,-3*S); 
+                            ctx.lineTo(0,-4*S); 
+                            //ctx.strokeStyle = "#E79B33";
+                            ctx.stroke();
+                            
+                            // stroke up
+                            ctx.beginPath();
+                            ctx.moveTo(H,-S*2-S/2); 
+                            ctx.lineTo(H,S/2); 
+                            //ctx.strokeStyle = "#C21313";
+                            ctx.stroke();
+                            
+                            //ctx.strokeStyle = colT; // reset color 
+                        }
+                        
+                    // move down (considering last active point when drawing)
+                    ctx.translate(0,S/2);
+
+                
+                    } // stop going down the column and drawing if you're done 
+                    else if ( triangle_Drew == triangle_ToDraw) {
+                        break;
+                    }
                 }
+                // reset canvas transformations before moving to next column
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
             }
+                
+            ctx.restore();
         }
 
-        ctx.restore();
-    }
+        function setup_capture_zones(){
+            ctx.save();
 
-    function draw_shape(s){
+            ctx.globalAlpha = 0; // set transparency for circles
+            ctx.strokeStyle = "#666";
+            ctx.lineWidth = 0.5;
+            
+            // create circles for listening to click events on all intersections
+            for (let j = 1; j <= mm_points_rows; j++) {
+                for (let k = 1; k <= mm_points_cols; k++) {
+
+                    // using indexes 1:N for accessing the matrix
+                    // these indexes then become row/col coordinates for rings & markers as inherited post-snapping
+                    let point = mm_points[j-1][k-1];
+
+                    if (point == 1) {
+
+                        // ACTIVE POINTS COORDINATES
+                        // we move by x = (H * k) & y = H for each new column
+                        // we also move by y = S/2 in between each row (active and non-active points)
+                        
+                        let apoint_x = H * k;
+                        let apoint_y = H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
+                        
+                        // draw circles in each intersection point and add them to an array
+                        let capture_path = new Path2D()
+                        capture_path.arc(apoint_x, apoint_y, S*0.35, 0, 2*Math.PI);
+                        ctx.stroke(capture_path);
+
+                        // update path shape definition
+                        capture_zones.push({path: capture_path, x:apoint_x, y:apoint_y, m_row:j, m_col:k});
+                        
+
+                    }
+                }
+            }
+
+            ctx.restore();
+        }
+
+        function draw_shape(s){
         // expects to receive an input elements from the shapes array
         ctx.save();
 
-        if (s.type == "ring"){
+        if (s.type == ring_id ){
 
             let inner = S*0.42;
             let circle_lineWidth = inner/3;
 
-            if (s.player == "black"){ 
+            if (s.player == player_black_id){ 
                 
                 ctx.strokeStyle = "#1A1A1A";
                 ctx.lineWidth = circle_lineWidth;            
@@ -350,7 +358,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                 // update path shape definition
                 s.path = ring_path;
         
-            } else if (s.player == "white"){
+            } else if (s.player == player_white_id){
 
                 
 
@@ -392,7 +400,46 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
     };
 
+
+    // Empty game state
+    let game_state = Array(19*11).fill(""); 
+
+    // from col/row in a matrix to a linear index 
+    // Julia expects col-major for building a matrix from an index
+    // also, js arrays start at 0, hence the -1 offset
+    function reshape_index(row, col) { return (col-1)*19 + row -1; };
+
+    // instatiate event target for changes to the game state
+    let game_state_target = new EventTarget()
     
+    // listens to ring drops and updates game state
+    game_state_target.addEventListener("ring_dropped", 
+        function (evt) {
+
+        index = reshape_index(evt.detail.m_row, evt.detail.m_col);
+        value = evt.detail.type.concat(evt.detail.player);
+
+        game_state[index] = value;
+        console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
+
+    });
+
+    // listens to ring picks and updates game state
+    game_state_target.addEventListener("ring_picked", 
+        function (evt) {
+
+        index = reshape_index(evt.detail.m_row, evt.detail.m_col);
+        value = evt.detail.type.concat(evt.detail.player);
+
+        game_state[index] = "";
+        console.log(`${value} picked from ${evt.detail.m_row}:${evt.detail.m_col} at -> ${index}`);
+
+        row = evt.detail.m_row;
+        col = evt.detail.m_col;
+
+        allowed_moves = server_allowed_moves(game_state, row, col);
+
+    });
 
     // If a move is underway, need to drop the ring before doing something else
     function check_active_ring() {
@@ -420,7 +467,12 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         // test which capture zone the mouse is selecting and return its center coordinates
         for(let i=0; i<capture_zones.length; i++){
             if (ctx.isPointInPath(capture_zones[i].path, xp, yp)){
-                to_return = {x: capture_zones[i].x, y: capture_zones[i].y}; 
+                to_return = {
+                            x: capture_zones[i].x, 
+                            y: capture_zones[i].y,
+                            m_row: capture_zones[i].m_row,
+                            m_col: capture_zones[i].m_col
+                            }; 
             };
         };
 
@@ -441,7 +493,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     canvas.addEventListener("mousedown", 
         function (evt) {
             mousePos = getMousePos(canvas, evt);
-            console.log("down");
+            //console.log("down");
 
             active_ring = check_active_ring();
 
@@ -453,9 +505,16 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                     
                     // set selected path to active if it's a ring
                     if (ctx.isPointInPath(shapes[i].path, mousePos.x, mousePos.y)){
-                        if (shapes[i].type === "ring"){
-                             
+                        if (shapes[i].type == ring_id){
+                            
+                            
                             shapes[i].active = true;
+
+                            // create and dispatch event for what the ring being picked up -> game state should change
+                            const ringPick_event = new CustomEvent("ring_picked", { detail: shapes[i] });
+                            game_state_target.dispatchEvent(ringPick_event);
+
+                            // here I should have a callback that then dispatches an event to the game drawing target
                             
                             // remove the element and put it back at the end of the array, so it's always drawn last => on top
                             // note: splice returns the array of removed elements
@@ -472,26 +531,43 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                 // drop in place the currently active ring  
                 // the ring must snap to the grid 
 
-                // I need collision check: ring -x-> ring but marker -o-> ring
                 drop_coord = closest_snap(mousePos.x, mousePos.y);
-                console.log(drop_coord)
 
                 if (drop_coord !== "no_snap"){
+
+                    // the server should confirm that the coordinates are okay
+                    // all of these should be wrapped into functions that take care of single tasks (legality check, update ring values and state, etc)
+
+                    // making the ring inactive again
                     shapes[active_ring].active = false;
+                   
+                    // dropping it at the center of the drop zones (x/y are drawing)
                     shapes[active_ring].x = drop_coord.x;
                     shapes[active_ring].y = drop_coord.y;
-                    ping_jl_srv();
-                    refresh_state();
+
+                    // updating row/col location of the ring (row/col for state)
+                    shapes[active_ring].m_row = drop_coord.m_row;
+                    shapes[active_ring].m_col = drop_coord.m_col;
+
+                    // create and dispatch event for the ring being dropped -> game state should change
+                    const ringDrop_event = new CustomEvent("ring_dropped", { detail: shapes[active_ring] });
+                    game_state_target.dispatchEvent(ringDrop_event);
+
+                    // logging drop coordinates
+                    //console.log(drop_coord);
+
+                    // re-draw everything
+                    refresh_draw_state();
+
+                    // play sound
                     sfxr.play(sound);
-                    // need to check for FREE drop grids as well -> legality check?
                 };  
             };
         });
 
     canvas.addEventListener("mouseup", 
         function (evt) {
-            some_var = false;
-            console.log("up");
+            //console.log("up");
         });
 
     canvas.addEventListener("mousemove", 
@@ -501,12 +577,12 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
             active_ring = check_active_ring();
 
-            // if a ring is active, let's drag it
+            // if a ring is active, let's drag it -> refresh everything as you move it
             if (active_ring != "no_ring"){
 
                 shapes[active_ring].x = mousePos.x;
                 shapes[active_ring].y = mousePos.y;
-                refresh_state();
+                refresh_draw_state();
             };
 
         });
@@ -587,20 +663,42 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
         
 
-    // trying to call the Julia server
-    async function ping_jl_srv(){
+    // server call for checking allowable moves 
+    async function server_allowed_moves(state, row, col){
+
         // https://stackoverflow.com/questions/48708449/promise-pending-why-is-it-still-pending-how-can-i-fix-this
         // https://stackoverflow.com/questions/40385133/retrieve-data-from-a-readablestream-object
         
-        response = await fetch('http://localhost:1016/api/yinsh/v1/simple_test', {
-            method: 'GET'
+    
+        response = await fetch('http://localhost:1019/api/yinsh/v1/allowed_moves', {
+            method: 'POST',
+            body: JSON.stringify({
+                                    "game_id": 'dummy_game_unique_id', 
+                                    "state": state, 
+                                    "row": row,
+                                    "col": col
+
+                                })
         });
 
-        //console.log(response);
+        // note: passing the state could be redundant, only game id should be necessary
+        
+        // get allowed moves back from the server (array)
+        srv_allowed_moves = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
+        
+        // parse and store allowed moves
+        let allowed_moves = [];
 
-        val = await response.json();
-        console.log(val);
+        if (srv_allowed_moves.length > 0) {
+            for (const move of srv_allowed_moves.values()) {
+                allowed_moves.push(move.I);
+            };
+        };
+        
+        console.log("Allowed moves: ");
+        console.log(allowed_moves);
 
+        return allowed_moves;
 
     };
    
