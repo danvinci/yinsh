@@ -129,6 +129,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     let drop_zones = [];
     let highlight_zones = [];
     let current_allowed_moves = [];
+    let current_move_start = {row: 0, col: 0};
 
     // these values are used in defining rings/markers, log status, and check conditions within functions
     const ring_id = "R";
@@ -149,20 +150,29 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
     // listens to ring drops and updates game state
     game_state_target.addEventListener("ring_dropped", 
-        function (evt) {
+        async function (evt) {
 
         index = reshape_index(evt.detail.m_row, evt.detail.m_col);
         value = evt.detail.type.concat(evt.detail.player); // -> RB, RW, MB, MW
 
         game_state[index] = value;
+
         console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
 
-        // create and dispatch event for the ring being dropped -> no zones to highlight
+        // create and dispatch event for the ring being dropped -> turn allowed moves OFF
         const allowedMoves_OFF_event = new CustomEvent("allowed_moves_OFF");
         highlight_moves_target.dispatchEvent(allowedMoves_OFF_event);
 
-        // check if any markers needs to be flipped
+        end_row = evt.detail.m_row;
+        end_col = evt.detail.m_col;
 
+        // check if any markers needs to be flipped
+        const markers_to_flip = await server_markers_check(game_state, current_move_start.row, current_move_start.col, end_row, end_col);
+        // trigger event to other listener -> change player for marker -> update game status -> retrigger drawing 
+
+        // reset global variable for the current move 
+        current_move_start.row = 0;
+        current_move_start.col = 0;
     });
 
     // listens to ring picks and updates game state
@@ -178,6 +188,11 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         row = evt.detail.m_row;
         col = evt.detail.m_col;
 
+        // write start of the currently active move to a global variable
+        current_move_start.row = row;
+        current_move_start.col = col;
+
+        // get allowed moves from the server
         const allowed_moves = await server_allowed_moves(game_state, row, col);
 
         if (allowed_moves != "no_moves"){
@@ -535,7 +550,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             for (const s of markers.values()) {
 
                 let inner = S*0.23;
-                let marker_lineWidth = inner/3;
+                let marker_lineWidth = inner/4;
 
                 // draw black marker
                 if (s.player == player_black_id){ 
@@ -875,21 +890,22 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         });
 
         
+    // SERVER INTERFACE FUNCTIONS
 
     // server call for checking allowable moves 
-    async function server_allowed_moves(state, row, col){
+    async function server_allowed_moves(state, start_row, start_col){
 
         // https://stackoverflow.com/questions/48708449/promise-pending-why-is-it-still-pending-how-can-i-fix-this
         // https://stackoverflow.com/questions/40385133/retrieve-data-from-a-readablestream-object
         
     
-        response = await fetch('http://localhost:1019/api/yinsh/v1/allowed_moves', {
-            method: 'POST',
+        response = await fetch('http://localhost:1020/api/v1/allowed_moves', {
+            method: 'POST', // GET requests cannot have a body
             body: JSON.stringify({
                                     "game_id": 'dummy_game_unique_id', 
                                     "state": state, 
-                                    "row": row,
-                                    "col": col
+                                    "row": start_row,
+                                    "col": start_col
 
                                 })
         });
@@ -918,7 +934,50 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         };
 
     };
-   
+
+    // server call for checking which markers must be flipped
+    async function server_markers_check(state, start_row, start_col, end_row, end_col){
+    
+        response = await fetch('http://localhost:1020/api/v1/markers_check', {
+            method: 'POST', 
+            body: JSON.stringify({
+                                    "game_id": 'dummy_game_unique_id', 
+                                    "state": state, 
+                                    "start_row": start_row,
+                                    "start_col": start_col,
+                                    "end_row": end_row,
+                                    "end_col": end_row
+
+                                })
+        });
+
+        // note: passing the state could be redundant, only game id should be necessary
+        
+        // get markers to be flipped back from the server (array)
+        const srv_markers_check = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
+        
+        // parse and store indexes of markers
+        let markers_to_flip = [];
+
+        if (srv_markers_check.length > 0) {
+            for (const mk_index of srv_markers_check.values()) {
+                // note: reshaping could be moved to the server, as well as the length check -> keep the client dumb but lean
+                markers_to_flip.push(reshape_index(mk_index.I[0], mk_index.I[1]));
+            };
+
+            console.log("Markers to flip from the server: "); 
+            console.log(markers_to_flip);
+            return markers_to_flip;
+
+        } else {
+
+            console.log("No markers to flip");
+            return "no_markers_to_flip";
+        };
+
+    };
+
+    
 
     
 

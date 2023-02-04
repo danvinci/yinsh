@@ -509,6 +509,7 @@ function search_loc(ref_board, row_start::Int, col_start::Int)
 		append!(search_return, keepValid(ref_board, search_temp)) 
 
 		# also append initial location of the ring
+		# NOTE: to be removed/changed after handling ring activation in the client
 		append!(search_return, [CartesianIndex(row_start, col_start)])
 	end
 
@@ -522,31 +523,33 @@ search_loc_graph(draw_board() ,row_start, col_start, search_loc(mm_states, row_s
 # ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
 search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, row_start_n,col_start_n))
 
+# ╔═╡ 8f2e4816-b60d-40eb-a9d8-acf4240c646a
+function markers_flip(row_start, col_start, row_end, col_end)
+
+# assume straight line, assume valid start/end
+start_index = CartesianIndex(row_start, col_start)
+end_index = CartesianIndex(row_end, col_end)
+	
+# draw straight line
+# cut search space
+valid_spots = findall(x -> x==1, mm_yinsh_01)
+
+min_r, max_r = min(row_start, row_end), max(row_start, row_end)
+min_c, max_c = min(col_start, col_end), max(col_start, col_end)
+
+ids = findall(s -> ((min_r < s[1] < max_r) && (min_c < s[2] < max_c)), valid_spots)
+
+# return coordinates of all markers within (IN PROGRESS, DUMMY FUNCTION)
+
+return [valid_spots[i] for i in ids]
+
+end
+
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
-md"## Exposing function as web endpoint "
-
-# ╔═╡ 5a7ff16b-f40a-492a-a08a-2d7614551a59
-#=
-
-when a new game starts -> send request -> create unique game_id 
-
-create random board setup (rings) ?
-
-client sends board status -> store last status
-
-client wants to make a move from a starting position -> check game status and return allowed moves
-
-send coordinates within 19x11 -> pre-computed depending on drop-zone -> ring inherits from DZ
-
-# all of this should happen with websockets (1 per game)
-
-=#
-
-# ╔═╡ 0fe4eab7-0642-4c56-953b-0b019361e752
-# let's create a simple ping pong
+md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1019
+port_test = 1020
 
 # ╔═╡ a9afec7f-ee2c-484b-881f-9b24d62737c7
 #HTTP.forceclose(simple_srv)
@@ -573,44 +576,59 @@ begin
 	# CORS response headers: set access right of the client
 	const CORS_RES_HEADERS = ["Access-Control-Allow-Origin" => "*"]
 	
-	# service function
-	function respond_simple(req::HTTP.Request)
-		#req_string = JSON3.read(req.body, String)
-		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write("hello from the Julia Server"))
-	end
+	# FUNCTIONS
 
 	function allowed_moves(req::HTTP.Request)
 		# saves request to global states store
 		push!(global_states, req)
 
 		# parses request body to json
-		reqBody_json = JSON3.read(req.body)
+		body_json = JSON3.read(req.body)
 
 		# computes allowed moves
 		ok_moves = search_loc(
-								reshape(reqBody_json[:state], 19, 11), 		
-								reqBody_json[:row], 
-								reqBody_json[:col]
+								reshape([s for s in body_json[:state]], 19, 11), 
+								body_json[:row], 
+								body_json[:col]
 								)
 		
 		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(ok_moves))
 	
 	end
 
+	function markers_check(req::HTTP.Request)
+		# saves request to global states store
+		push!(global_states, req)
+
+		# parses request body to json
+		body_json = JSON3.read(req.body)
+
+		# check markers that should be flipped
+		to_flip = markers_flip(
+								body_json[:start_row], 
+								body_json[:start_col], 
+								body_json[:end_row], 
+								body_json[:end_col]
+								)
+		
+		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(to_flip))
+	
+	end
+
+	
+
 
 	# define REST endpoints to dispatch calls to functions
 	const simple_router = HTTP.Router()
-	HTTP.register!(simple_router, "GET", "/api/yinsh/v1/simple_test", respond_simple)
-	HTTP.register!(simple_router, "POST", "/api/yinsh/v1/allowed_moves", allowed_moves)
+	HTTP.register!(simple_router, "POST", "/api/v1/allowed_moves", allowed_moves)
+	HTTP.register!(simple_router, "POST", "/api/v1/markers_check", markers_check)
+	
 
 	# start server 
 	simple_srv = HTTP.serve!(simple_router, Sockets.localhost, port_test)
 	
 
 end
-
-# ╔═╡ 3a623d6d-0303-40ff-908c-c939c1b79813
-JSON3.write("hello")
 
 # ╔═╡ b13e5c1d-454f-4c87-9523-863a7d5d843f
 global_states
@@ -621,71 +639,28 @@ req_test = global_states[end]
 # ╔═╡ 4c983857-8532-487c-bcc4-8843c9a3cc31
 resp_js = JSON3.read(req_test.body)
 
+# ╔═╡ eb217ce6-48de-4ebe-86cd-f5b0c0685c91
+markers_flip(
+				resp_js[:start_row], 
+				resp_js[:start_col], 
+				resp_js[:end_row], 
+				resp_js[:end_col]
+				)
+
 # ╔═╡ 943d4bc5-ad8e-41e5-842a-0fdb9a94f47d
 _moves = search_loc(reshape(resp_js[:state], 19, 11), resp_js[:row], resp_js[:col])
 
-# ╔═╡ 93748fcd-c1a6-40ce-85d4-9f02185fa23e
-JSON3.write(_moves)
-
-# ╔═╡ 042a313d-1063-4d74-8fff-2b4c83110686
-findall(x -> contains(x,"R"), client_state)
-
-# ╔═╡ 077fc01d-5bed-4a50-82ab-612ac33661ce
-[i for i in (resp_js[:state])]
-
-# ╔═╡ 6cea2ffe-5a77-48f7-abaa-cd35b22c5388
-# need to have an on_change metod so I can add/update the functions linked by the router and the web sever doesn't try to restart on the same port
-
-# ╔═╡ ba75ec53-ac2a-4ec1-9ae4-761025232021
-#HTTP.forceclose(simple_srv)
-
-# ╔═╡ 79de78ac-43ff-4772-83b6-e70bc0e8b6f3
-url_to_call = "http://localhost:$port_test/api/yinsh/v1/simple_test"
-
-# ╔═╡ 1f133935-db3b-45ee-8dec-0371198de79b
-resp_test = HTTP.get(url_to_call)
-
-# ╔═╡ d6db3a92-d8d6-4c1e-9897-034981641771
-String(resp_test.body)
-
 # ╔═╡ ca4a8229-3b34-4b5d-9807-27b840183109
-# could use JLD2 to write dicts to disk instead od using Redis etc
+md"""### Options for storing game sessions and states"""
 
 # ╔═╡ b8ff58a8-dabe-4e03-baf2-0c351c66ecd7
-# write to disk
+# could use JLD2 and write arrays/dicts to disk instead od using Redis etc
 
 # ╔═╡ ad8304c7-f06f-4b59-a981-64f45b2d5e39
 jldsave("states.jld2"; global_states)
 
 # ╔═╡ dea8b51d-b708-4d62-bd14-8814c188ad86
 read_states = jldopen("states.jld2")
-
-# ╔═╡ 53c3738b-c140-4634-87f1-4a8179fcab09
-mm_setup
-
-# ╔═╡ abee805b-5feb-4590-abff-2644e6df08d4
-mm_yinsh_01
-
-# ╔═╡ 660528bb-1a72-4a80-8bd7-91ef2859bdc9
-# how to represent status so that it can be easily passed back and forth between JS client and JL server?
-
-# javascript has 1-dimensional arrays -> array of array for matrix
-
-# ╔═╡ d0391bbc-8db3-423e-b7f8-0635a88cc304
-fa_test = findall(x -> x == 1, mm_yinsh_01)
-
-# ╔═╡ 2c541f2a-bb8f-4e2c-adc8-57180c6d68b6
-test_vofv = [[0,1,0,1,0],[0,0,1,0,1], [0,0,0,0,1]]
-
-# ╔═╡ 7deb21c9-89a2-435a-baf8-81e5a94f221c
-test_js = JSON3.write(mm_yinsh_01)
-
-# ╔═╡ a1e9d6a1-b1d6-4324-9cf9-ff64f38d6e2f
-JSON3.read(test_js)
-
-# ╔═╡ cb12ef36-ff94-4c2b-b1c5-57a23d1dad9d
-# maybe I'll need a custom parsing thingy
-# I could pass string with only valid points ?
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -713,7 +688,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "86f3bb7cc1018d00e608136ed5881f3c91cdfdbc"
+project_hash = "b6e27b5ded1ded35ca7c887f24c6e19457b81ccd"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1731,10 +1706,8 @@ version = "1.4.1+0"
 # ╠═ccbf567a-8923-4343-a2ff-53d81f2b6361
 # ╠═bf2dce8c-f026-40e3-89db-d72edb0b041c
 # ╠═52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
+# ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
-# ╠═5a7ff16b-f40a-492a-a08a-2d7614551a59
-# ╠═0fe4eab7-0642-4c56-953b-0b019361e752
-# ╠═3a623d6d-0303-40ff-908c-c939c1b79813
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
 # ╠═a9afec7f-ee2c-484b-881f-9b24d62737c7
@@ -1742,27 +1715,12 @@ version = "1.4.1+0"
 # ╠═b13e5c1d-454f-4c87-9523-863a7d5d843f
 # ╠═f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
 # ╠═4c983857-8532-487c-bcc4-8843c9a3cc31
+# ╠═eb217ce6-48de-4ebe-86cd-f5b0c0685c91
 # ╠═943d4bc5-ad8e-41e5-842a-0fdb9a94f47d
-# ╠═93748fcd-c1a6-40ce-85d4-9f02185fa23e
-# ╠═042a313d-1063-4d74-8fff-2b4c83110686
-# ╠═077fc01d-5bed-4a50-82ab-612ac33661ce
-# ╠═6cea2ffe-5a77-48f7-abaa-cd35b22c5388
-# ╠═ba75ec53-ac2a-4ec1-9ae4-761025232021
-# ╠═79de78ac-43ff-4772-83b6-e70bc0e8b6f3
-# ╠═1f133935-db3b-45ee-8dec-0371198de79b
-# ╠═d6db3a92-d8d6-4c1e-9897-034981641771
-# ╠═ca4a8229-3b34-4b5d-9807-27b840183109
+# ╟─ca4a8229-3b34-4b5d-9807-27b840183109
 # ╠═b8ff58a8-dabe-4e03-baf2-0c351c66ecd7
 # ╠═64b1f98e-2e04-4db2-a827-4bc74ead76ab
 # ╠═ad8304c7-f06f-4b59-a981-64f45b2d5e39
 # ╠═dea8b51d-b708-4d62-bd14-8814c188ad86
-# ╠═53c3738b-c140-4634-87f1-4a8179fcab09
-# ╠═abee805b-5feb-4590-abff-2644e6df08d4
-# ╠═660528bb-1a72-4a80-8bd7-91ef2859bdc9
-# ╠═d0391bbc-8db3-423e-b7f8-0635a88cc304
-# ╠═2c541f2a-bb8f-4e2c-adc8-57180c6d68b6
-# ╠═7deb21c9-89a2-435a-baf8-81e5a94f221c
-# ╠═a1e9d6a1-b1d6-4324-9cf9-ff64f38d6e2f
-# ╠═cb12ef36-ff94-4c2b-b1c5-57a23d1dad9d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
