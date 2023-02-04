@@ -135,21 +135,74 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     const player_black_id = "B";
     const player_white_id = "W";
 
-    // add random rings in array of shapes
-    shapes.push({path:{}, x:50, y:120, m_row: 0, m_col: 0, type: ring_id, player: player_black_id, active:false});
-    shapes.push({path:{}, x:50, y:160, m_row: 0, m_col: 0, type: ring_id, player: player_white_id, active:false});
+    //shapes.push({path:{}, x:50, y:120, m_row: 0, m_col: 0, type: ring_id, player: player_black_id, active:false});
+    //shapes.push({path:{}, x:50, y:160, m_row: 0, m_col: 0, type: ring_id, player: player_white_id, active:false});
 
     // specify dimensions for the triangles in the grid
     // for now outside, so they can be set depending on possible canvas size
     let S = 40;
     let H = Math.round(S * Math.sqrt(3)/2);
 
+    // instatiate event target for changes to the game state
+    let game_state_target = new EventTarget()
+
+    // Empty game state
+    let game_state = Array(19*11).fill(""); 
+
+    // listens to ring drops and updates game state
+    game_state_target.addEventListener("ring_dropped", 
+        function (evt) {
+
+        index = reshape_index(evt.detail.m_row, evt.detail.m_col);
+        value = evt.detail.type.concat(evt.detail.player);
+
+        game_state[index] = value;
+        console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
+
+        // create and dispatch event for the ring being dropped -> no zones to highlight
+        const allowedMoves_OFF_event = new CustomEvent("allowed_moves_OFF");
+        highlight_moves_target.dispatchEvent(allowedMoves_OFF_event);
+
+    });
+
+    // listens to ring picks and updates game state
+    game_state_target.addEventListener("ring_picked", 
+        async function (evt) {
+
+        index = reshape_index(evt.detail.m_row, evt.detail.m_col);
+        value = evt.detail.type.concat(evt.detail.player);
+
+        game_state[index] = "";
+        console.log(`${value} picked from ${evt.detail.m_row}:${evt.detail.m_col} at -> ${index}`);
+
+        row = evt.detail.m_row;
+        col = evt.detail.m_col;
+
+        const allowed_moves = await server_allowed_moves(game_state, row, col);
+
+        if (allowed_moves != "no_moves"){
+
+            // writes allowed moves to a global variable
+            current_allowed_moves = allowed_moves;
+
+            // create and dispatch event for the ring being picked and allowed moves being highlighted
+            const allowedMoves_ON_event = new CustomEvent("allowed_moves_ON");
+            highlight_moves_target.dispatchEvent(allowedMoves_ON_event);
+
+        };
+
+    });
+
+
     // initialize drop zones
     init_drop_zones();
+
+    // add random rings to an array of shapes
+    init_rings();
     
     // board and initial state drawn for the first time
     // this function is then called by the single events when they change the state
-    refresh_draw_state();
+    refresh_draw_state(); 
 
     function refresh_draw_state(){
         
@@ -325,7 +378,13 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                         let drop_path = new Path2D()
                         drop_path.arc(apoint_x, apoint_y, S*0.35, 0, 2*Math.PI);
 
-                        drop_zones.push({path: drop_path, x:apoint_x, y:apoint_y, m_row:j, m_col:k, index: reshape_index(j,k)});
+                        drop_zones.push({   path: drop_path, 
+                                            x: apoint_x, 
+                                            y: apoint_y, 
+                                            m_row: j, 
+                                            m_col: k, 
+                                            index: reshape_index(j,k)
+                                        });
 
                     }
                 }
@@ -382,7 +441,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
             ctx.globalAlpha = 1; 
             ctx.strokeStyle = "#1e52b7";
-            ctx.fillStyle = "#4277e0";
+            ctx.fillStyle = "#506fa8";
             ctx.lineWidth = 1;
 
             for(let i=0; i<highlight_zones.length; i++){
@@ -458,10 +517,35 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
     };
 
+        function init_rings(){
+
+            // pick N drop zones at random (note: it should be random)
+            random_picks_ids = [15, 36, 55, 82]; // max = 85
+
+            for (const id of random_picks_ids.values()) {
+                const ref_drop_zone = drop_zones[id];   
+                let init_ring = {   path:{}, 
+                                    x: ref_drop_zone.x, 
+                                    y: ref_drop_zone.y, 
+                                    m_row: ref_drop_zone.m_row, 
+                                    m_col: ref_drop_zone.m_col, 
+                                    type: ring_id, 
+                                    player: (id % 2 == 0) ? player_black_id : player_white_id , 
+                                    active: false
+                                };            
+                
+                shapes.push(init_ring);  
+                            
+                // create and dispatch event for the ring being initiated (as if it was dropped) so that game state can be updated
+                const ringDrop_event = new CustomEvent("ring_dropped", { detail: init_ring });
+                game_state_target.dispatchEvent(ringDrop_event);
+
+            };
+            
+        };
 
     // instatiate event target for changes to drop zones objects (manages state and triggers drawing)
     let highlight_moves_target = new EventTarget();
-
 
     // calls function to update the array of allowed moves -> highlighted zones
     highlight_moves_target.addEventListener("allowed_moves_ON", 
@@ -469,7 +553,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
         // this function operates on the array of the highlighted zones =/= allowable moves array
         // we map indexes to (x,y) coordinates
-        update_highlight_zones();
+        update_highlight_zones(); // animate drop zones size/coloring/wave??
         refresh_draw_state();
 
     });
@@ -481,65 +565,14 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         update_highlight_zones(empty = true);
         refresh_draw_state();
 
-    });
+    }); 
 
-
-    // Empty game state
-    let game_state = Array(19*11).fill(""); 
 
     // from col/row in a matrix to a linear index 
     // Julia expects col-major for building a matrix from an index
     // also, js arrays start at 0, hence the -1 offset
     function reshape_index(row, col) { return (col-1)*19 + row -1; };
-
-    // instatiate event target for changes to the game state
-    let game_state_target = new EventTarget()
     
-    // listens to ring drops and updates game state
-    game_state_target.addEventListener("ring_dropped", 
-        function (evt) {
-
-        index = reshape_index(evt.detail.m_row, evt.detail.m_col);
-        value = evt.detail.type.concat(evt.detail.player);
-
-        game_state[index] = value;
-        console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
-
-        // create and dispatch event for the ring being dropped -> no zones to highlight
-        const allowedMoves_OFF_event = new CustomEvent("allowed_moves_OFF");
-        highlight_moves_target.dispatchEvent(allowedMoves_OFF_event);
-
-    });
-
-    // listens to ring picks and updates game state
-    game_state_target.addEventListener("ring_picked", 
-        async function (evt) {
-
-        index = reshape_index(evt.detail.m_row, evt.detail.m_col);
-        value = evt.detail.type.concat(evt.detail.player);
-
-        game_state[index] = "";
-        console.log(`${value} picked from ${evt.detail.m_row}:${evt.detail.m_col} at -> ${index}`);
-
-        row = evt.detail.m_row;
-        col = evt.detail.m_col;
-
-        const allowed_moves = await server_allowed_moves(game_state, row, col);
-
-        if (allowed_moves != "no_moves"){
-
-            // writes allowed moves to a global variable
-            current_allowed_moves = allowed_moves;
-
-            // create and dispatch event for the ring being picked and allowed moves being highlighted
-            const allowedMoves_ON_event = new CustomEvent("allowed_moves_ON");
-            highlight_moves_target.dispatchEvent(allowedMoves_ON_event);
-
-        };
-
-    });
-
-
     // If a move is underway, need to drop the ring before doing something else
     function check_active_ring() {
         // if any ring is set to active, returns its index - otherwise "no"
@@ -570,7 +603,8 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                             x: drop_zones[i].x, 
                             y: drop_zones[i].y,
                             m_row: drop_zones[i].m_row,
-                            m_col: drop_zones[i].m_col
+                            m_col: drop_zones[i].m_col,
+                            index: drop_zones[i].index
                             }; 
             };
         };
@@ -579,10 +613,11 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
     };
 
-    // IDEAS
-    // use drop zones to highlight allowable moves
-    // animate drop zones size/coloring/wave
-
+    // function to return true if the drop zone index is among the allowable moves
+    function valid_snap(drop_index){
+        return current_allowed_moves.includes(drop_index);
+    };
+    
 
     // CAPTURE MOUSE EVENTS AND DO SOMETHING
     // https://bencentra.com/code/2014/12/05/html5-canvas-touch-events.html
@@ -603,6 +638,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                 for(let i=0; i<shapes.length; i++){
                     
                     // set selected path to active if it's a ring
+                    // this should go to dedicated function !!
                     if (ctx.isPointInPath(shapes[i].path, mousePos.x, mousePos.y)){
                         if (shapes[i].type == ring_id){
                             
@@ -624,39 +660,45 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                 };
 
             } else {
-                // drop in place the currently active ring  
-                // the ring must snap to the grid 
-
+                
+                // drop the currently active ring so that it snaps to the grid
                 drop_coord = closest_snap(mousePos.x, mousePos.y);
-
+                
+                // geometric check first 
                 if (drop_coord !== "no_snap"){
 
-                    // the server should confirm that the coordinates are okay
-                    // all of these should be wrapped into functions that take care of single tasks (legality check, update ring values and state, etc)
+                    // when the ring was picked, the server is asked for allowed spots -> stored as linear index in current_allowed_moves
+                    if (valid_snap(drop_coord.index) == true){
 
-                    // making the ring inactive again
-                    shapes[active_ring].active = false;
-                   
-                    // dropping it at the center of the drop zones (x/y are drawing)
-                    shapes[active_ring].x = drop_coord.x;
-                    shapes[active_ring].y = drop_coord.y;
+                        // making the ring inactive again
+                        shapes[active_ring].active = false;
+                    
+                        // dropping it at the center of the drop zones (x/y are drawing)
+                        shapes[active_ring].x = drop_coord.x;
+                        shapes[active_ring].y = drop_coord.y;
 
-                    // updating row/col location of the ring (row/col for state)
-                    shapes[active_ring].m_row = drop_coord.m_row;
-                    shapes[active_ring].m_col = drop_coord.m_col;
+                        // updating row/col location of the ring (row/col for state)
+                        shapes[active_ring].m_row = drop_coord.m_row;
+                        shapes[active_ring].m_col = drop_coord.m_col;
 
-                    // create and dispatch event for the ring being dropped -> game state should change
-                    const ringDrop_event = new CustomEvent("ring_dropped", { detail: shapes[active_ring] });
-                    game_state_target.dispatchEvent(ringDrop_event);
+                        // create and dispatch event for the ring being dropped -> game state should change
+                        const ringDrop_event = new CustomEvent("ring_dropped", { detail: shapes[active_ring] });
+                        game_state_target.dispatchEvent(ringDrop_event);
 
-                    // logging drop coordinates
-                    //console.log(drop_coord);
+                        // logging drop coordinates
+                        //console.log(drop_coord);
 
-                    // re-draw everything
-                    refresh_draw_state(); // this might be an event to be fired and not a function call (?)
+                        // re-draw everything
+                        refresh_draw_state(); // this might be an event to be fired and not a function call (?)
 
-                    // play sound
-                    sfxr.play(sound); // this same as above
+                        // play sound
+                        sfxr.play(sound); // this same as above
+
+                    } else {
+                        
+                        console.log("Invalid drop location");
+
+                    };
                 };  
             };
         });
