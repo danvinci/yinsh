@@ -505,10 +505,11 @@ function search_loc(ref_board, row_start::Int, col_start::Int)
 		# append valid moves to array to be returned
 		append!(search_return, keepValid(ref_board, search_temp)) 
 
-		# also append initial location of the ring
-		# NOTE: to be removed/changed after handling ring activation in the client
-		append!(search_return, [CartesianIndex(row_start, col_start)])
 	end
+
+	# append initial location of the ring
+	# NOTE: to be removed/changed after handling ring activation in the client
+	append!(search_return, [CartesianIndex(row_start, col_start)])
 
 return search_return
 
@@ -643,7 +644,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1031
+port_test = 1032
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -740,6 +741,13 @@ req_test = global_states[end]
 # ╔═╡ 4c983857-8532-487c-bcc4-8843c9a3cc31
 resp_js = JSON3.read(req_test.body)
 
+# ╔═╡ f87ce8a4-e250-49dd-95cf-b0992585101e
+search_loc(
+			reshape([s for s in resp_js[:state]], 19, 11), 
+			resp_js[:row], 
+			resp_js[:col]
+			)
+
 # ╔═╡ e28edbf2-fd82-46fd-aca8-0070bc21c289
 begin
 
@@ -753,6 +761,17 @@ to_flip = markers_flip(
 						resp_js[:end_col]
 						)
 
+end
+
+# ╔═╡ 381addf7-535e-40b2-9d47-4c220ed69355
+begin
+
+	test_linear_index = Int[];
+	for col in 1:11
+		for row in 1:19
+			push!(test_linear_index, (col-1)*19 + row -1)
+		end
+	end
 end
 
 # ╔═╡ ca4a8229-3b34-4b5d-9807-27b840183109
@@ -1821,7 +1840,9 @@ version = "1.4.1+0"
 # ╠═b13e5c1d-454f-4c87-9523-863a7d5d843f
 # ╠═f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
 # ╠═4c983857-8532-487c-bcc4-8843c9a3cc31
+# ╠═f87ce8a4-e250-49dd-95cf-b0992585101e
 # ╠═e28edbf2-fd82-46fd-aca8-0070bc21c289
+# ╠═381addf7-535e-40b2-9d47-4c220ed69355
 # ╟─ca4a8229-3b34-4b5d-9807-27b840183109
 # ╠═b8ff58a8-dabe-4e03-baf2-0c351c66ecd7
 # ╠═64b1f98e-2e04-4db2-a827-4bc74ead76ab
