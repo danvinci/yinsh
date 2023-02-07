@@ -326,7 +326,7 @@ function random_states_setup()
 
 
 	# element types and how many we want to place of each
-	elems_typeNum = ("Rw" => 4, "Rb" => 4, "Mw" => 9, "Mb" => 12)
+	elems_typeNum = ("RW" => 4, "RB" => 4, "MW" => 9, "MB" => 12)
 
 	
 	# place all elements in board
@@ -347,10 +347,10 @@ function rings_marks_graph()
 	# draw base board
 
 	new_board = draw_board()
-	Rw_locs = findall(x -> x=="Rw", mm_setup)
-	Rb_locs = findall(x -> x=="Rb", mm_setup)
-	Mw_locs = findall(x -> x=="Mw", mm_setup)
-	Mb_locs = findall(x -> x=="Mb", mm_setup)
+	Rw_locs = findall(x -> x=="RW", mm_setup)
+	Rb_locs = findall(x -> x=="RB", mm_setup)
+	Mw_locs = findall(x -> x=="MW", mm_setup)
+	Mb_locs = findall(x -> x=="MB", mm_setup)
 
 	ring_size = 11
 	marker_size = 6
@@ -389,19 +389,98 @@ setup_graph = rings_marks_graph();
 # ╔═╡ edfa0b25-9132-4de9-bf11-3ea2f0952e4f
 row_start_n = locz[locz_index_n][1]; col_start_n = locz[locz_index_n][2];
 
+# ╔═╡ 003f670b-d3b1-4905-b105-67504f16ba19
+# populate dictionary of locations search space 
+function pop_searchSpace!(locs_searchSpace::Dict)
+
+	# board bounds 
+	last_row = 19
+	last_col = 11
+
+	# keys mapping to valid board locations
+	keys_loc = findall(x -> x==1, mm_yinsh_01)
+	
+	for key in keys_loc
+
+		## Generate zip ranges for each direction
+		# get row/col from each cart_index location
+		row_start = key[1]
+		col_start = key[2]
+	
+		# Init array for zip ranges
+		zip_ranges = []
+	
+		# straight up to first row, k stays the same (j-2, k = k)
+		j_range = row_start-2:-2:1
+		k_range = [col_start for _ in j_range]
+	
+			push!(zip_ranges, zip(j_range, k_range))
+	
+		# straight down to last row, k stays the same (j+2, k = k)
+		j_range = row_start+2:2:last_row
+		k_range = [col_start for _ in j_range]
+	
+			push!(zip_ranges, zip(j_range, k_range))
+	
+		# diagonal up right (j-1, k+1)
+		j_range = row_start-1:-1:1
+		k_range = col_start+1:last_col
+	
+			push!(zip_ranges, zip(j_range, k_range))
+		
+		# diagonal down right (j+1, k+1)
+		j_range = row_start+1:last_row
+		k_range = col_start+1:last_col
+	
+			push!(zip_ranges, zip(j_range, k_range))
+	
+		# diagonal up left (j-1, k-1)
+		j_range = row_start-1:-1:1
+		k_range = col_start-1:-1:1
+	
+			push!(zip_ranges, zip(j_range, k_range))
+	
+		# diagonal down left (j+1, k-1)
+		j_range = row_start+1:last_row
+		k_range = col_start-1:-1:1
+	
+			push!(zip_ranges, zip(j_range, k_range))
+
+		## Convert locations to cart_index
+		# Init array for zip ranges
+		cartIndex_ranges = []
+
+		for range in zip_ranges
+
+			if length(range) > 0
+				push!(cartIndex_ranges, [CartesianIndex(z[1], z[2]) for z in range])
+			end
+		end
+
+		
+		## Write array of cartesian locations to dictionary
+		setindex!(locs_searchSpace, cartIndex_ranges, key)
+
+	end
+
+end
+
+# ╔═╡ 1d811aa5-940b-4ddd-908d-e94fe3635a6a
+# pre-populate dictionary with search space for each starting location
+
+begin
+	locs_searchSpace = Dict()
+	pop_searchSpace!(locs_searchSpace)
+end
+
 # ╔═╡ 52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
-function keepValid(ref_board, ref_array)
+function keepValid(state, ref_array)
 
-
-	# point must belong to the board
-	# could be moved to the end depending on how we implement jump condition over markers
-	valid_spots = findall(x -> x==1, mm_yinsh_01)
-
-	# temp array of cartesian indexes
-	loc_array = filter(x -> x in valid_spots, ref_array)
+	# create a copy to avoid modifying location arrays
+	loc_array = ref_array
 
 	# recovering states for all indexes in temp array
-	states_array = [ref_board[z] for z in loc_array]
+	states_array = [state[z] for z in loc_array]
 
 	# cutting at the first ring encountered
 	firstRing_index = findfirst(x -> contains(x,"R"), states_array)
@@ -411,7 +490,7 @@ function keepValid(ref_board, ref_array)
 		loc_array = loc_array[1:firstRing_index-1]
 		
 		# keeping states array updated
-		states_array = [ref_board[z] for z in loc_array]
+		states_array = [state[z] for z in loc_array]
 	end
 
 
@@ -422,14 +501,14 @@ function keepValid(ref_board, ref_array)
 			loc_array = loc_array[1:i+1]
 
 			# keeping states array fresh
-			states_array = [ref_board[z] for z in loc_array]
+			states_array = [state[z] for z in loc_array]
 			break
 		end
 	end
 
 
 	# remove existing markers from set of valid locations	
-	loc_array = filter(z -> !contains(ref_board[z], "M"), loc_array)
+	loc_array = filter(z -> !contains(state[z], "M"), loc_array)
 			
 	
 	return loc_array
@@ -437,73 +516,26 @@ function keepValid(ref_board, ref_array)
 end
 
 # ╔═╡ bf2dce8c-f026-40e3-89db-d72edb0b041c
-### NOTE: explore variant using findall first and filtering later
-
+# returns sub-array of valid moves
 function search_loc(ref_board, row_start::Int, col_start::Int)
 
-	# checks that row/col are valid
-	if !(1<= row_start <= 19) && !(1<= col_start <= 11) 
-		return [] 
-
-	# checks that row/col match active points
-	elseif bounds_check(row_start, col_start) == false
-		return []
+	start_index = CartesianIndex(row_start, col_start)
 	
+	# checks that row/col are valid
+	if !(start_index in keys(locs_searchSpace))
+		return [] 
 	end
 
-	# board bounds 
-	last_row = 19
-	last_col = 11
+	# retrieve search space for the starting point
+	search_space = locs_searchSpace[start_index]
 
-	# array of valid locations/moves to be returned
-	search_return = CartesianIndex[]
-	
-	## Prepare up search_arrays	
-	zip_ranges = []
+	# array to be returned
+	search_return = []
 
-	# straight up to first row, k stays the same (j-2, k = k)
-	j_range = row_start-2:-2:1
-	k_range = [col_start for _ in j_range]
-
-		push!(zip_ranges, zip(j_range, k_range))
-
-	# straight down to last row, k stays the same (j+2, k = k)
-	j_range = row_start+2:2:last_row
-	k_range = [col_start for _ in j_range]
-
-		push!(zip_ranges, zip(j_range, k_range))
-
-	# diagonal up right (j-1, k+1)
-	j_range = row_start-1:-1:1
-	k_range = col_start+1:last_col
-
-		push!(zip_ranges, zip(j_range, k_range))
-	
-	# diagonal down right (j+1, k+1)
-	j_range = row_start+1:last_row
-	k_range = col_start+1:last_col
-
-		push!(zip_ranges, zip(j_range, k_range))
-
-	# diagonal up left (j-1, k-1)
-	j_range = row_start-1:-1:1
-	k_range = col_start-1:-1:1
-
-		push!(zip_ranges, zip(j_range, k_range))
-
-	# diagonal down left (j+1, k-1)
-	j_range = row_start+1:last_row
-	k_range = col_start-1:-1:1
-
-		push!(zip_ranges, zip(j_range, k_range))
-
-	for range in zip_ranges
-
-		# temp array of moves to validate
-		search_temp = [CartesianIndex(z[1], z[2]) for z in range]
+	for range in search_space
 
 		# append valid moves to array to be returned
-		append!(search_return, keepValid(ref_board, search_temp)) 
+		append!(search_return, keepValid(ref_board, range)) 
 
 	end
 
@@ -522,18 +554,13 @@ search_loc_graph(draw_board() ,row_start, col_start, search_loc(mm_states, row_s
 search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, row_start_n,col_start_n))
 
 # ╔═╡ c67154cb-c8cc-406c-90a8-0ea8241d8571
-function markers_search(ref_board, ref_array)
+function markers_search(state, ref_array)
 
-	# point must belong to the board
-	# could be moved to the end depending on how we implement jump condition over markers
-	valid_spots = findall(x -> x==1, mm_yinsh_01) # might be overkill considering teh construction of the ranges
-	# also, we should operate directly on the list of 85 points and/or pre-built ranges -> store results of findall for yinsh_01
-
-	# temp array of cartesian indexes
-	loc_array = filter(x -> x in valid_spots, ref_array)
+	# create a copy to avoid modifying location arrays
+	loc_array = ref_array
 
 	# recovering states for all indexes in temp array
-	states_array = [ref_board[z] for z in loc_array]
+	states_array = [state[z] for z in loc_array]
 
 	# cutting at the first ring encountered
 	# the first ring is the one that was moved!
@@ -545,9 +572,8 @@ function markers_search(ref_board, ref_array)
 	end
 
 	# pick markers from set of remaining locations	
-	loc_array = filter(z -> contains(ref_board[z], "M"), loc_array)
+	loc_array = filter(z -> contains(state[z], "M"), loc_array)
 			
-	
 	return loc_array
 
 end
@@ -556,76 +582,22 @@ end
 function markers_flip(state, row_start, col_start, row_end, col_end)
 
 	end_index = CartesianIndex(row_end, col_end)
-		
-	# cut search space
-	valid_spots = findall(x -> x==1, mm_yinsh_01)
-
-
-# recompute possible movement ranges (should be stored or pre-computed for all ?)
-# keep track of which array maps to which direction
-# see in which array/direction is now the ring
-# slice it knowing the end position
-# return markers in sliced array
-
-
-	# board bounds 
-	last_row = 19
-	last_col = 11
-
-
-	## Prepare up search_arrays	
-	zip_ranges = []
-
-	# straight up to first row, k stays the same (j-2, k = k) -> direction 1
-	j_range = row_start-2:-2:1
-	k_range = [col_start for _ in j_range]
-
-		push!(zip_ranges, zip(j_range, k_range))
-
-	# straight down to last row, k stays the same (j+2, k = k) -> direction 2
-	j_range = row_start+2:2:last_row
-	k_range = [col_start for _ in j_range]
-
-		push!(zip_ranges, zip(j_range, k_range))
-
-	# diagonal up right (j-1, k+1) -> direction 3
-	j_range = row_start-1:-1:1
-	k_range = col_start+1:last_col
-
-		push!(zip_ranges, zip(j_range, k_range)) 
+	start_index = CartesianIndex(row_start, col_start)
 	
-	# diagonal down right (j+1, k+1) -> direction 4
-	j_range = row_start+1:last_row
-	k_range = col_start+1:last_col
-
-		push!(zip_ranges, zip(j_range, k_range))
-
-	# diagonal up left (j-1, k-1) -> direction 5
-	j_range = row_start-1:-1:1
-	k_range = col_start-1:-1:1
-
-		push!(zip_ranges, zip(j_range, k_range))
-
-	# diagonal down left (j+1, k-1) -> direction 6
-	j_range = row_start+1:last_row
-	k_range = col_start-1:-1:1
-
-		push!(zip_ranges, zip(j_range, k_range))
-
-
-	cart_ranges = []
-	
-	# map zips to cartesian indexes
-	for range in zip_ranges
-
-		push!(cart_ranges, [CartesianIndex(z[1], z[2]) for z in range])
+	# checks that end both start and end are valid -> otherwise return no markers
+	valid_locs = keys(locs_searchSpace)
+	if !((start_index in valid_locs) || (end_index in valid_locs))
+		return [] 
 	end
+
+	# retrieve search space for the starting point
+	search_space = locs_searchSpace[start_index]
 
 
 	direction = 0
 
-	# spot direction that contains the ring 
-	for (i, range) in enumerate(cart_ranges)
+	# spot direction/array that contains the ring 
+	for (i, range) in enumerate(search_space)
 
 		# check if search_temp contains end_index
 		if (end_index in range)
@@ -635,7 +607,7 @@ function markers_flip(state, row_start, col_start, row_end, col_end)
 	end
 
 	# return markers within direction of movement
-	return markers_search(state, cart_ranges[direction])
+	return markers_search(state, search_space[direction])
 
 
 end
@@ -644,7 +616,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1032
+port_test = 1035
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1828,6 +1800,8 @@ version = "1.4.1+0"
 # ╠═e767b0a7-282f-46c4-b2e7-1f737807a3cb
 # ╠═edfa0b25-9132-4de9-bf11-3ea2f0952e4f
 # ╠═ccbf567a-8923-4343-a2ff-53d81f2b6361
+# ╠═1d811aa5-940b-4ddd-908d-e94fe3635a6a
+# ╟─003f670b-d3b1-4905-b105-67504f16ba19
 # ╠═bf2dce8c-f026-40e3-89db-d72edb0b041c
 # ╠═52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
 # ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
