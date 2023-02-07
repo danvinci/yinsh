@@ -586,7 +586,7 @@ function markers_flip(state, row_start, col_start, row_end, col_end)
 	
 	# checks that end both start and end are valid -> otherwise return no markers
 	valid_locs = keys(locs_searchSpace)
-	if !((start_index in valid_locs) || (end_index in valid_locs))
+	if (!(start_index in valid_locs) || !(end_index in valid_locs))
 		return [] 
 	end
 
@@ -616,7 +616,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1035
+port_test = 1036
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []

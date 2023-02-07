@@ -918,7 +918,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
         
     // SERVER INTERFACE FUNCTIONS
-    port_number = "1035"
+    port_number = "1036"
 
     // server call for checking allowable moves 
     async function server_allowed_moves(state, start_row, start_col){
@@ -969,7 +969,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         response = await fetch(`http://localhost:${port_number}/api/v1/markers_check`, {
             method: 'POST', 
             body: JSON.stringify({
-                                    "game_id": 'dummy_game_unique_id', 
+                                    "game_id": 'game_unique_id', 
                                     "state": state, 
                                     "start_row": start_row,
                                     "start_col": start_col,
