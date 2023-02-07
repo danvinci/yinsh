@@ -410,7 +410,7 @@ function keepValid(ref_board, ref_array)
 		# slice locations array to be returned
 		loc_array = loc_array[1:firstRing_index-1]
 		
-		# keeping states array fresh
+		# keeping states array updated
 		states_array = [ref_board[z] for z in loc_array]
 	end
 
@@ -458,9 +458,6 @@ function search_loc(ref_board, row_start::Int, col_start::Int)
 	# array of valid locations/moves to be returned
 	search_return = CartesianIndex[]
 	
-	# temp array of locations to be added to the set of search arrays
-	search_temp = CartesianIndex[]
-
 	## Prepare up search_arrays	
 	zip_ranges = []
 
@@ -523,25 +520,122 @@ search_loc_graph(draw_board() ,row_start, col_start, search_loc(mm_states, row_s
 # ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
 search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, row_start_n,col_start_n))
 
-# ╔═╡ 8f2e4816-b60d-40eb-a9d8-acf4240c646a
-function markers_flip(row_start, col_start, row_end, col_end)
+# ╔═╡ c67154cb-c8cc-406c-90a8-0ea8241d8571
+function markers_search(ref_board, ref_array)
 
-# assume straight line, assume valid start/end
-start_index = CartesianIndex(row_start, col_start)
-end_index = CartesianIndex(row_end, col_end)
+	# point must belong to the board
+	# could be moved to the end depending on how we implement jump condition over markers
+	valid_spots = findall(x -> x==1, mm_yinsh_01) # might be overkill considering teh construction of the ranges
+	# also, we should operate directly on the list of 85 points and/or pre-built ranges -> store results of findall for yinsh_01
+
+	# temp array of cartesian indexes
+	loc_array = filter(x -> x in valid_spots, ref_array)
+
+	# recovering states for all indexes in temp array
+	states_array = [ref_board[z] for z in loc_array]
+
+	# cutting at the first ring encountered
+	# the first ring is the one that was moved!
+	firstRing_index = findfirst(x -> contains(x,"R"), states_array)
+
+	if firstRing_index !== nothing
+		# slice locations array 
+		loc_array = loc_array[1:firstRing_index-1]
+	end
+
+	# pick markers from set of remaining locations	
+	loc_array = filter(z -> contains(ref_board[z], "M"), loc_array)
+			
 	
-# draw straight line
-# cut search space
-valid_spots = findall(x -> x==1, mm_yinsh_01)
+	return loc_array
 
-min_r, max_r = min(row_start, row_end), max(row_start, row_end)
-min_c, max_c = min(col_start, col_end), max(col_start, col_end)
+end
 
-ids = findall(s -> ((min_r < s[1] < max_r) && (min_c < s[2] < max_c)), valid_spots)
+# ╔═╡ 8f2e4816-b60d-40eb-a9d8-acf4240c646a
+function markers_flip(state, row_start, col_start, row_end, col_end)
 
-# return coordinates of all markers within (IN PROGRESS, DUMMY FUNCTION)
+	end_index = CartesianIndex(row_end, col_end)
+		
+	# cut search space
+	valid_spots = findall(x -> x==1, mm_yinsh_01)
 
-return [valid_spots[i] for i in ids]
+
+# recompute possible movement ranges (should be stored or pre-computed for all ?)
+# keep track of which array maps to which direction
+# see in which array/direction is now the ring
+# slice it knowing the end position
+# return markers in sliced array
+
+
+	# board bounds 
+	last_row = 19
+	last_col = 11
+
+
+	## Prepare up search_arrays	
+	zip_ranges = []
+
+	# straight up to first row, k stays the same (j-2, k = k) -> direction 1
+	j_range = row_start-2:-2:1
+	k_range = [col_start for _ in j_range]
+
+		push!(zip_ranges, zip(j_range, k_range))
+
+	# straight down to last row, k stays the same (j+2, k = k) -> direction 2
+	j_range = row_start+2:2:last_row
+	k_range = [col_start for _ in j_range]
+
+		push!(zip_ranges, zip(j_range, k_range))
+
+	# diagonal up right (j-1, k+1) -> direction 3
+	j_range = row_start-1:-1:1
+	k_range = col_start+1:last_col
+
+		push!(zip_ranges, zip(j_range, k_range)) 
+	
+	# diagonal down right (j+1, k+1) -> direction 4
+	j_range = row_start+1:last_row
+	k_range = col_start+1:last_col
+
+		push!(zip_ranges, zip(j_range, k_range))
+
+	# diagonal up left (j-1, k-1) -> direction 5
+	j_range = row_start-1:-1:1
+	k_range = col_start-1:-1:1
+
+		push!(zip_ranges, zip(j_range, k_range))
+
+	# diagonal down left (j+1, k-1) -> direction 6
+	j_range = row_start+1:last_row
+	k_range = col_start-1:-1:1
+
+		push!(zip_ranges, zip(j_range, k_range))
+
+
+	cart_ranges = []
+	
+	# map zips to cartesian indexes
+	for range in zip_ranges
+
+		push!(cart_ranges, [CartesianIndex(z[1], z[2]) for z in range])
+	end
+
+
+	direction = 0
+
+	# spot direction that contains the ring 
+	for (i, range) in enumerate(cart_ranges)
+
+		# check if search_temp contains end_index
+		if (end_index in range)
+			 direction = i
+			break
+		end
+	end
+
+	# return markers within direction of movement
+	return markers_search(state, cart_ranges[direction])
+
 
 end
 
@@ -549,15 +643,13 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1020
-
-# ╔═╡ a9afec7f-ee2c-484b-881f-9b24d62737c7
-#HTTP.forceclose(simple_srv)
+port_test = 1031
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
 
 # ╔═╡ d3b0a36b-0578-40ad-8c96-bdad11e29a83
+# server + router + service functions definition
 begin
 
 	using HTTP, JSON3, Sockets
@@ -605,6 +697,7 @@ begin
 
 		# check markers that should be flipped
 		to_flip = markers_flip(
+								reshape([s for s in body_json[:state]], 19, 11),
 								body_json[:start_row], 
 								body_json[:start_col], 
 								body_json[:end_row], 
@@ -624,9 +717,17 @@ begin
 	HTTP.register!(simple_router, "POST", "/api/v1/markers_check", markers_check)
 	
 
-	# start server 
-	simple_srv = HTTP.serve!(simple_router, Sockets.localhost, port_test)
-	
+end
+
+# ╔═╡ 75ce1c80-1dc6-4e0a-852a-830f88269022
+begin
+
+# start server 
+simple_srv = HTTP.serve!(simple_router, Sockets.localhost, port_test)
+
+# force server shutdown
+#HTTP.forceclose(simple_srv)
+
 
 end
 
@@ -639,16 +740,20 @@ req_test = global_states[end]
 # ╔═╡ 4c983857-8532-487c-bcc4-8843c9a3cc31
 resp_js = JSON3.read(req_test.body)
 
-# ╔═╡ eb217ce6-48de-4ebe-86cd-f5b0c0685c91
-markers_flip(
-				resp_js[:start_row], 
-				resp_js[:start_col], 
-				resp_js[:end_row], 
-				resp_js[:end_col]
-				)
+# ╔═╡ e28edbf2-fd82-46fd-aca8-0070bc21c289
+begin
 
-# ╔═╡ 943d4bc5-ad8e-41e5-842a-0fdb9a94f47d
-_moves = search_loc(reshape(resp_js[:state], 19, 11), resp_js[:row], resp_js[:col])
+
+# check markers that should be flipped
+to_flip = markers_flip(
+						reshape([s for s in resp_js[:state]], 19, 11),
+						resp_js[:start_row], 
+						resp_js[:start_col], 
+						resp_js[:end_row], 
+						resp_js[:end_col]
+						)
+
+end
 
 # ╔═╡ ca4a8229-3b34-4b5d-9807-27b840183109
 md"""### Options for storing game sessions and states"""
@@ -688,7 +793,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "b6e27b5ded1ded35ca7c887f24c6e19457b81ccd"
+project_hash = "86f3bb7cc1018d00e608136ed5881f3c91cdfdbc"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1707,16 +1812,16 @@ version = "1.4.1+0"
 # ╠═bf2dce8c-f026-40e3-89db-d72edb0b041c
 # ╠═52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
 # ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
+# ╠═c67154cb-c8cc-406c-90a8-0ea8241d8571
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
-# ╠═a9afec7f-ee2c-484b-881f-9b24d62737c7
+# ╠═75ce1c80-1dc6-4e0a-852a-830f88269022
 # ╠═5a0a2a61-57e6-4044-ad00-c8f0f569159d
 # ╠═b13e5c1d-454f-4c87-9523-863a7d5d843f
 # ╠═f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
 # ╠═4c983857-8532-487c-bcc4-8843c9a3cc31
-# ╠═eb217ce6-48de-4ebe-86cd-f5b0c0685c91
-# ╠═943d4bc5-ad8e-41e5-842a-0fdb9a94f47d
+# ╠═e28edbf2-fd82-46fd-aca8-0070bc21c289
 # ╟─ca4a8229-3b34-4b5d-9807-27b840183109
 # ╠═b8ff58a8-dabe-4e03-baf2-0c351c66ecd7
 # ╠═64b1f98e-2e04-4db2-a827-4bc74ead76ab

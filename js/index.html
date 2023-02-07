@@ -170,7 +170,11 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         const markers_to_flip = await server_markers_check(game_state, current_move_start.row, current_move_start.col, end_row, end_col);
         // trigger event to other listener -> change player for marker -> update game status -> retrigger drawing 
 
-        // reset global variable for the current move 
+        if (markers_to_flip != "no_markers_to_flip"){
+            flip_markers(markers_to_flip);
+        };
+
+        // reset global variable for the current move -> maybe to move to specialized function?
         current_move_start.row = 0;
         current_move_start.col = 0;
     });
@@ -212,11 +216,11 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     game_state_target.addEventListener("marker_init", 
         function (evt) {
 
-        index = reshape_index(evt.detail.m_row, evt.detail.m_col);
+        index = evt.detail.index
         value = evt.detail.type.concat(evt.detail.player); // -> RB, RW, MB, MW
 
         game_state[index] = value;
-        console.log(`${value} init at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
+        console.log(`${value} init at ${evt.detail.m_row}:${evt.detail.m_col} -> ${evt.detail.index}`);
 
     });
 
@@ -611,7 +615,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         function init_markers(){
 
             // pick N drop zones at random (note: it should be random)
-            random_picks_ids = [18, 35, 54, 77]; // max = 85
+            random_picks_ids = [18, 35, 54, 58, 77, 7, 11, 16, 19, 38, 43, 59]; // max = 85
 
             for (const id of random_picks_ids.values()) {
                 const ref_drop_zone = drop_zones[id];   
@@ -619,7 +623,8 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                 let init_marker = { x: ref_drop_zone.x, 
                                     y: ref_drop_zone.y, 
                                     m_row: ref_drop_zone.m_row, 
-                                    m_col: ref_drop_zone.m_col, 
+                                    m_col: ref_drop_zone.m_col,
+                                    index: ref_drop_zone.index,  
                                     type: marker_id, 
                                     player: (id % 2 == 0) ? player_black_id : player_white_id 
                                 };            
@@ -634,7 +639,29 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
         };
 
-    // instatiate event target for changes to drop zones objects (manages state and triggers drawing)
+        function flip_markers(markers_to_flip){
+
+            for (const marker of markers.values()) {
+                if (markers_to_flip.includes(marker.index)) {
+
+                    marker.player = (marker.player == player_black_id ? player_white_id : player_black_id);   
+                   
+                };
+            
+            };
+                // create and dispatch event for the markers having being flipped
+                // we know at least one has been flipped due to function call condition in the game state listener
+                // this could be later used for sound effect -> count number of markers flipped and play with some delay and/or animate
+                //const markersFlipped_event = new CustomEvent("markers_flipped", { detail: markers_to_flip });
+                //game_state_target.dispatchEvent(markersFlipped_event);
+
+                // for now let's just re-draw everything once done
+                refresh_draw_state();
+
+            };
+        
+    
+        // instatiate event target for changes to drop zones objects (manages state and triggers drawing)
     let highlight_moves_target = new EventTarget(); 
 
     // calls function to update the array of allowed moves -> highlighted zones
@@ -891,6 +918,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
         
     // SERVER INTERFACE FUNCTIONS
+    port_number = "1031"
 
     // server call for checking allowable moves 
     async function server_allowed_moves(state, start_row, start_col){
@@ -899,7 +927,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         // https://stackoverflow.com/questions/40385133/retrieve-data-from-a-readablestream-object
         
     
-        response = await fetch('http://localhost:1020/api/v1/allowed_moves', {
+        response = await fetch(`http://localhost:${port_number}/api/v1/allowed_moves`, {
             method: 'POST', // GET requests cannot have a body
             body: JSON.stringify({
                                     "game_id": 'dummy_game_unique_id', 
@@ -938,7 +966,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     // server call for checking which markers must be flipped
     async function server_markers_check(state, start_row, start_col, end_row, end_col){
     
-        response = await fetch('http://localhost:1020/api/v1/markers_check', {
+        response = await fetch(`http://localhost:${port_number}/api/v1/markers_check`, {
             method: 'POST', 
             body: JSON.stringify({
                                     "game_id": 'dummy_game_unique_id', 
@@ -946,7 +974,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                                     "start_row": start_row,
                                     "start_col": start_col,
                                     "end_row": end_row,
-                                    "end_col": end_row
+                                    "end_col": end_col
 
                                 })
         });
