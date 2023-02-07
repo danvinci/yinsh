@@ -391,7 +391,7 @@ row_start_n = locz[locz_index_n][1]; col_start_n = locz[locz_index_n][2];
 
 # ╔═╡ 003f670b-d3b1-4905-b105-67504f16ba19
 # populate dictionary of locations search space 
-function pop_searchSpace!(locs_searchSpace::Dict)
+function populate_searchSpace!(locs_searchSpace::Dict)
 
 	# board bounds 
 	last_row = 19
@@ -470,7 +470,7 @@ end
 
 begin
 	locs_searchSpace = Dict()
-	pop_searchSpace!(locs_searchSpace)
+	populate_searchSpace!(locs_searchSpace)
 end
 
 # ╔═╡ 52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
@@ -616,7 +616,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1036
+port_test = 1037
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -784,7 +784,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "86f3bb7cc1018d00e608136ed5881f3c91cdfdbc"
+project_hash = "b6e27b5ded1ded35ca7c887f24c6e19457b81ccd"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]

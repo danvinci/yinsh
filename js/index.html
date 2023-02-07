@@ -129,7 +129,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     let drop_zones = [];
     let highlight_zones = [];
     let current_allowed_moves = [];
-    let current_move_start = {row: 0, col: 0};
+    let current_move_start = {row: 0, col: 0, x: 0, y: 0};
 
     // these values are used in defining rings/markers, log status, and check conditions within functions
     const ring_id = "R";
@@ -174,9 +174,27 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             flip_markers(markers_to_flip);
         };
 
+        // if start != end, marker needs to be dropped 
+        if (end_row != current_move_start.row || end_col != current_move_start.col){
+            // place marker in starting spot (TRAILING)
+            init_markers(   random = false, 
+                            mk_coord = {    x: current_move_start.x, 
+                                            y: current_move_start.y, 
+                                            m_row: current_move_start.row, 
+                                            m_col: current_move_start.col, 
+                                            index: reshape_index(current_move_start.row, current_move_start.col)},
+                            mk_player = evt.detail.player
+                            
+                        );
+        };
+
+
         // reset global variable for the current move -> maybe to move to specialized function?
         current_move_start.row = 0;
         current_move_start.col = 0;
+        current_move_start.x = 0;
+        current_move_start.y = 0;
+
     });
 
     // listens to ring picks and updates game state
@@ -195,6 +213,9 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         // write start of the currently active move to a global variable
         current_move_start.row = row;
         current_move_start.col = col;
+        current_move_start.x = evt.detail.x;
+        current_move_start.y = evt.detail.y;
+        
 
         // get allowed moves from the server
         const allowed_moves = await server_allowed_moves(game_state, row, col);
@@ -221,7 +242,9 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
         game_state[index] = value;
         console.log(`${value} init at ${evt.detail.m_row}:${evt.detail.m_col} -> ${evt.detail.index}`);
+        console.log(`Markers on the board: ${markers.length}`);
 
+        refresh_draw_state();
     });
 
     // initialize drop zones
@@ -612,21 +635,20 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             
         };
 
-        function init_markers(){
+        function init_markers(random = true, mk_coord = {}, mk_player = ""){
 
-            // pick N drop zones at random (note: it should be random)
-            random_picks_ids = [18, 35, 54, 58, 77, 7, 11, 16, 19, 38, 43, 59]; // max = 85
+            if (random == false){
+            // assumes the function will be called for single markers
 
-            for (const id of random_picks_ids.values()) {
-                const ref_drop_zone = drop_zones[id];   
-                 
-                let init_marker = { x: ref_drop_zone.x, 
-                                    y: ref_drop_zone.y, 
-                                    m_row: ref_drop_zone.m_row, 
-                                    m_col: ref_drop_zone.m_col,
-                                    index: ref_drop_zone.index,  
+                    
+                // handling locations should be reduced to a single (nested) object
+                let init_marker = { x: mk_coord.x, 
+                                    y: mk_coord.y, 
+                                    m_row: mk_coord.m_row, 
+                                    m_col: mk_coord.m_col,
+                                    index: mk_coord.index,  
                                     type: marker_id, 
-                                    player: (id % 2 == 0) ? player_black_id : player_white_id 
+                                    player: mk_player 
                                 };            
                 
                 markers.push(init_marker);  
@@ -634,13 +656,40 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                 // create and dispatch event for the ring being initiated (as if it was dropped) so that game state can be updated
                 const markInit_event = new CustomEvent("marker_init", { detail: init_marker });
                 game_state_target.dispatchEvent(markInit_event);
+                
 
+            } else {
+                // creating the case in which this function is called without arguments
+                // it should init random markers
+                // pick N drop zones at random (note: it should be random)
+                random_picks_ids = [18, 35, 54, 58, 77, 7, 11, 16, 19, 38, 43, 59]; // max = 85
+
+                for (const id of random_picks_ids.values()) {
+                    const ref_drop_zone = drop_zones[id];   
+                    
+                    let init_marker = { x: ref_drop_zone.x, 
+                                        y: ref_drop_zone.y, 
+                                        m_row: ref_drop_zone.m_row, 
+                                        m_col: ref_drop_zone.m_col,
+                                        index: ref_drop_zone.index,  
+                                        type: marker_id, 
+                                        player: (id % 2 == 0) ? player_black_id : player_white_id 
+                                    };            
+                    
+                    markers.push(init_marker);  
+                                
+                    // create and dispatch event for the ring being initiated (as if it was dropped) so that game state can be updated
+                    const markInit_event = new CustomEvent("marker_init", { detail: init_marker });
+                    game_state_target.dispatchEvent(markInit_event);
+
+                };
             };
 
         };
 
         function flip_markers(markers_to_flip){
-
+        // works with linear index instead of row/col
+        
             for (const marker of markers.values()) {
                 if (markers_to_flip.includes(marker.index)) {
 
@@ -918,7 +967,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
         
     // SERVER INTERFACE FUNCTIONS
-    port_number = "1036"
+    port_number = "1037"
 
     // server call for checking allowable moves 
     async function server_allowed_moves(state, start_row, start_col){
