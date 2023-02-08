@@ -590,6 +590,10 @@ function markers_flip(state, row_start, col_start, row_end, col_end)
 		return [] 
 	end
 
+	if start_index == end_index 
+		return [] 
+	end
+
 	# retrieve search space for the starting point
 	search_space = locs_searchSpace[start_index]
 
@@ -616,7 +620,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1037
+port_test = 1038
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
