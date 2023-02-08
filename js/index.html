@@ -177,22 +177,6 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             flip_markers(markers_to_flip);
         };
 
-        /* implementation of trailing marker, re-uses function for markers init 
-        // if start != end, marker needs to be dropped 
-        if (end_row != current_move_start.row || end_col != current_move_start.col){
-            // place marker in starting spot (TRAILING)
-            init_markers(   random = false, 
-                            mk_coord = {    x: current_move_start.x, 
-                                            y: current_move_start.y, 
-                                            m_row: current_move_start.row, 
-                                            m_col: current_move_start.col, 
-                                            index: reshape_index(current_move_start.row, current_move_start.col)},
-                            mk_player = evt.detail.player
-                            
-                        );
-        };
-        */
-
         // this removes the marker if the ring is dropped where picked
         // game state update and redraw is handled by dedicated event listener
         console.log(`Start row: ${current_move_start.row}, start col: ${current_move_start.col}`);
@@ -690,21 +674,21 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             
         };
 
-        function init_markers(random = true, mk_coord = {}, mk_player = ""){
-        // this function should be split in two !
-            
-            if (random == false){
-            // assumes the function will be called for single markers
+        function init_markers(){
+        
+            // pick N drop zones at random (note: it should be random)
+            random_picks_ids = [18, 35, 54, 58, 77, 7, 11, 16, 19, 38, 43, 59]; // max = 85
 
-                    
-                // handling locations should be reduced to a single (nested) object
-                let init_marker = { x: mk_coord.x, 
-                                    y: mk_coord.y, 
-                                    m_row: mk_coord.m_row, 
-                                    m_col: mk_coord.m_col,
-                                    index: mk_coord.index,  
+            for (const id of random_picks_ids.values()) {
+                const ref_drop_zone = drop_zones[id];   
+                
+                let init_marker = { x: ref_drop_zone.x, 
+                                    y: ref_drop_zone.y, 
+                                    m_row: ref_drop_zone.m_row, 
+                                    m_col: ref_drop_zone.m_col,
+                                    index: ref_drop_zone.index,  
                                     type: marker_id, 
-                                    player: mk_player 
+                                    player: (id % 2 == 0) ? player_black_id : player_white_id 
                                 };            
                 
                 markers.push(init_marker);  
@@ -712,35 +696,8 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                 // create and dispatch event for the marker being initiated (as if it was dropped) so that game state can be updated
                 const markInit_event = new CustomEvent("marker_init", { detail: init_marker });
                 game_state_target.dispatchEvent(markInit_event);
-                
 
-            } else {
-                // creating the case in which this function is called without arguments
-                // it should init random markers
-                // pick N drop zones at random (note: it should be random)
-                random_picks_ids = [18, 35, 54, 58, 77, 7, 11, 16, 19, 38, 43, 59]; // max = 85
-
-                for (const id of random_picks_ids.values()) {
-                    const ref_drop_zone = drop_zones[id];   
-                    
-                    let init_marker = { x: ref_drop_zone.x, 
-                                        y: ref_drop_zone.y, 
-                                        m_row: ref_drop_zone.m_row, 
-                                        m_col: ref_drop_zone.m_col,
-                                        index: ref_drop_zone.index,  
-                                        type: marker_id, 
-                                        player: (id % 2 == 0) ? player_black_id : player_white_id 
-                                    };            
-                    
-                    markers.push(init_marker);  
-                                
-                    // create and dispatch event for the marker being initiated (as if it was dropped) so that game state can be updated
-                    const markInit_event = new CustomEvent("marker_init", { detail: init_marker });
-                    game_state_target.dispatchEvent(markInit_event);
-
-                };
             };
-
         };
 
         function flip_markers(markers_to_flip){
