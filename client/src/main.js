@@ -142,6 +142,7 @@ game_state_target.addEventListener("ring_drop_attempt",
         // the active ring is always last in the array
         id_last_ring = rings.length-1;
 
+        // update ring loc information
         rings[id_last_ring].loc = structuredClone(drop_coord_loc);
 
         index = drop_coord_loc.index;
@@ -332,7 +333,6 @@ function refresh_draw_state(){
             -- only if next colum is bigger
         - column before last, 2 vertical strokes
         - last column, 3 vertical strokes
-
         */
 
         // drawing settings
@@ -348,8 +348,8 @@ function refresh_draw_state(){
             triangle_ToDraw = numTriangles(getCol(mm_points, k-1));
             triangle_Drew = 0;
 
-            // move right for each new column
-            ctx.translate(H*k,H);
+            // move right for each new column (-H/3 reduces left canvas border)
+            ctx.translate(H*k - H/3, H);
 
             // going down the individual columns
             for (let j = 1; j <= mm_points_rows; j++) {
@@ -449,7 +449,6 @@ function refresh_draw_state(){
         ctx.restore();
     }
 
-
     function init_drop_zones(){
         
         // create paths for listening to click events on all intersections
@@ -466,7 +465,7 @@ function refresh_draw_state(){
                     // we move by x = (H * k) & y = H for each new column
                     // we also move by y = S/2 in between each row (active and non-active points)
                     
-                    let apoint_x = H * k;
+                    let apoint_x = H * k - H/3; // H/3 adj factor to slim margin left to canvas
                     let apoint_y = H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
                     
                     // create paths and add them to the global array
