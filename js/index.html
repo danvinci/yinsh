@@ -148,28 +148,28 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     // instatiate event target for changes to drop zones objects (manages state and triggers drawing)
     let highlight_moves_target = new EventTarget();
 
-    // Empty game state
+    // Empty game state, string -> it will be reshaped to a matrix on the server side
     let game_state = Array(19*11).fill(""); 
 
     // listens to ring drops and updates game state
     game_state_target.addEventListener("ring_drop_attempt", 
         async function (evt) {
 
-        drop_coord = evt.detail;
+        drop_coord_loc = evt.detail;
 
         // check if drop coordinates are valid
-        if (current_allowed_moves.includes(drop_coord.index) == true){
+        if (current_allowed_moves.includes(drop_coord_loc.index) == true){
 
             // the active ring is always last in the array
             id_last_ring = rings.length-1;
-            
-            // update ring location data -> should be handled by separate function
-            rings[id_last_ring].loc = drop_coord;
 
-            end_row = drop_coord.m_row;
-            end_col = drop_coord.m_col;
+            // update ring location data -> could be handled by separate function
+            rings[id_last_ring].loc = structuredClone(drop_coord_loc);
 
-            index = drop_coord.index;
+            end_row = drop_coord_loc.m_row;
+            end_col = drop_coord_loc.m_col;
+
+            index = drop_coord_loc.index;
             value = rings[id_last_ring].type.concat(rings[id_last_ring].player); // -> RB, RW
 
             game_state[index] = value;
@@ -684,7 +684,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                 const ref_drop_zone = drop_zones[id];   
                    
                 let init_ring = {   path: {}, // needed as we check if we're clicking it
-                                    loc: ref_drop_zone.loc,
+                                    loc: structuredClone(ref_drop_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
                                     type: ring_id, 
                                     player: (id % 2 == 0) ? player_black_id : player_white_id 
                                 };            
@@ -707,7 +707,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             for (const id of random_picks_ids.values()) {
                 const ref_drop_zone = drop_zones[id];   
                 
-                let init_marker = { loc: ref_drop_zone.loc,
+                let init_marker = { loc: structuredClone(ref_drop_zone.loc),
                                     type: marker_id, 
                                     player: (id % 2 == 0) ? player_black_id : player_white_id 
                                 };            
@@ -758,7 +758,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             
             // we have to find the marker with the matching index and remove it
             for (let i=0; i<markers.length; i++){
-                if (markers[i].index == mk_index){
+                if (markers[i].loc.index == mk_index){
                    
                     markers.splice(i, 1);
                     break; // we're supposed to only find one marker
@@ -779,7 +779,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     // also, js arrays start at 0, hence the -1 offset
     function reshape_index(row, col) { return (col-1)*19 + row -1; };
     
-    // function to return x,y of closest drop zone
+    // function to return location object of closest drop zone
     function closest_snap(xp, yp){
 
         to_return = "no_snap";
@@ -787,7 +787,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
         // test which drop zone the mouse is selecting and return its center coordinates
         for(let i=0; i<drop_zones.length; i++){
             if (ctx.isPointInPath(drop_zones[i].path, xp, yp)){
-                to_return = drop_zones[i].loc; 
+                to_return = structuredClone(drop_zones[i].loc); 
                 break;
             };
         };
@@ -826,13 +826,13 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                 
                 // move is active, ring drop attempt
                 // check snapping (geometric) coordinates
-                drop_coord = closest_snap(mousePos.x, mousePos.y);
+                drop_coord_loc = closest_snap(mousePos.x, mousePos.y);
                 
                 // geometric check first 
-                if (drop_coord !== "no_snap"){
+                if (drop_coord_loc !== "no_snap"){
 
                     // create and dispatch event for dropping attempt
-                    const ringDropAttempt_event = new CustomEvent("ring_drop_attempt", { detail: drop_coord });
+                    const ringDropAttempt_event = new CustomEvent("ring_drop_attempt", { detail: drop_coord_loc });
                     game_state_target.dispatchEvent(ringDropAttempt_event);
 
                     // game state target responsible for validity check, here we only take care of interaction
