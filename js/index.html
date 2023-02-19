@@ -129,7 +129,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     let drop_zones = [];
     let highlight_zones = [];
     let current_allowed_moves = [];
-    let current_move_start = {row: 0, col: 0, x: 0, y: 0};
+    let current_move = {active: false, row_start: 0, col_start: 0, x_start: 0, y_start: 0};
 
     // these values are used in defining rings/markers, log status, and check conditions within functions
     const ring_id = "R";
@@ -139,7 +139,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
     // specify dimensions for the triangles in the grid
     // for now outside, so they can be set depending on possible canvas size
-    let S = 45;
+    let S = 40;
     let H = Math.round(S * Math.sqrt(3)/2);
 
     // instatiate event target for changes to the game state
@@ -152,82 +152,125 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     let game_state = Array(19*11).fill(""); 
 
     // listens to ring drops and updates game state
-    game_state_target.addEventListener("ring_dropped", 
+    game_state_target.addEventListener("ring_drop_attempt", 
         async function (evt) {
 
-        index = evt.detail.index;
-        value = evt.detail.type.concat(evt.detail.player); // -> RB, RW
+        drop_coord = evt.detail;
 
-        game_state[index] = value;
+        // check if drop coordinates are valid
+        if (valid_snap(evt.detail.index) == true){
 
-        console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
-
-        // create and dispatch event for the ring being dropped -> turn allowed moves OFF
-        const allowedMoves_OFF_event = new CustomEvent("allowed_moves_OFF");
-        highlight_moves_target.dispatchEvent(allowedMoves_OFF_event);
-
-        end_row = evt.detail.m_row;
-        end_col = evt.detail.m_col;
-
-        // check if any markers needs to be flipped
-        const markers_to_flip = await server_markers_check(game_state, current_move_start.row, current_move_start.col, end_row, end_col);
-        // trigger event to other listener -> change player for marker -> update game status -> retrigger drawing 
-
-        if (markers_to_flip != "no_markers_to_flip"){
-            flip_markers(markers_to_flip);
-        };
-
-        // this removes the marker if the ring is dropped where picked
-        // game state update and redraw is handled by dedicated event listener
-        console.log(`Start row: ${current_move_start.row}, start col: ${current_move_start.col}`);
-        console.log(`End row: ${end_row}, end col: ${end_col}`);
-
-        if (end_row == current_move_start.row && end_col == current_move_start.col){
+            // the active ring is always last in the array
+            id_last_ring = rings.length-1;
             
-            remove_marker(index);
+            // this works by reference only if we change the object's properties - weird
+            //dropped_ring = rings[id_last_ring];
+
+            // update ring location data -> should be handled by separate function
+            // dropping it at the center of the drop zones (x/y are drawing)
+            rings[id_last_ring].x = drop_coord.x;
+            rings[id_last_ring].y = drop_coord.y;
+
+            // MOVE THIS TO SEPARATE FUNCTION
+            // updating row/col location of the ring (row/col for state)
+            rings[id_last_ring].m_row = drop_coord.m_row;
+            rings[id_last_ring].m_col = drop_coord.m_col;
+            rings[id_last_ring].index = drop_coord.index;
+
+            end_row = drop_coord.m_row;
+            end_col = drop_coord.m_col;
+
+            index = drop_coord.index;
+            value = rings[id_last_ring].type.concat(rings[id_last_ring].player); // -> RB, RW
+
+            game_state[index] = value;
+
+            console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
+
+            // create and dispatch event for the ring being dropped -> turn allowed moves OFF
+            const allowedMoves_OFF_event = new CustomEvent("allowed_moves_OFF");
+            highlight_moves_target.dispatchEvent(allowedMoves_OFF_event);
+
+            
+
+            // this removes the marker if the ring is dropped where picked
+            // if yes, remove marker, otherwise check markers to flip and flip them
+            console.log(`Start row: ${current_move.row_start}, start col: ${current_move.col_start}`);
+            console.log(`End row: ${end_row}, end col: ${end_col}`);
+
+            if (end_row == current_move.row_start && end_col == current_move.col_start){
+                
+                remove_marker(index);
+                game_state[index] = "";
+                console.log(`Marker removed from index: ${index}`);
+
+            } else {
+
+                // check if any markers needs to be flipped
+                const markers_to_flip = await server_markers_check(game_state, current_move.row_start, current_move.col_start, end_row, end_col);
+                // trigger event to other listener -> change player for marker -> update game status -> retrigger drawing 
+
+                if (markers_to_flip != "no_markers_to_flip"){
+                    flip_markers(markers_to_flip);
+                };
+
+            };
+
+            // reset global variable for the current move
+            reset_current_move()
+
+            // re-draw everything
+            refresh_draw_state(); 
+
+            // play sound
+            sfxr.play(sound); 
 
         };
-
-
-        // reset global variable for the current move -> maybe to move to specialized function?
-        current_move_start.row = 0;
-        current_move_start.col = 0;
-        current_move_start.x = 0;
-        current_move_start.y = 0;
-
     });
 
-
-    // listens to marker being REMOVED -> updates game state & redraws
-    game_state_target.addEventListener("marker_removed", 
+     // listens to a ring being moved -> updates ring state & redraws
+     game_state_target.addEventListener("ring_moved", 
         function (evt) {
 
-        index = evt.detail
-        game_state[index] = "";
+            // evt.detail -> mousePos
 
-        console.log(`Marker removed from index: ${index}`);
+            id_last_ring = rings.length-1;
 
-        refresh_draw_state();
+            rings[id_last_ring].x = evt.detail.x;
+            rings[id_last_ring].y = evt.detail.y;
+            refresh_draw_state();
+
     });
+
 
     // listens to ring picks and updates game state
     game_state_target.addEventListener("ring_picked", 
         async function (evt) {
 
-        index = evt.detail.index;
-        value = evt.detail.type.concat(evt.detail.player); // -> RB, RW, MB, MW
+        id_ring_evt = evt.detail;
+
+        // remove the element and put it back at the end of the array, so it's always drawn last => on top
+        // note: splice returns the array of removed elements
+        rings.push(rings.splice(id_ring_evt,1)[0]); 
+        
+        id_last_ring = rings.length-1;
+        picked_ring = rings[id_last_ring];
+       
+        index = picked_ring.index;
+        value = picked_ring.type.concat(picked_ring.player); // -> RB, RW, MB, MW
 
         game_state[index] = "";
-        console.log(`${value} picked from ${evt.detail.m_row}:${evt.detail.m_col} at -> ${index}`);
+        console.log(`${value} picked from ${picked_ring.m_row}:${picked_ring.m_col} at -> ${index}`);
 
-        row = evt.detail.m_row;
-        col = evt.detail.m_col;
+        row = picked_ring.m_row;
+        col = picked_ring.m_col;
 
         // write start of the currently active move to a global variable
-        current_move_start.row = row;
-        current_move_start.col = col;
-        current_move_start.x = evt.detail.x;
-        current_move_start.y = evt.detail.y;
+        current_move.active = true;
+        current_move.row_start = row;
+        current_move.col_start = col;
+        current_move.x_start = picked_ring.x;
+        current_move.y_start = picked_ring.y;
         
 
         // get allowed moves from the server
@@ -247,13 +290,12 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
         // place marker in its location
         // update game state and redraw are handled by dedicated event listener
-        add_marker(mk_coord = { x: current_move_start.x, 
-                                y: current_move_start.y, 
+        add_marker(mk_coord = { x: current_move.x_start, 
+                                y: current_move.y_start, 
                                 m_row: row, 
                                 m_col: col, 
                                 index: index},
-                    mk_player = evt.detail.player);
-        
+                    mk_player = picked_ring.player);
 
     });
 
@@ -447,6 +489,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             ctx.restore();
         }
 
+
         function init_drop_zones(){
             
             // create paths for listening to click events on all intersections
@@ -502,6 +545,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             ctx.restore();
         };
 
+
         function update_highlight_zones(empty = false){
         // manipulates global variable of allowed moves for current ring
 
@@ -546,6 +590,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             ctx.restore();
         };
 
+        
         function draw_rings(){
             ctx.save();
 
@@ -573,7 +618,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
                     //inner white ~ light gray
                     ctx.strokeStyle = "#F6F7F6";
-                    ctx.lineWidth = ring_lineWidth*0.95;            
+                    ctx.lineWidth = ring_lineWidth*0.9;            
                     
                     let ring_path = new Path2D()
                     ring_path.arc(s.x, s.y, inner, 0, 2*Math.PI);
@@ -581,7 +626,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
                     // outer border
                     ctx.strokeStyle = "#000";
-                    ctx.lineWidth = ring_lineWidth/10; 
+                    ctx.lineWidth = ring_lineWidth/12; 
                     
                     let outerB_path = new Path2D()
                     outerB_path.arc(s.x, s.y, inner*1.15, 0, 2*Math.PI);
@@ -591,7 +636,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
 
                     // inner border
                     ctx.strokeStyle = "#000";
-                    ctx.lineWidth = ring_lineWidth/10;  
+                    ctx.lineWidth = ring_lineWidth/12;  
 
                     let innerB_path = new Path2D()
                     innerB_path.arc(s.x, s.y, inner*0.85, 0, 2*Math.PI);
@@ -614,8 +659,8 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             // reads the global markers object
             for (const s of markers.values()) {
 
-                let inner = S*0.23;
-                let marker_lineWidth = inner/4;
+                let inner = S*0.25;
+                let marker_lineWidth = inner/5;
 
                 // draw black marker
                 if (s.player == player_black_id){ 
@@ -645,6 +690,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             ctx.restore();
         };
 
+
         function init_rings(){
 
             // pick N drop zones at random (note: it should be random)
@@ -660,8 +706,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                                     m_col: ref_drop_zone.m_col, 
                                     index: reshape_index(ref_drop_zone.m_row, ref_drop_zone.m_col),
                                     type: ring_id, 
-                                    player: (id % 2 == 0) ? player_black_id : player_white_id , 
-                                    active: false
+                                    player: (id % 2 == 0) ? player_black_id : player_white_id 
                                 };            
                 
                 rings.push(init_ring);  
@@ -700,6 +745,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             };
         };
 
+
         function flip_markers(markers_to_flip){
         // works with linear index instead of row/col
         
@@ -711,16 +757,7 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                 };
             
             };
-                // create and dispatch event for the markers having being flipped
-                // we know at least one has been flipped due to function call condition in the game state listener
-                // this could be later used for sound effect -> count number of markers flipped and play with some delay and/or animate
-                //const markersFlipped_event = new CustomEvent("markers_flipped", { detail: markers_to_flip });
-                //game_state_target.dispatchEvent(markersFlipped_event);
-
-                // for now let's just re-draw everything once done
-                refresh_draw_state();
-
-            };
+        };
      
         function add_marker(mk_coord = {}, mk_player = ""){
         // this is just for adding a new marker when a ring is picked             
@@ -755,14 +792,19 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                     break; // we're supposed to only find one marker
                 };
             };
-            
-                        
-            // create and dispatch event for the ring being initiated (as if it was dropped) so that game state can be updated
-            const markRemoved_event = new CustomEvent("marker_removed", { detail: mk_index });
-            game_state_target.dispatchEvent(markRemoved_event);
                 
         };
 
+
+        function reset_current_move(){
+
+            // reset global variable for the current move
+            current_move.active = false;
+            current_move.row_start = 0;
+            current_move.col_start = 0;
+            current_move.x_start = 0;
+            current_move.y_start = 0;
+        };
  
 
     // calls function to update the array of allowed moves -> highlighted zones
@@ -790,24 +832,6 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
     // Julia expects col-major for building a matrix from an index
     // also, js arrays start at 0, hence the -1 offset
     function reshape_index(row, col) { return (col-1)*19 + row -1; };
-    
-    // If a move is underway, need to drop the ring before doing something else
-    function check_active_ring() {
-        // if any ring is set to active, returns its index - otherwise "no"
-        // returning false/true clashes with returning 0/1 for shape index
-
-        to_return = "no_ring";
-        
-        for(let i=0; i<rings.length; i++){
-            if (rings[i].active == true){
-                to_return = i;
-                break;
-            };
-        };
-
-        //console.log(to_return);
-        return to_return;
-    };
     
     // function to return x,y of closest drop zone
     function closest_snap(xp, yp){
@@ -847,39 +871,26 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             mousePos = getMousePos(canvas, evt);
             //console.log("down");
 
-            active_ring = check_active_ring();
+            // check if move currently underway. If not, check which ring is being picked and emit event
+            if (current_move.active == false){
 
-            // if no ring is already active, then set the selected to active
-            if (active_ring === "no_ring"){
-
-                // test which shape the mouse is selecting and set it to active
+                // test which ring the mouse is selecting and send an event
                 for(let i=0; i<rings.length; i++){
-                    
-                    // set selected path to active if it's a ring
-                    // this should go into a dedicated function !!
                     if (ctx.isPointInPath(rings[i].path, mousePos.x, mousePos.y)){
-                        if (rings[i].type == ring_id){
-                            
-                            rings[i].active = true;
 
-                            // create and dispatch event for what the ring being picked up -> game state should change
-                            const ringPick_event = new CustomEvent("ring_picked", { detail: rings[i] });
-                            game_state_target.dispatchEvent(ringPick_event);
-                            
-                            // remove the element and put it back at the end of the array, so it's always drawn last => on top
-                            // note: splice returns the array of removed elements
-                            rings.push(rings.splice(i,1)[0]); // this should be a separate concern, we shouldn't be doing it here 
-                            // -> fire the same event to the dispacther, to an array of targets OR fire the event and let the dispatcher orchestrate? or the game state handler do it? :/
-                            
-                            break; // otherwise it keeps looping and can encounter the same ring twice as we move it to the end
+                        // create and dispatch event for what the ring being picked up -> game state should change
+                        const ringPick_event = new CustomEvent("ring_picked", { detail: i});
+                        game_state_target.dispatchEvent(ringPick_event);
                         
-                        };
+                        break; 
+                        
                     };
                 };
 
             } else {
                 
-                // drop the currently active ring so that it snaps to the grid
+                // move is active, ring drop attempt
+                // check snapping (geometric) coordinates
                 drop_coord = closest_snap(mousePos.x, mousePos.y);
                 
                 // geometric check first 
@@ -888,31 +899,12 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
                     // when the ring was picked, the server is asked for allowed spots -> stored as linear index in current_allowed_moves
                     if (valid_snap(drop_coord.index) == true){
 
-                        // making the ring inactive again
-                        rings[active_ring].active = false;
-                    
-                        // dropping it at the center of the drop zones (x/y are drawing)
-                        rings[active_ring].x = drop_coord.x;
-                        rings[active_ring].y = drop_coord.y;
+                        // create and dispatch event for dropping attempt
+                        const ringDropAttempt_event = new CustomEvent("ring_drop_attempt", { detail: drop_coord });
+                        game_state_target.dispatchEvent(ringDropAttempt_event);
 
-                        // MOVE THIS TO SEPARATE FUNCTION
-                        // updating row/col location of the ring (row/col for state)
-                        rings[active_ring].m_row = drop_coord.m_row;
-                        rings[active_ring].m_col = drop_coord.m_col;
-                        rings[active_ring].index = drop_coord.index;
+                        // game state target responsible for validity check, here we only take care of interaction
 
-                        // create and dispatch event for the ring being dropped -> game state should change
-                        const ringDrop_event = new CustomEvent("ring_dropped", { detail: rings[active_ring] });
-                        game_state_target.dispatchEvent(ringDrop_event);
-
-                        // logging drop coordinates
-                        //console.log(drop_coord);
-
-                        // re-draw everything
-                        refresh_draw_state(); // this might be an event to be fired and not a function call (?)
-
-                        // play sound
-                        sfxr.play(sound); // this same as above
 
                     } else {
                         
@@ -933,14 +925,14 @@ https://stackoverflow.com/questions/30280370/how-does-content-security-policy-cs
             mousePos = getMousePos(canvas, evt);
             //console.log("move");
 
-            active_ring = check_active_ring();
-
             // if a ring is active, let's drag it -> refresh everything as you move it
-            if (active_ring != "no_ring"){
+            if (current_move.active == true){
 
-                rings[active_ring].x = mousePos.x;
-                rings[active_ring].y = mousePos.y;
-                refresh_draw_state();
+                // create and dispatch event for mouse moving while move is active
+                // we could listen directly to this event from the game state target, but this way SOC is explicit AND we only send an event when a move is active
+                const ringMove_event = new CustomEvent("ring_moved", {detail: mousePos});
+                game_state_target.dispatchEvent(ringMove_event);
+                
             };
 
         });
