@@ -174,6 +174,7 @@ game_state_target.addEventListener("marker_init",
 init_drop_zones();
 
 // init random rings and markers
+// these should not emit events, the game status should be calling them - same as other data functions
 init_rings();
 init_markers();
 

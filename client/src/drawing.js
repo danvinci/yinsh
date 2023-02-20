@@ -313,3 +313,22 @@ function draw_highlight_zones(){
     
     ctx.restore();
 };
+
+
+// HELPER FUNCTIONS 
+
+// extract array columns from matrix
+function getCol(matrix, n_col){
+    return matrix.map(v => v[n_col]);
+}
+
+// helper function to know how many triangles we should draw
+function numTriangles(array) {
+    let counter = 0;
+    for (item of array.flat()) {
+        if (item) {
+            counter++;
+        }
+    }
+    return counter - 1;
+}

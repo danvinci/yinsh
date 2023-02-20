@@ -27,22 +27,6 @@ const mm_points = [
 const mm_points_rows = 19 // mm_points.length;
 const mm_points_cols = 11 // mm_points[0].length;
 
-// helper function to extract array columns from matrix
-function getCol(matrix, n_col){
-    return matrix.map(v => v[n_col]);
-}
-
-// helper function to know how many triangles we should draw
-function numTriangles(array) {
-    let counter = 0;
-    for (item of array.flat()) {
-        if (item) {
-            counter++;
-        }
-    }
-    return counter - 1;
-}
-
 // bind canvas to variable
 var canvas = document.getElementById('canvas'); 
 var ctx = canvas.getContext('2d', { alpha: true }); 
