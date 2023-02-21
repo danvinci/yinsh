@@ -36,8 +36,9 @@ game_state_target.addEventListener("ring_picked",
     current_move.loc = p_ring.loc;        
 
     // get allowed moves from the server
-    // NOTE : allowed moves are requested considering no ring nor marker at their location (game state was wiped)
-    const allowed_moves = await server_allowed_moves(game_state, p_ring.loc.m_row, p_ring.loc.m_col);
+    // game_state and current move are read from global variables
+    // NOTE : allowed moves are requested considering no ring nor marker at their current location due to game_state updates
+    const allowed_moves = await server_allowed_moves();
 
     if (allowed_moves != "no_moves"){
 
@@ -50,7 +51,7 @@ game_state_target.addEventListener("ring_picked",
     };
 
     // place marker in same location and update game status (after asking for allowed moves)
-    // location must be copied and not referenced -> otherwise the marker will be drawn along the ring
+    // location must be copied and not referenced -> otherwise the marker will be drawn along the ring as it inherits the same location
     add_marker(loc = structuredClone(p_ring.loc), player = p_ring.player);
 
     refresh_draw_state();
@@ -62,14 +63,14 @@ game_state_target.addEventListener("ring_picked",
 game_state_target.addEventListener("ring_moved", 
     function (evt) {
 
-        // evt.detail -> mousePos
+    // evt.detail -> mousePos
 
-        id_last_ring = rings.length-1;
+    id_last_ring = rings.length-1;
 
-        rings[id_last_ring].loc.x = evt.detail.x;
-        rings[id_last_ring].loc.y = evt.detail.y;
-        
-        refresh_draw_state();
+    rings[id_last_ring].loc.x = evt.detail.x;
+    rings[id_last_ring].loc.y = evt.detail.y;
+
+    refresh_draw_state();
 
 });
 
@@ -95,7 +96,6 @@ game_state_target.addEventListener("ring_drop_attempt",
         // update game state
         // if ring dropped in same location, this automatically overrides MB/MW -> no need to handle it in remove_marker()
         update_game_state(index, value);
-
         console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
 
         // empty array of allowed zones
@@ -119,7 +119,8 @@ game_state_target.addEventListener("ring_drop_attempt",
         } else {
 
             // check if any markers needs to be flipped
-            const markers_to_flip = await server_markers_check(game_state, current_move.loc.m_row, current_move.loc.m_col, end_row, end_col);
+            // game_state and current move are read from global variables
+            const markers_to_flip = await server_markers_check(end_row, end_col);
             // trigger event to other listener -> change player for marker -> update game status -> retrigger drawing 
 
             if (markers_to_flip != "no_markers_to_flip"){

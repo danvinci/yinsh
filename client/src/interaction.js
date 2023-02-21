@@ -40,7 +40,8 @@ canvas.addEventListener("mousedown",
                 const ringDropAttempt_event = new CustomEvent("ring_drop_attempt", { detail: drop_coord_loc });
                 game_state_target.dispatchEvent(ringDropAttempt_event);
 
-                // game state target responsible for validity check, here we only take care of interaction
+                // game state target responsible for validity check
+                // here we only take care of interaction and checking there's actually a nearby drop zone
 
             };  
         };
