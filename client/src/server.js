@@ -72,6 +72,7 @@ async function server_markers_check(state, start_row, start_col, end_row, end_co
     if (srv_markers_check.length > 0) {
         for (const mk_index of srv_markers_check.values()) {
             // note: reshaping could be moved to the server, as well as the length check -> keep the client dumb but lean
+            // this way we get rid of using reshape here 
             markers_to_flip.push(reshape_index(mk_index.I[0], mk_index.I[1]));
         };
 

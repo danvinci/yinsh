@@ -1,5 +1,5 @@
 // DATA
-// global data objects and functions operating on them
+// global data objects and functions operating on them + utils like reshape_index
 
 // matrix of active points on the grid
 const mm_points = [
@@ -28,8 +28,8 @@ const mm_points_rows = 19 // mm_points.length;
 const mm_points_cols = 11 // mm_points[0].length;
 
 // bind canvas to variable
-var canvas = document.getElementById('canvas'); 
-var ctx = canvas.getContext('2d', { alpha: true }); 
+const canvas = document.getElementById('canvas'); 
+const ctx = canvas.getContext('2d', { alpha: true }); 
 
 // initialize array for markers and rings + drop zones + highlight zones
 let rings = [];
@@ -55,13 +55,32 @@ let H = Math.round(S * Math.sqrt(3)/2);
 let game_state = Array(19*11).fill(""); 
 
 
-
 // DATA functions below
 
 // from col/row in a matrix to a linear index 
 // Julia expects col-major for building a matrix from an index
 // also, js arrays start at 0, hence the -1 offset
 function reshape_index(row, col) { return (col-1)*19 + row -1; };
+
+// function to write to the game state array
+function update_game_state(index, value){
+    // there shoul de some input arguments check
+
+    game_state[index] = value;
+
+};
+
+// glue function to setup new game
+function setup_new_game(){
+
+    // initialize drop zones
+    init_drop_zones();
+
+    // init random rings and markers
+    init_rings();
+    init_markers();
+
+};
 
 // initialize drop zones -> used propagate location data
 function init_drop_zones(){
@@ -140,20 +159,18 @@ function init_rings(){
     for (const id of random_picks_ids.values()) {
         const ref_drop_zone = drop_zones[id];   
             
-        let init_ring = {   path: {}, // needed as we check if we're clicking it
-                            loc: structuredClone(ref_drop_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
-                            type: ring_id, 
-                            player: (id % 2 == 0) ? player_black_id : player_white_id 
-                        };            
+        let R = {   path: {}, // needed as we check if we're clicking it
+                    loc: structuredClone(ref_drop_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
+                    type: ring_id, 
+                    player: (id % 2 == 0) ? player_black_id : player_white_id 
+                };            
         
-        rings.push(init_ring);  
+        // add to array
+        rings.push(R);  
                     
-        // create and dispatch event for the ring being initiated (as if it was dropped) so that game state can be updated
-        // event obsolete, we redraw state everytime anyway -> should be removed and game state calling init and not the other way around
-
-        const ringInit_event = new CustomEvent("ring_init", { detail: init_ring });
-        game_state_target.dispatchEvent(ringInit_event);
-        //
+        // update game state and log change
+        update_game_state(R.loc.index, R.type.concat(R.player)); // -> RB, RW at index
+        console.log(`${R.type.concat(R.player)} init at ${R.loc.m_row}:${R.loc.m_col} -> ${R.loc.index}`);
 
     };
     
@@ -168,18 +185,17 @@ function init_markers(){
     for (const id of random_picks_ids.values()) {
         const ref_drop_zone = drop_zones[id];   
         
-        let init_marker = { loc: structuredClone(ref_drop_zone.loc),
-                            type: marker_id, 
-                            player: (id % 2 == 0) ? player_black_id : player_white_id 
-                        };            
+        let M = {   loc: structuredClone(ref_drop_zone.loc),
+                    type: marker_id, 
+                    player: (id % 2 == 0) ? player_black_id : player_white_id 
+                };            
         
-        markers.push(init_marker);  
-                    
-        // create and dispatch event for the marker being initiated (as if it was dropped) so that game state can be updated
-        // event obsolete, we redraw state everytime anyway -> should be removed and game state calling init and not the other way around
-        const markInit_event = new CustomEvent("marker_init", { detail: init_marker });
-        game_state_target.dispatchEvent(markInit_event);
-        //
+        // add to array
+        markers.push(M);  
+
+        // update game state and log change
+        update_game_state(M.loc.index, M.type.concat(M.player)); // -> MB, MW at index
+        console.log(`${M.type.concat(M.player)} init at ${M.loc.m_row}:${M.loc.m_col} -> ${M.loc.index}`);
 
     };
 };
@@ -203,16 +219,17 @@ function add_marker(loc = {}, player = ""){
 // this is just for adding a new marker when a ring is picked             
 
     // handling locations should be reduced to a single (nested) object
-    let init_marker = { loc: loc, 
+    let M = { loc: loc, 
                         type: marker_id, 
                         player: player 
                     };            
     
-    markers.push(init_marker);  
-                
-    // create and dispatch event for the marker being initiated (as if it was dropped) so that game state can be updated
-    const markInit_event = new CustomEvent("marker_init", { detail: init_marker });
-    game_state_target.dispatchEvent(markInit_event);
+    // add to array
+    markers.push(M);  
+
+    // update game state and log change
+    update_game_state(M.loc.index, M.type.concat(M.player)); // -> MB, MW at index
+    console.log(`${M.type.concat(M.player)} init at ${M.loc.m_row}:${M.loc.m_col} -> ${M.loc.index}`);
         
 };
 
@@ -226,10 +243,14 @@ function remove_marker(mk_index){
         if (markers[i].loc.index == mk_index){
             
             markers.splice(i, 1);
+
             break; // we're supposed to only find one marker
         };
     };
         
+    // if ring dropped in same location, its game_state update will overwrite MB/MW
+    // no need to call update_game_state() here, it would also cause weird behavior
+
 };
 
 // resets global variable of current move data
