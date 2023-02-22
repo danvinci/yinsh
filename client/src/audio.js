@@ -1,6 +1,6 @@
 
 // Audio effects
-const sound = {
+const ring_drop_sound = {
                 "p_hpf_freq": 0.104,
                 "p_duty": 0.457,
                 "p_pha_offset": 0.142,

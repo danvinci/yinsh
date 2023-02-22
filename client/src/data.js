@@ -71,7 +71,7 @@ function update_game_state(index, value){
 };
 
 // glue function to setup new game
-function setup_new_game(){
+function init_objects(){
 
     // initialize drop zones
     init_drop_zones();

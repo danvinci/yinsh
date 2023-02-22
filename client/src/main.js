@@ -1,8 +1,8 @@
 // MAIN 
 // game logic and orchestration
 
-// game setup and first draw
-setup_new_game()
+// init drop zones + markers y rings -> setup and first draw
+init_objects()
 refresh_draw_state(); 
 
 
@@ -50,7 +50,8 @@ game_state_target.addEventListener("ring_picked",
 
     };
 
-    // place marker in same location and update game status (after asking for allowed moves)
+    // place marker in same location and update game_state (after asking for allowed moves)
+    // this allows for scoring to be computed correclty from game_state, as this marker will stay in place at ring_drop
     // location must be copied and not referenced -> otherwise the marker will be drawn along the ring as it inherits the same location
     add_marker(loc = structuredClone(p_ring.loc), player = p_ring.player);
 
@@ -81,7 +82,7 @@ game_state_target.addEventListener("ring_drop_attempt",
 
     drop_coord_loc = evt.detail;
 
-    // check if drop coordinates are valid
+    // check if drop coordinates are valid 
     if (current_allowed_moves.includes(drop_coord_loc.index) == true){
 
         // the active ring is always last in the array
@@ -106,8 +107,6 @@ game_state_target.addEventListener("ring_drop_attempt",
         end_col = drop_coord_loc.m_col;
 
         // this removes the marker if the ring is dropped where picked
-        // if yes, remove marker, otherwise check markers to flip and flip them
-        // should be moved to separate function !!
         console.log(`Start row: ${current_move.loc.m_row}, start col: ${current_move.loc.m_col}`);
         console.log(`End row: ${end_row}, end col: ${end_col}`);
 
@@ -116,35 +115,38 @@ game_state_target.addEventListener("ring_drop_attempt",
             remove_marker(index);
             console.log(`Marker removed from index: ${index}`);
 
+            // CASE: same location drop, nothing to flip (no server call needed for this)
+            // -> do nothing
+
+        // ring moved -> asks the server about markers and scoring options
         } else {
 
-            // check if any markers needs to be flipped
-            // game_state and current move are read from global variables
-            const markers_to_flip = await server_markers_check(end_row, end_col);
-            // trigger event to other listener -> change player for marker -> update game status -> retrigger drawing 
+            const markers_response = await server_markers_check(end_row, end_col);
 
-            if (markers_to_flip != "no_markers_to_flip"){
-                flip_markers(markers_to_flip);
+            // CASE: nothing to flip {markers_response[0] == false} -> do nothing
+
+            // CASE: something to flip
+            if (markers_response[0] == true){
+                flip_markers(markers_response[1]);
             };
 
         };
 
-        // reset global variable for the current move
+        // complete move, redraw, and play sound
         reset_current_move()
-
-        // re-draw everything
         refresh_draw_state(); 
+        sfxr.play(ring_drop_sound); 
 
-        // play sound
-        sfxr.play(sound); 
-
+        // handle scoring cases
+        // see if server was called, pause, act
+        // NOTE: need to prevent interaction during pauses
+    
     } else{
 
         console.log("Invalid drop location");
+        // NOTE: we could play specific sound 
     };
 });
-
-
 
 
 
