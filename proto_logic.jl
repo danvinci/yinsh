@@ -573,8 +573,21 @@ function markers_search(state, ref_array)
 
 	# pick markers from set of remaining locations	
 	loc_array = filter(z -> contains(state[z], "M"), loc_array)
+
+	
+	## return bits to inform client of which case is unfolding
+	# FLIP_FLAG
+	# true -> nothing to flip
+	# false -> something to flip
+
+	flip_flag = (length(loc_array) > 0) ? true : false
+	
+	# SCORE_CASE -> maybe could be reduced to simple true/false
+	# 0 -> no scoring
+	# 1 -> simple scoring
+	# 2 -> multi-row scoring
 			
-	return loc_array
+	return [flip_flag, loc_array]
 
 end
 
@@ -620,7 +633,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1038
+port_test = 1043
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1805,7 +1818,7 @@ version = "1.4.1+0"
 # ╠═edfa0b25-9132-4de9-bf11-3ea2f0952e4f
 # ╠═ccbf567a-8923-4343-a2ff-53d81f2b6361
 # ╠═1d811aa5-940b-4ddd-908d-e94fe3635a6a
-# ╟─003f670b-d3b1-4905-b105-67504f16ba19
+# ╠═003f670b-d3b1-4905-b105-67504f16ba19
 # ╠═bf2dce8c-f026-40e3-89db-d72edb0b041c
 # ╠═52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
 # ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
