@@ -484,6 +484,45 @@ begin
 	populate_searchSpace!(locs_searchSpace)
 end
 
+# ╔═╡ f0e9e077-f435-4f4b-bd69-f495dfccec27
+function sub_spaces_split(input_array, key)
+
+# array of search sub-spaces to be returned
+to_return = []
+
+len_array = length(input_array)
+
+ 
+	if len_array >= 5
+
+		# key is contained in the input_array and array is sorted
+		key_index = findfirst(x -> x == key, input_array)
+
+		# scroll over a window of 5 elements
+		for j in 0:4
+
+			start_index = key_index - j
+			end_index = key_index + ( 4 - j )
+
+			bounds_check = start_index >= 1 && end_index <= len_array
+			length_check = (end_index - start_index + 1) == 5
+			
+			if (bounds_check && length_check)
+
+				# save sliced array
+				push!(to_return, input_array[start_index:end_index])
+
+			end
+
+		end
+
+	end
+
+
+	return to_return
+
+end
+
 # ╔═╡ a96a9a78-0aeb-4b00-8f3c-db61839deb5c
 # populate dictionary of locations search space for SCORING
 function populate_searchSpace_scoring!(store_dict::Dict)
@@ -570,11 +609,18 @@ function populate_searchSpace_scoring!(store_dict::Dict)
 			# add starting location to all ranges
 			append!(range, [(row_start, col_start)])
 
-			if length(range) > 0
-				push!(cartIndex_ranges, sort([CartesianIndex(z[1], z[2]) for z in range]))
+			# sorted direction array (vertical, diag up, diag down)
+			dir_array = sort([CartesianIndex(z[1], z[2]) for z in range])
+			
+			## split in subarrays of len=5 that contain the starting location
+			# save results of splitting
+			sub_arrays = sub_spaces_split(dir_array, key)
 
-				# we may need to sort but maybe not
+			for sub in sub_arrays
+				push!(cartIndex_ranges, sub)
 			end
+
+			
 		end
 
 		
@@ -791,62 +837,14 @@ function markers_flip(state, row_start, col_start, row_end, col_end)
 
 end
 
-# ╔═╡ c1a432f3-748b-4e8b-aba4-9795b719df37
-locs_searchSpace_scoring[CartesianIndex(9,9)]
-
-# ╔═╡ 27ffdc28-a66d-4d29-9131-0aecf9ec8954
-t_copy = locs_searchSpace_scoring[CartesianIndex(9,9)][1]
-
-# ╔═╡ ebafb957-8196-4673-8192-776912b08a9c
-function test_slicing(input_c_index)
-
-
-input_array = locs_searchSpace_scoring[input_c_index]
-
-to_return = []
-
-for arr in input_array
-	LL = length(arr)
-	
-	 
-		if LL >= 5
-			
-			slice_id = findfirst(id -> id == input_c_index, arr)
-	
-			# scroll over a window of 5 elements
-			for j in 0:4
-	
-				start_id = slice_id-j
-				end_id = slice_id+(4-j)
-	
-				bounds_check = start_id >=1 && end_id <= LL
-				len_check = (end_id - start_id + 1) == 5
-				
-				if (bounds_check && len_check)
-					
-					temp = arr[start_id:end_id]
-				
-					push!(to_return, temp)
-	
-				end
-	
-			end
-	
-		end
-end
-
-	return to_return
-
-end
-
 # ╔═╡ 72e778c2-f17c-4360-949e-9391128ba960
 keys_loc_test = findall(x -> x==1, mm_yinsh_01)
 
 # ╔═╡ 87c9f7f7-9a98-44d5-952e-4511433465bd
 @bind key_slider Slider(keys_loc_test, show_value=true)
 
-# ╔═╡ 0fa2e848-6b81-4bbe-92f9-77741f976e77
-test_slicing(key_slider)
+# ╔═╡ bf8c51dd-1898-4179-98a8-8192d855d4a6
+locs_searchSpace_scoring[key_slider]
 
 # ╔═╡ 516126c1-d081-4c0c-9862-74f2be9679df
 #=
@@ -2053,15 +2051,13 @@ version = "1.4.1+0"
 # ╠═003f670b-d3b1-4905-b105-67504f16ba19
 # ╠═2cee3e2b-5061-40f4-a205-94d80cfdc20b
 # ╠═a96a9a78-0aeb-4b00-8f3c-db61839deb5c
+# ╠═f0e9e077-f435-4f4b-bd69-f495dfccec27
 # ╟─bf2dce8c-f026-40e3-89db-d72edb0b041c
 # ╟─52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
 # ╟─8f2e4816-b60d-40eb-a9d8-acf4240c646a
 # ╟─c67154cb-c8cc-406c-90a8-0ea8241d8571
 # ╠═53dec9b0-dac1-47a6-b242-9696ff45b91b
-# ╠═c1a432f3-748b-4e8b-aba4-9795b719df37
-# ╠═27ffdc28-a66d-4d29-9131-0aecf9ec8954
-# ╠═ebafb957-8196-4673-8192-776912b08a9c
-# ╠═0fa2e848-6b81-4bbe-92f9-77741f976e77
+# ╠═bf8c51dd-1898-4179-98a8-8192d855d4a6
 # ╠═72e778c2-f17c-4360-949e-9391128ba960
 # ╠═87c9f7f7-9a98-44d5-952e-4511433465bd
 # ╠═516126c1-d081-4c0c-9862-74f2be9679df
