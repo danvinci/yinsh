@@ -123,7 +123,7 @@ game_state_target.addEventListener("ring_drop_attempt",
 
             const markers_response = await server_markers_check(end_row, end_col);
 
-            // CASE: nothing to flip {markers_response[0] == false} -> do nothing
+            // NOTE: replace array with dictionary (so to use field names instead of 0/1/2/etc)
 
             // CASE: something to flip
             if (markers_response[0] == true){

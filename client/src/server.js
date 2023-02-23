@@ -1,6 +1,6 @@
 // SERVER INTERFACE FUNCTIONS
 
-port_number = "1043"
+port_number = "1056"
 
 // server call for checking allowable moves 
 async function server_allowed_moves(){
@@ -65,17 +65,14 @@ async function server_markers_check(end_row, end_col){
     
     // get markers to be flipped back from the server (array)
     const srv_response = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
-    
-    // flag to inform about flip/no-flip
-    const srv_markers_flipFlag = srv_response[0];
 
     // get markers to be flipped back from the server 
-    const srv_markers_toFlip = srv_response[1];
+    const srv_markers_toFlip = srv_response.markers_toFlip;
 
     // parse and store indexes of markers in the client's format
     let cli_markers_toFlip = [];
 
-    if (srv_markers_flipFlag == true) {
+    if (srv_response.flip_flag == true) {
         for (const mk_index of srv_markers_toFlip.values()) {
             // note: reshaping could be moved to the server, as well as the length check -> keep the client dumb but lean
             // this way we get rid of using reshape here 
@@ -85,12 +82,13 @@ async function server_markers_check(end_row, end_col){
         console.log("Markers to flip from the server: "); 
         console.log(cli_markers_toFlip);
 
-        return [srv_markers_flipFlag, cli_markers_toFlip];
+        // return original server response -> server should provide indexes already
+        return [srv_response.flip_flag, cli_markers_toFlip];
 
     } else {
 
         console.log("No markers to flip");
-        return [srv_markers_flipFlag];
+        return [srv_response.flip_flag];
     };
 
 };

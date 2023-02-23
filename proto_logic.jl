@@ -391,7 +391,7 @@ row_start_n = locz[locz_index_n][1]; col_start_n = locz[locz_index_n][2];
 
 # ╔═╡ 003f670b-d3b1-4905-b105-67504f16ba19
 # populate dictionary of locations search space 
-function populate_searchSpace!(locs_searchSpace::Dict)
+function populate_searchSpace!(store_dict::Dict)
 
 	# board bounds 
 	last_row = 19
@@ -409,42 +409,50 @@ function populate_searchSpace!(locs_searchSpace::Dict)
 	
 		# Init array for zip ranges
 		zip_ranges = []
-	
-		# straight up to first row, k stays the same (j-2, k = k)
-		j_range = row_start-2:-2:1
-		k_range = [col_start for _ in j_range]
-	
-			push!(zip_ranges, zip(j_range, k_range))
-	
-		# straight down to last row, k stays the same (j+2, k = k)
-		j_range = row_start+2:2:last_row
-		k_range = [col_start for _ in j_range]
-	
-			push!(zip_ranges, zip(j_range, k_range))
-	
-		# diagonal up right (j-1, k+1)
-		j_range = row_start-1:-1:1
-		k_range = col_start+1:last_col
-	
-			push!(zip_ranges, zip(j_range, k_range))
+
+		## vertical line
 		
-		# diagonal down right (j+1, k+1)
-		j_range = row_start+1:last_row
-		k_range = col_start+1:last_col
-	
-			push!(zip_ranges, zip(j_range, k_range))
-	
-		# diagonal up left (j-1, k-1)
-		j_range = row_start-1:-1:1
-		k_range = col_start-1:-1:1
-	
-			push!(zip_ranges, zip(j_range, k_range))
-	
-		# diagonal down left (j+1, k-1)
-		j_range = row_start+1:last_row
-		k_range = col_start-1:-1:1
-	
-			push!(zip_ranges, zip(j_range, k_range))
+			# straight up to first row, k stays the same (j-2, k = k)
+			j_range = row_start-2:-2:1
+			k_range = [col_start for _ in j_range]
+		
+				push!(zip_ranges, zip(j_range, k_range))
+		
+			# straight down to last row, k stays the same (j+2, k = k)
+			j_range = row_start+2:2:last_row
+			k_range = [col_start for _ in j_range]
+		
+				push!(zip_ranges, zip(j_range, k_range))
+
+		## diagonal left to right up
+
+			# diagonal down left (j+1, k-1)
+			j_range = row_start+1:last_row
+			k_range = col_start-1:-1:1
+		
+				push!(zip_ranges, zip(j_range, k_range))
+			
+			# diagonal up right (j-1, k+1)
+			j_range = row_start-1:-1:1
+			k_range = col_start+1:last_col
+		
+				push!(zip_ranges, zip(j_range, k_range))
+
+		
+		## diagonal left to right down
+
+			# diagonal up left (j-1, k-1)
+			j_range = row_start-1:-1:1
+			k_range = col_start-1:-1:1
+		
+				push!(zip_ranges, zip(j_range, k_range))
+			
+			# diagonal down right (j+1, k+1)
+			j_range = row_start+1:last_row
+			k_range = col_start+1:last_col
+		
+				push!(zip_ranges, zip(j_range, k_range))
+		
 
 		## Convert locations to cart_index
 		# Init array for zip ranges
@@ -457,9 +465,12 @@ function populate_searchSpace!(locs_searchSpace::Dict)
 			end
 		end
 
+		# append starting location as possible move option
+		push!(cartIndex_ranges, [CartesianIndex(row_start, col_start)])
+
 		
 		## Write array of cartesian locations to dictionary
-		setindex!(locs_searchSpace, cartIndex_ranges, key)
+		setindex!(store_dict, cartIndex_ranges, key)
 
 	end
 
@@ -473,11 +484,120 @@ begin
 	populate_searchSpace!(locs_searchSpace)
 end
 
+# ╔═╡ a96a9a78-0aeb-4b00-8f3c-db61839deb5c
+# populate dictionary of locations search space for SCORING
+function populate_searchSpace_scoring!(store_dict::Dict)
+
+	# board bounds 
+	last_row = 19
+	last_col = 11
+
+	# keys mapping to valid board locations
+	keys_loc = findall(x -> x==1, mm_yinsh_01)
+	
+	for key in keys_loc
+
+		## Generate zip ranges for each direction
+		# get row/col from each cart_index location
+		row_start = key[1]
+		col_start = key[2]
+	
+		# Init array for zip ranges
+		zip_ranges = []
+
+		## Vertical line
+	
+			## vertical line
+		
+			# straight up to first row, k stays the same (j-2, k = k)
+			j_range = row_start-2:-2:1
+			k_range = [col_start for _ in j_range]
+		
+				temp = [z for z in zip(j_range, k_range)]
+		
+			# straight down to last row, k stays the same (j+2, k = k)
+			j_range = row_start+2:2:last_row
+			k_range = [col_start for _ in j_range]
+
+				# unite ranges
+				append!(temp, [z for z in zip(j_range, k_range)])
+
+				push!(zip_ranges, temp)
+
+		## diagonal left to right up
+
+			# diagonal down left (j+1, k-1)
+			j_range = row_start+1:last_row
+			k_range = col_start-1:-1:1
+		
+				temp = [z for z in zip(j_range, k_range)]
+			
+			# diagonal up right (j-1, k+1)
+			j_range = row_start-1:-1:1
+			k_range = col_start+1:last_col
+
+				# must leverage zipping to ensure ranges are correct
+				# especially true on diagonals are starts/ends for row/col mismatch
+				append!(temp, [z for z in zip(j_range, k_range)])
+		
+				push!(zip_ranges, temp)
+
+
+		## diagonal left to right down
+
+			# diagonal up left (j-1, k-1)
+			j_range = row_start-1:-1:1
+			k_range = col_start-1:-1:1
+		
+				temp = [z for z in zip(j_range, k_range)]
+			
+			# diagonal down right (j+1, k+1)
+			j_range = row_start+1:last_row
+			k_range = col_start+1:last_col
+		
+	
+				append!(temp, [z for z in zip(j_range, k_range)])
+
+				push!(zip_ranges, temp)
+
+		
+		## Convert locations to cart_index
+		# Init array for zip ranges
+		cartIndex_ranges = []
+
+		for range in zip_ranges
+
+			# add starting location to all ranges
+			append!(range, [(row_start, col_start)])
+
+			if length(range) > 0
+				push!(cartIndex_ranges, sort([CartesianIndex(z[1], z[2]) for z in range]))
+
+				# we may need to sort but maybe not
+			end
+		end
+
+		
+		## Write array of cartesian locations to dictionary
+		setindex!(store_dict, cartIndex_ranges, key)
+
+	end
+
+end
+
+# ╔═╡ 2cee3e2b-5061-40f4-a205-94d80cfdc20b
+# pre-populate dictionary with search space (scoring)
+
+begin
+	locs_searchSpace_scoring = Dict()
+	populate_searchSpace_scoring!(locs_searchSpace_scoring)
+end
+
 # ╔═╡ 52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
-function keepValid(state, ref_array)
+function keepValid(state, input_array)
 
 	# create a copy to avoid modifying location arrays
-	loc_array = ref_array
+	loc_array = input_array
 
 	# recovering states for all indexes in temp array
 	states_array = [state[z] for z in loc_array]
@@ -495,6 +615,7 @@ function keepValid(state, ref_array)
 
 
 	# searching for the first empty spot after a marker
+	# if range is 1:0 or 1:-1 collection is empty and cycle is skipped
 	for i in 1:length(states_array)-1
 		if contains(states_array[i],"M") == true && states_array[i+1] == ""
 			# slice locations array to be returned
@@ -539,10 +660,6 @@ function search_loc(ref_board, row_start::Int, col_start::Int)
 
 	end
 
-	# append initial location of the ring
-	# NOTE: to be removed/changed after handling ring activation in the client
-	append!(search_return, [CartesianIndex(row_start, col_start)])
-
 return search_return
 
 end
@@ -554,10 +671,10 @@ search_loc_graph(draw_board() ,row_start, col_start, search_loc(mm_states, row_s
 search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, row_start_n,col_start_n))
 
 # ╔═╡ c67154cb-c8cc-406c-90a8-0ea8241d8571
-function markers_search(state, ref_array)
-
+function markers_toFlip_search(state, input_array)
+	
 	# create a copy to avoid modifying location arrays
-	loc_array = ref_array
+	loc_array = input_array
 
 	# recovering states for all indexes in temp array
 	states_array = [state[z] for z in loc_array]
@@ -581,18 +698,46 @@ function markers_search(state, ref_array)
 	# false -> something to flip
 
 	flip_flag = (length(loc_array) > 0) ? true : false
-	
+			
+	return flip_flag, loc_array
+
+end
+
+# ╔═╡ 53dec9b0-dac1-47a6-b242-9696ff45b91b
+function score_lookup(state, input_array)
+# for each of the markers the are going to flip (+ dropped one) search along lines if a point was scored
+
+
+	# create a copy to avoid modifying input locations array
+	loc_array = input_array
+
+	for mk_index in input_array
+
+		# for each marker
+		
+
+	end
+
+	# for each marker, retrieve search spaces with at at least other 4 slots
+		# for each search_space, keep combos with continous 5 markers of the same color
+
 	# SCORE_CASE -> maybe could be reduced to simple true/false
 	# 0 -> no scoring
 	# 1 -> simple scoring
 	# 2 -> multi-row scoring
-			
-	return [flip_flag, loc_array]
+
+	score_flag = 0
+	markers_scoring = 0
+
+	return score_flag, markers_scoring
 
 end
 
 # ╔═╡ 8f2e4816-b60d-40eb-a9d8-acf4240c646a
 function markers_flip(state, row_start, col_start, row_end, col_end)
+	# change name of the function to reflect orch scope (flip + score)
+
+	# it's useful that state is queried only once and then passed as an argument downstream
 
 	end_index = CartesianIndex(row_end, col_end)
 	start_index = CartesianIndex(row_start, col_start)
@@ -623,17 +768,99 @@ function markers_flip(state, row_start, col_start, row_end, col_end)
 		end
 	end
 
-	# return markers within direction of movement
-	return markers_search(state, search_space[direction])
+	# return flag + markers to flip in direction of movement
+	flip_flag,  markers_toFlip = markers_toFlip_search(state, search_space[direction])
+
+
+	# if flip_flag true, include flipped markers for checking score
+	score_input_array = [start_index]
+	
+	if flip_flag == true
+		append!(score_input_array, markers_toFlip)
+	end
+
+	score_flag, markers_scoring = score_lookup(state, score_input_array)
+
+	return Dict("flip_flag" => flip_flag, 
+				"markers_toFlip" => markers_toFlip,
+				"score_flag" => score_flag,
+				"markers_scoring" => markers_scoring)
+
+	# to be translated to linear index
 
 
 end
+
+# ╔═╡ c1a432f3-748b-4e8b-aba4-9795b719df37
+locs_searchSpace_scoring[CartesianIndex(9,9)]
+
+# ╔═╡ 27ffdc28-a66d-4d29-9131-0aecf9ec8954
+t_copy = locs_searchSpace_scoring[CartesianIndex(9,9)][1]
+
+# ╔═╡ ebafb957-8196-4673-8192-776912b08a9c
+function test_slicing(input_c_index)
+
+
+input_array = locs_searchSpace_scoring[input_c_index]
+
+to_return = []
+
+for arr in input_array
+	LL = length(arr)
+	
+	 
+		if LL >= 5
+			
+			slice_id = findfirst(id -> id == input_c_index, arr)
+	
+			# scroll over a window of 5 elements
+			for j in 0:4
+	
+				start_id = slice_id-j
+				end_id = slice_id+(4-j)
+	
+				bounds_check = start_id >=1 && end_id <= LL
+				len_check = (end_id - start_id + 1) == 5
+				
+				if (bounds_check && len_check)
+					
+					temp = arr[start_id:end_id]
+				
+					push!(to_return, temp)
+	
+				end
+	
+			end
+	
+		end
+end
+
+	return to_return
+
+end
+
+# ╔═╡ 72e778c2-f17c-4360-949e-9391128ba960
+keys_loc_test = findall(x -> x==1, mm_yinsh_01)
+
+# ╔═╡ 87c9f7f7-9a98-44d5-952e-4511433465bd
+@bind key_slider Slider(keys_loc_test, show_value=true)
+
+# ╔═╡ 0fa2e848-6b81-4bbe-92f9-77741f976e77
+test_slicing(key_slider)
+
+# ╔═╡ 516126c1-d081-4c0c-9862-74f2be9679df
+#=
+
+for each marker of the loc_array (maybe also need to check original placed), look at their directions, and see if you can find 5 markers in continuous spots
+
+if yes, return [id_marker_origin] [id_markers_score]
+=#
 
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1043
+port_test = 1056
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -730,13 +957,6 @@ req_test = global_states[end]
 # ╔═╡ 4c983857-8532-487c-bcc4-8843c9a3cc31
 resp_js = JSON3.read(req_test.body)
 
-# ╔═╡ f87ce8a4-e250-49dd-95cf-b0992585101e
-search_loc(
-			reshape([s for s in resp_js[:state]], 19, 11), 
-			resp_js[:row], 
-			resp_js[:col]
-			)
-
 # ╔═╡ e28edbf2-fd82-46fd-aca8-0070bc21c289
 begin
 
@@ -751,6 +971,18 @@ to_flip = markers_flip(
 						)
 
 end
+
+# ╔═╡ b12429eb-799a-4026-84a8-23aac1825a8c
+c_to_flip = to_flip["markers_toFlip"]
+
+# ╔═╡ a4d3e04b-1906-4083-aa8b-0b0cb5072f14
+cart_to_index(col,row) = (col-1)*19 + row -1
+
+# ╔═╡ df42a56e-f49f-406b-a109-0d99798f67e9
+cart_to_index(coord::CartesianIndex) = (coord[2]-1)*19 + coord[1] -1
+
+# ╔═╡ cdda4924-2cf4-4cff-ba0a-e52de7b52ddc
+cart_to_index(c_to_flip[1])
 
 # ╔═╡ 381addf7-535e-40b2-9d47-4c220ed69355
 begin
@@ -1819,10 +2051,20 @@ version = "1.4.1+0"
 # ╠═ccbf567a-8923-4343-a2ff-53d81f2b6361
 # ╠═1d811aa5-940b-4ddd-908d-e94fe3635a6a
 # ╠═003f670b-d3b1-4905-b105-67504f16ba19
-# ╠═bf2dce8c-f026-40e3-89db-d72edb0b041c
-# ╠═52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
-# ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
-# ╠═c67154cb-c8cc-406c-90a8-0ea8241d8571
+# ╠═2cee3e2b-5061-40f4-a205-94d80cfdc20b
+# ╠═a96a9a78-0aeb-4b00-8f3c-db61839deb5c
+# ╟─bf2dce8c-f026-40e3-89db-d72edb0b041c
+# ╟─52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
+# ╟─8f2e4816-b60d-40eb-a9d8-acf4240c646a
+# ╟─c67154cb-c8cc-406c-90a8-0ea8241d8571
+# ╠═53dec9b0-dac1-47a6-b242-9696ff45b91b
+# ╠═c1a432f3-748b-4e8b-aba4-9795b719df37
+# ╠═27ffdc28-a66d-4d29-9131-0aecf9ec8954
+# ╠═ebafb957-8196-4673-8192-776912b08a9c
+# ╠═0fa2e848-6b81-4bbe-92f9-77741f976e77
+# ╠═72e778c2-f17c-4360-949e-9391128ba960
+# ╠═87c9f7f7-9a98-44d5-952e-4511433465bd
+# ╠═516126c1-d081-4c0c-9862-74f2be9679df
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
@@ -1831,8 +2073,11 @@ version = "1.4.1+0"
 # ╠═b13e5c1d-454f-4c87-9523-863a7d5d843f
 # ╠═f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
 # ╠═4c983857-8532-487c-bcc4-8843c9a3cc31
-# ╠═f87ce8a4-e250-49dd-95cf-b0992585101e
 # ╠═e28edbf2-fd82-46fd-aca8-0070bc21c289
+# ╠═b12429eb-799a-4026-84a8-23aac1825a8c
+# ╠═a4d3e04b-1906-4083-aa8b-0b0cb5072f14
+# ╠═df42a56e-f49f-406b-a109-0d99798f67e9
+# ╠═cdda4924-2cf4-4cff-ba0a-e52de7b52ddc
 # ╠═381addf7-535e-40b2-9d47-4c220ed69355
 # ╟─ca4a8229-3b34-4b5d-9807-27b840183109
 # ╠═b8ff58a8-dabe-4e03-baf2-0c351c66ecd7
