@@ -204,9 +204,9 @@ function init_markers(){
     };
 };
 
-// flips markers (changes their player)
+// flips markers (changes player of game objects)
 function flip_markers(markers_to_flip){
-// works with linear index instead of row/col
+// works with linear index 
 
     for (const marker of markers.values()) {
         if (markers_to_flip.includes(marker.loc.index)) {
@@ -217,6 +217,24 @@ function flip_markers(markers_to_flip){
     
     };
 };
+
+// flips markers in game state
+function flip_markers_game_state(markers_to_flip){
+    // works with linear index 
+    
+        for (const marker_id of markers_to_flip.values()) {
+            
+            if (game_state[marker_id] == "MW"){ 
+                
+                game_state[marker_id] = "MB"
+            
+            } else if (game_state[marker_id] == "MB") {
+                
+                game_state[marker_id] = "MW"
+            };
+        
+        };
+    };
 
 // adds marker -> called when ring is picked
 function add_marker(loc = {}, player = ""){
@@ -273,7 +291,10 @@ function reset_current_move(){
     current_move.loc = {};
 };
 
-
+function reset_mk_toRemove_scoring(){
+    // reset global var for the indexes of markers to be removed (scoring row)
+    temp_mk_to_remove = [];
+}
 
 // creates and destroys highlight intersection zones (subspaces for search of scoring options)
 function update_ss_scoring_zones(reset = false){

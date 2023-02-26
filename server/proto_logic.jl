@@ -1063,6 +1063,14 @@ req_test = global_states[end]
 # ╔═╡ 4c983857-8532-487c-bcc4-8843c9a3cc31
 resp_js = JSON3.read(req_test.body)
 
+# ╔═╡ 762330f8-88a7-4ef8-b67e-74663868f38b
+for row in 1:19
+	println(reshape([i for i in resp_js.state], 19,11)[row,:])
+end
+
+# ╔═╡ 93983a1b-d1d6-42ba-b056-80de0d3dffbc
+
+
 # ╔═╡ e28edbf2-fd82-46fd-aca8-0070bc21c289
 begin
 
@@ -2180,6 +2188,8 @@ version = "1.4.1+0"
 # ╠═b13e5c1d-454f-4c87-9523-863a7d5d843f
 # ╠═f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
 # ╠═4c983857-8532-487c-bcc4-8843c9a3cc31
+# ╠═762330f8-88a7-4ef8-b67e-74663868f38b
+# ╠═93983a1b-d1d6-42ba-b056-80de0d3dffbc
 # ╠═e28edbf2-fd82-46fd-aca8-0070bc21c289
 # ╠═b12429eb-799a-4026-84a8-23aac1825a8c
 # ╠═a4d3e04b-1906-4083-aa8b-0b0cb5072f14

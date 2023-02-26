@@ -19,6 +19,8 @@ async function server_allowed_moves(){
                             })
     });
 
+    // the failed fetch should be handled -> game pause or automatic retry?
+
     // note: passing the state could be redundant, only game id should be necessary
     
     // get allowed moves back from the server (array)

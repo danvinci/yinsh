@@ -117,6 +117,8 @@ game_state_target.addEventListener("ring_drop_attempt",
         if (end_row == current_move.loc.m_row && end_col == current_move.loc.m_col){
             
             remove_marker(index);
+            // ring dropped in same location, overrides MB/MW -> no need to handle it explicitly
+
             console.log(`Marker removed from index: ${index}`);
 
             // CASE: same location drop, nothing to flip (no server call needed for this)
@@ -131,7 +133,11 @@ game_state_target.addEventListener("ring_drop_attempt",
 
             // CASE: something to flip
             if (markers_response[0] == true){
+                // update drawing objects
                 flip_markers(markers_response[1]);
+
+                // update game state
+                flip_markers_game_state(markers_response[1])
             };
 
         };
@@ -145,7 +151,7 @@ game_state_target.addEventListener("ring_drop_attempt",
         update_ss_scoring_zones();
         draw_ss_scoring_zones();
 
-
+        
         // handle scoring cases
         // see if server was called, pause, act
         // NOTE: need to prevent interaction during pauses
@@ -153,11 +159,22 @@ game_state_target.addEventListener("ring_drop_attempt",
         // this check should be done on response from the server
         if (temp_mk_to_remove.length > 0) {
 
-            // markers should be removed both from object and game state 
-            setTimeout(remove_marker_multiple, 3000, temp_mk_to_remove);
-            //refresh_draw_state(); 
+            await sleep(1);
+            // markers removed both from object and game state 
+            remove_marker_multiple(temp_mk_to_remove);
+            
+            for (const mk_index of temp_mk_to_remove.values()) {
+                // clean markers from game state as well
+                update_game_state(mk_index, "");
+            };
+        
+            reset_mk_toRemove_scoring();
+            refresh_draw_state(); 
        
         };
+
+        await sleep(0.5);
+        refresh_draw_state(); 
         
     
     } else{
@@ -169,3 +186,6 @@ game_state_target.addEventListener("ring_drop_attempt",
 
 
 
+async function sleep(sec) {
+    return new Promise(resolve => setTimeout(resolve, sec * 1000));
+  }
