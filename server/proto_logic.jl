@@ -966,6 +966,23 @@ function markers_actions(state, row_start, col_start, row_end, col_end)
 
 end
 
+# ╔═╡ 148d1418-76a3-462d-9049-d30e85a45f06
+function reshape_out(input_array::Vector{CartesianIndex{2}})
+# CartesianIndex -> LinearIndex reshaping for the client
+# CARTESIAN to LINEAR > (col-1)*19 + row -1
+
+	return_array = Int64[]
+	
+	if !isempty(input_array)
+
+		return_array = [( (v[2]-1)*19 + v[1] - 1 ) for v in input_array]
+
+	end
+	
+	return return_array
+
+end
+
 # ╔═╡ 72e778c2-f17c-4360-949e-9391128ba960
 keys_loc_test = findall(x -> x==1, mm_yinsh_01)
 
@@ -2214,6 +2231,7 @@ version = "1.4.1+0"
 # ╟─c67154cb-c8cc-406c-90a8-0ea8241d8571
 # ╠═c2797a4c-81d3-4409-9038-117fe50540a8
 # ╠═53dec9b0-dac1-47a6-b242-9696ff45b91b
+# ╠═148d1418-76a3-462d-9049-d30e85a45f06
 # ╠═bf8c51dd-1898-4179-98a8-8192d855d4a6
 # ╠═72e778c2-f17c-4360-949e-9391128ba960
 # ╠═87c9f7f7-9a98-44d5-952e-4511433465bd
