@@ -1,6 +1,6 @@
 // SERVER INTERFACE FUNCTIONS
 
-port_number = "1099"
+port_number = "1100"
 
 // server call for checking allowable moves 
 async function server_allowed_moves(){

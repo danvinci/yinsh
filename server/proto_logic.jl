@@ -892,7 +892,7 @@ function reshape_out(input_array)
 	len = length(input_array)
 	for j in 1:len
 
-		row, col = input_array[j].I
+		row, col = Tuple(input_array[j])
 		push!(return_array, (col-1)*19 + row - 1)
 
 	end
@@ -1003,7 +1003,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1099
+port_test = 1100
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
