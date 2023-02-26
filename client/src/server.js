@@ -1,10 +1,11 @@
 // SERVER INTERFACE FUNCTIONS
 
-port_number = "1077"
+port_number = "1079"
 
 // server call for checking allowable moves 
 async function server_allowed_moves(){
 
+    let call_start = Date.now();
     // https://stackoverflow.com/questions/48708449/promise-pending-why-is-it-still-pending-how-can-i-fix-this
     // https://stackoverflow.com/questions/40385133/retrieve-data-from-a-readablestream-object
 
@@ -36,11 +37,21 @@ async function server_allowed_moves(){
         };
 
         console.log("Allowed moves from the server: "); console.log(cli_allowed_moves);
+        
+        // logging time
+        let delta_time = Date.now() - call_start;
+        console.log(`RTT: ${delta_time}ms`);
+
         return cli_allowed_moves;
 
     } else {
 
         console.log("no_moves");
+        
+        // logging time
+        let delta_time = Date.now() - call_start;
+        console.log(`RTT: ${delta_time}ms`);
+        
         return "no_moves";
     };
 
@@ -50,6 +61,7 @@ async function server_allowed_moves(){
 // change endpoint name to markers_action
 async function server_markers_check(end_row, end_col){
 
+    let call_start = Date.now();
     // reads directly global variables for game_state and current move
     response = await fetch(`http://localhost:${port_number}/api/v1/markers_check`, {
         method: 'POST', 
@@ -87,7 +99,7 @@ async function server_markers_check(end_row, end_col){
     console.log(`arrays in temp_global: ${arrays_count}`)
 
     // if there are scoring rows
-    num_scoring_rows = srv_response.num_scoring_rows 
+    num_scoring_rows = srv_response.num_scoring_rows.tot 
     if (num_scoring_rows >= 1) {
 
         // getting scoring rows details (sel marker, ids to be removed from board, player) 
@@ -122,13 +134,23 @@ async function server_markers_check(end_row, end_col){
         console.log("Markers to flip from the server: "); 
         console.log(cli_markers_toFlip);
 
+        // logging time
+        let delta_time = Date.now() - call_start;
+        console.log(`RTT: ${delta_time}ms`);
+
         // return original server response -> server should provide indexes already
         return [srv_response.flip_flag, cli_markers_toFlip];
 
     } else {
 
         console.log("No markers to flip");
+        
+        // logging time
+        let delta_time = Date.now() - call_start;
+        console.log(`RTT: ${delta_time}ms`);
+
         return [srv_response.flip_flag];
+       
     };
 
 };

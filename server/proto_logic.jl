@@ -20,6 +20,9 @@ using PlutoUI
 # ╔═╡ 9505b0f0-91a2-46a8-90a5-d615c2acdbc1
 using Plots, PlotThemes;  plotly() ; theme(:default)
 
+# ╔═╡ c2797a4c-81d3-4409-9038-117fe50540a8
+using StatsBase
+
 # ╔═╡ 64b1f98e-2e04-4db2-a827-4bc74ead76ab
 using JLD2
 
@@ -808,7 +811,7 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 		end
 
 	# values to be returned
-	num_scoring_rows = 0
+	num_scoring_rows = Dict("tot" => 0, "black" => 0, "white" => 0)
 	scoring_details = Dict("sub_spaces_locs" => [], "scoring_details" => [])
 
 	# helper array to store found locations for scoring markers
@@ -856,12 +859,19 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 				if !(locs in found_locs)
 
 					# save score_row details
-					score_row = Dict(   "mk_sel" => mk_index, 
-										"locs" => locs,
+					score_row = Dict(   "locs" => locs,
 										"player" => scoring_player)
 			
 					push!(scoring_details["scoring_details"], score_row)
-					num_scoring_rows += 1
+					
+					# keep count of scoring rows (total and per player)
+					num_scoring_rows["tot"] += 1	
+					
+						if black_scoring
+							num_scoring_rows["black"] += 1
+						elseif white_scoring
+							num_scoring_rows["white"] += 1
+						end
 
 					# save array of locations to simplify future checks
 					push!(found_locs, locs)
@@ -872,6 +882,32 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 		end
 	end
 
+	## handling case of multiple scoring rows in the same move
+	if num_scoring_rows["tot"] > 1
+
+		# scoring rows: find markers outside intersection and use them for selection
+		# guaranteed to find at least 1 for each series (found_locs helps)
+
+		all_mk_ids = []
+		for row in scoring_details["scoring_details"]
+			append!(all_mk_ids, row["locs"])
+		end
+
+		# frequency count of each marker location ID
+		# markers with freq == 1 only appear in one array
+		mk_ids_fCount = countmap(all_mk_ids)
+		
+		for (row_id, row) in enumerate(scoring_details["scoring_details"])
+			
+			# find first marker with freq count 1 and save its index in the loc array
+			mk_sel_index = findfirst(i -> mk_ids_fCount[i] == 1, row["locs"])
+			
+			# save mk_sel in row collection to be returned
+			setindex!(scoring_details["scoring_details"][row_id], 
+						row["locs"][mk_sel_index], "mk_sel")
+		
+		end
+	end
 
 	return num_scoring_rows, scoring_details
 
@@ -966,7 +1002,7 @@ search_subspaces_graph(draw_board(), key_slider[1], key_slider[2], locs_searchSp
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1077
+port_test = 1079
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1131,6 +1167,7 @@ PlotThemes = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 HTTP = "~1.7.4"
@@ -1139,6 +1176,7 @@ JSON3 = "~1.12.0"
 PlotThemes = "~3.1.0"
 Plots = "~1.38.5"
 PlutoUI = "~0.7.49"
+StatsBase = "~0.33.21"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -1147,7 +1185,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "1f5b2f45002af75bc27721f4b575706efa6bc38b"
+project_hash = "b409f71bce698d04c7967507034ba6326af72c36"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -2174,6 +2212,7 @@ version = "1.4.1+0"
 # ╟─52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
 # ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
 # ╟─c67154cb-c8cc-406c-90a8-0ea8241d8571
+# ╠═c2797a4c-81d3-4409-9038-117fe50540a8
 # ╠═53dec9b0-dac1-47a6-b242-9696ff45b91b
 # ╠═bf8c51dd-1898-4179-98a8-8192d855d4a6
 # ╠═72e778c2-f17c-4360-949e-9391128ba960
