@@ -1,6 +1,6 @@
 // SERVER INTERFACE FUNCTIONS
 
-port_number = "1079"
+port_number = "1099"
 
 // server call for checking allowable moves 
 async function server_allowed_moves(){
@@ -26,27 +26,20 @@ async function server_allowed_moves(){
     
     // get allowed moves back from the server (array)
     const srv_allowed_moves = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
-    
-    // parse and store allowed moves to local array
-    let cli_allowed_moves = [];
 
     if (srv_allowed_moves.length > 0) {
-        for (const move of srv_allowed_moves.values()) {
-            // note: reshaping could be moved to the server, as well as the length check -> keep the client dumb and lean
-            cli_allowed_moves.push(reshape_index(move.I[0], move.I[1]));
-        };
-
-        console.log("Allowed moves from the server: "); console.log(cli_allowed_moves);
+        
+        console.log(`Allowed moves: ${srv_allowed_moves}`); 
         
         // logging time
         let delta_time = Date.now() - call_start;
         console.log(`RTT: ${delta_time}ms`);
 
-        return cli_allowed_moves;
+        return srv_allowed_moves;
 
     } else {
 
-        console.log("no_moves");
+        console.log("No allowed moves");
         
         // logging time
         let delta_time = Date.now() - call_start;
@@ -84,62 +77,40 @@ async function server_markers_check(end_row, end_col){
     // get markers to be flipped back from the server 
     const srv_markers_toFlip = srv_response.markers_toFlip;
 
-    let arrays_count = 0; // to be deleted
-    // getting indexes of scoring sub-spaces    
-    for (const mk_index_array of srv_response.scoring_details.sub_spaces_locs.values()) {
-        arrays_count = arrays_count+1;
-
-        for (const mk_index of mk_index_array.values()){
-            temp_global_ss.push(reshape_index(mk_index.I[0], mk_index.I[1]));
-        };
-
-    };
-
-    //console.log('temp global: '); console.log(temp_global_ss);
-    console.log(`arrays in temp_global: ${arrays_count}`)
-
+    // getting indexes of scoring search sub-spaces   -> global var should be named differently and/or value returned OR NOT RETURNED
+    temp_global_ss = srv_response.scoring_details.sub_spaces_locs
+    
     // if there are scoring rows
     num_scoring_rows = srv_response.num_scoring_rows.tot 
     if (num_scoring_rows >= 1) {
 
-        // getting scoring rows details (sel marker, ids to be removed from board, player) 
+        // getting scoring rows details (sel marker, ids to be removed from board, player) -> game_state should be handling whole response
         for (const row of srv_response.scoring_details.scoring_details.values()) {
 
             for (const mk_index of row.locs.values()){
-                temp_mk_to_remove.push(reshape_index(mk_index.I[0], mk_index.I[1]));
+                temp_mk_to_remove.push(mk_index);
             };
         };
     
-        console.log("Markers to remove - scoring: "); 
-        console.log(temp_mk_to_remove);
+        console.log(`Markers to remove - scoring: ${temp_mk_to_remove}`); 
     };
 
     
 
-    // this should be returned and not wrote to a global variable
+    // this should be returned and not wrote to a global variable (scoring options)
     // only data functions should write
     // and they are only called by the game state
 
-    // parse and store indexes of markers in the client's format
-    let cli_markers_toFlip = [];
-    
 
     if (srv_response.flip_flag == true) {
-        for (const mk_index of srv_markers_toFlip.values()) {
-            // note: reshaping could be moved to the server, as well as the length check -> keep the client dumb but lean
-            // this way we get rid of using reshape here 
-            cli_markers_toFlip.push(reshape_index(mk_index.I[0], mk_index.I[1]));
-        };
-
-        console.log("Markers to flip from the server: "); 
-        console.log(cli_markers_toFlip);
+        
+        console.log(`Markers to flip: ${srv_markers_toFlip}`); 
 
         // logging time
         let delta_time = Date.now() - call_start;
         console.log(`RTT: ${delta_time}ms`);
 
-        // return original server response -> server should provide indexes already
-        return [srv_response.flip_flag, cli_markers_toFlip];
+        return [srv_response.flip_flag, srv_markers_toFlip];
 
     } else {
 

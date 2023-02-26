@@ -718,40 +718,6 @@ function keepValid(state, input_array)
 
 end
 
-# ╔═╡ bf2dce8c-f026-40e3-89db-d72edb0b041c
-# returns sub-array of valid moves
-function search_loc(ref_board, row_start::Int, col_start::Int)
-
-	start_index = CartesianIndex(row_start, col_start)
-	
-	# checks that row/col are valid
-	if !(start_index in keys(locs_searchSpace))
-		return [] 
-	end
-
-	# retrieve search space for the starting point
-	search_space = locs_searchSpace[start_index]
-
-	# array to be returned
-	search_return = []
-
-	for range in search_space
-
-		# append valid moves to array to be returned
-		append!(search_return, keepValid(ref_board, range)) 
-
-	end
-
-return search_return
-
-end
-
-# ╔═╡ abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
-search_loc_graph(draw_board() ,row_start, col_start, search_loc(mm_states, row_start,col_start))
-
-# ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
-search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, row_start_n,col_start_n))
-
 # ╔═╡ c67154cb-c8cc-406c-90a8-0ea8241d8571
 function markers_toFlip_search(state, input_array)
 	
@@ -823,8 +789,10 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 		locs_arrays = locs_searchSpace_scoring[mk_index]
 
 		for locs in locs_arrays
-			# saving array of subspaces
-			push!(scoring_details["sub_spaces_locs"], locs)
+			
+			# saving array of subspaces for visualization/debugging in the client
+			# this should be commented out
+			unique!(append!(scoring_details["sub_spaces_locs"], locs))
 			
 			# reading states for all indexes in loc search array
 			# if the index is of a flipped array, read from anticipated states
@@ -913,6 +881,60 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 
 end
 
+# ╔═╡ 148d1418-76a3-462d-9049-d30e85a45f06
+function reshape_out(input_array)
+# CartesianIndex -> LinearIndex reshaping for the client
+# CARTESIAN to LINEAR > (col-1)*19 + row -1
+
+	return_array = []
+
+	# array comprhension on CI doesn't work, must iterate the old way
+	len = length(input_array)
+	for j in 1:len
+
+		row, col = input_array[j].I
+		push!(return_array, (col-1)*19 + row - 1)
+
+	end
+
+	return return_array
+
+end
+
+# ╔═╡ bf2dce8c-f026-40e3-89db-d72edb0b041c
+# returns sub-array of valid moves
+function search_loc(ref_board, row_start::Int, col_start::Int)
+
+	start_index = CartesianIndex(row_start, col_start)
+	
+	# checks that row/col are valid
+	if !(start_index in keys(locs_searchSpace))
+		return [] 
+	end
+
+	# retrieve search space for the starting point
+	search_space = locs_searchSpace[start_index]
+
+	# array to be returned
+	search_return = CartesianIndex[]
+
+	for range in search_space
+
+		# check valid moves in each range and append them to returning array
+		append!(search_return, keepValid(ref_board, range)) 
+
+	end
+
+return reshape_out(search_return) # convert to linear indexes
+
+end
+
+# ╔═╡ abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
+search_loc_graph(draw_board() ,row_start, col_start, search_loc(mm_states, row_start,col_start))
+
+# ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
+search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, row_start_n,col_start_n))
+
 # ╔═╡ 8f2e4816-b60d-40eb-a9d8-acf4240c646a
 function markers_actions(state, row_start, col_start, row_end, col_end)
 
@@ -954,72 +976,34 @@ function markers_actions(state, row_start, col_start, row_end, col_end)
 
 
 	# pass start_index and markers about to flip for checking score
-	num_scoring_rows, scoring_det = score_lookup(state, start_index, markers_toFlip)
+	num_scoring_rows, sc_det = score_lookup(state, start_index, markers_toFlip)
 
+	# reshape indexes in scoring_detatils
+	sc_det["sub_spaces_locs"] = reshape_out(sc_det["sub_spaces_locs"])
+
+	# reshape indexes for scoring rows (if any)
+	if num_scoring_rows["tot"] > 0
+		for (row_id, row) in enumerate(sc_det["scoring_details"])
+			sc_det["scoring_details"][row_id]["locs"] = reshape_out(row["locs"])
+		end
+	end
+		
+		
 	return Dict("flip_flag" => flip_flag, 
-				"markers_toFlip" => markers_toFlip,
+				"markers_toFlip" => reshape_out(markers_toFlip),
 				"num_scoring_rows" => num_scoring_rows,
-				"scoring_details" => scoring_det)
+				"scoring_details" => sc_det)
 
 	# to be translated to linear index
 
 
 end
 
-# ╔═╡ 148d1418-76a3-462d-9049-d30e85a45f06
-function reshape_out(input_array::Vector{CartesianIndex{2}})
-# CartesianIndex -> LinearIndex reshaping for the client
-# CARTESIAN to LINEAR > (col-1)*19 + row -1
-
-	return_array = Int64[]
-	
-	if !isempty(input_array)
-
-		return_array = [( (v[2]-1)*19 + v[1] - 1 ) for v in input_array]
-
-	end
-	
-	return return_array
-
-end
-
-# ╔═╡ 72e778c2-f17c-4360-949e-9391128ba960
-keys_loc_test = findall(x -> x==1, mm_yinsh_01)
-
-# ╔═╡ 87c9f7f7-9a98-44d5-952e-4511433465bd
-@bind key_slider Slider(keys_loc_test, show_value=true)
-
-# ╔═╡ bf8c51dd-1898-4179-98a8-8192d855d4a6
-locs_searchSpace_scoring[key_slider]
-
-# ╔═╡ a6e49a17-a97a-45b1-8041-22e066e716b0
-function search_subspaces_graph(input_board, row_s::Int, col_s::Int, locs)
-
-	
-
-# plot starting point
-	scatter!(input_board, [col_s], [row_s], msize = 12, mswidth = 2, mcolor = :darkblue, shape = :dtriangle)
-
-	
-# plot search locations
-for (ind,loc) in enumerate(locs)
-	for L in loc
-		scatter!(input_board, [L[2]], [L[1]], msize = 4, mswidth = 2, mcolor = :darkblue)
-	end
-	
-end
-
-return input_board
-end
-
-# ╔═╡ 5fad1e8f-51cc-4033-8b6b-2bbaeaa942e0
-search_subspaces_graph(draw_board(), key_slider[1], key_slider[2], locs_searchSpace_scoring[key_slider])
-
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1079
+port_test = 1099
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1121,9 +1105,6 @@ for row in 1:19
 	println(reshape([i for i in resp_js.state], 19,11)[row,:])
 end
 
-# ╔═╡ 93983a1b-d1d6-42ba-b056-80de0d3dffbc
-
-
 # ╔═╡ e28edbf2-fd82-46fd-aca8-0070bc21c289
 begin
 
@@ -1139,28 +1120,12 @@ to_flip = markers_actions(
 
 end
 
-# ╔═╡ b12429eb-799a-4026-84a8-23aac1825a8c
-c_to_flip = to_flip["markers_toFlip"]
-
-# ╔═╡ a4d3e04b-1906-4083-aa8b-0b0cb5072f14
-cart_to_index(col,row) = (col-1)*19 + row -1
-
-# ╔═╡ df42a56e-f49f-406b-a109-0d99798f67e9
-cart_to_index(coord::CartesianIndex) = (coord[2]-1)*19 + coord[1] -1
-
-# ╔═╡ cdda4924-2cf4-4cff-ba0a-e52de7b52ddc
-cart_to_index(c_to_flip[1])
-
-# ╔═╡ 381addf7-535e-40b2-9d47-4c220ed69355
-begin
-
-	test_linear_index = Int[];
-	for col in 1:11
-		for row in 1:19
-			push!(test_linear_index, (col-1)*19 + row -1)
-		end
-	end
-end
+# ╔═╡ bbf4868c-eae4-4191-b4d0-9564bb236cbe
+kkk_moves = search_loc(
+			reshape([s for s in resp_js[:state]], 19, 11), 
+			resp_js[:row], 
+			resp_js[:col]
+			)
 
 # ╔═╡ ca4a8229-3b34-4b5d-9807-27b840183109
 md"""### Options for storing game sessions and states"""
@@ -2225,19 +2190,14 @@ version = "1.4.1+0"
 # ╠═2cee3e2b-5061-40f4-a205-94d80cfdc20b
 # ╠═a96a9a78-0aeb-4b00-8f3c-db61839deb5c
 # ╠═f0e9e077-f435-4f4b-bd69-f495dfccec27
-# ╟─bf2dce8c-f026-40e3-89db-d72edb0b041c
-# ╟─52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
+# ╠═bf2dce8c-f026-40e3-89db-d72edb0b041c
+# ╠═52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
 # ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
-# ╟─c67154cb-c8cc-406c-90a8-0ea8241d8571
+# ╠═c67154cb-c8cc-406c-90a8-0ea8241d8571
 # ╠═c2797a4c-81d3-4409-9038-117fe50540a8
 # ╠═53dec9b0-dac1-47a6-b242-9696ff45b91b
 # ╠═148d1418-76a3-462d-9049-d30e85a45f06
-# ╠═bf8c51dd-1898-4179-98a8-8192d855d4a6
-# ╠═72e778c2-f17c-4360-949e-9391128ba960
-# ╠═87c9f7f7-9a98-44d5-952e-4511433465bd
-# ╠═5fad1e8f-51cc-4033-8b6b-2bbaeaa942e0
-# ╠═a6e49a17-a97a-45b1-8041-22e066e716b0
-# ╠═b170050e-cb51-47ec-9870-909ec141dc3d
+# ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
 # ╠═75ce1c80-1dc6-4e0a-852a-830f88269022
@@ -2246,13 +2206,8 @@ version = "1.4.1+0"
 # ╠═f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
 # ╠═4c983857-8532-487c-bcc4-8843c9a3cc31
 # ╠═762330f8-88a7-4ef8-b67e-74663868f38b
-# ╠═93983a1b-d1d6-42ba-b056-80de0d3dffbc
 # ╠═e28edbf2-fd82-46fd-aca8-0070bc21c289
-# ╠═b12429eb-799a-4026-84a8-23aac1825a8c
-# ╠═a4d3e04b-1906-4083-aa8b-0b0cb5072f14
-# ╠═df42a56e-f49f-406b-a109-0d99798f67e9
-# ╠═cdda4924-2cf4-4cff-ba0a-e52de7b52ddc
-# ╠═381addf7-535e-40b2-9d47-4c220ed69355
+# ╠═bbf4868c-eae4-4191-b4d0-9564bb236cbe
 # ╟─ca4a8229-3b34-4b5d-9807-27b840183109
 # ╠═b8ff58a8-dabe-4e03-baf2-0c351c66ecd7
 # ╠═64b1f98e-2e04-4db2-a827-4bc74ead76ab
