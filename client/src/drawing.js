@@ -19,6 +19,7 @@ function refresh_draw_state(){
     draw_markers();
     draw_rings();
 
+
 }; 
 
 
@@ -301,8 +302,8 @@ function draw_highlight_zones(){
 
     ctx.globalAlpha = 1; 
     ctx.strokeStyle = "#668bd2";
-    ctx.fillStyle = "#a0b5dd";
-    ctx.lineWidth = 1;
+    ctx.fillStyle = "#aaccdd";
+    ctx.lineWidth = 0.5;
 
     for(let i=0; i<highlight_zones.length; i++){
     
@@ -332,3 +333,24 @@ function numTriangles(array) {
     }
     return counter - 1;
 }
+
+
+// highlight subspaces scoring 
+function draw_ss_scoring_zones(){
+    ctx.save();
+
+    ctx.globalAlpha = 1; 
+    ctx.strokeStyle = "#668bd2";
+    ctx.fillStyle = "#ff0000";
+    ctx.lineWidth = 0.5;
+
+    for(let i=0; i<ss_scoring_zones.length; i++){
+    
+        ctx.fill(ss_scoring_zones[i].path); 
+        ctx.stroke(ss_scoring_zones[i].path); 
+        
+    };        
+    
+    ctx.restore();
+};
+

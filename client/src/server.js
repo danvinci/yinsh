@@ -1,6 +1,6 @@
 // SERVER INTERFACE FUNCTIONS
 
-port_number = "1056"
+port_number = "1077"
 
 // server call for checking allowable moves 
 async function server_allowed_moves(){
@@ -45,6 +45,7 @@ async function server_allowed_moves(){
 };
 
 // server call for checking which markers must be flipped
+// change endpoint name to markers_action
 async function server_markers_check(end_row, end_col){
 
     // reads directly global variables for game_state and current move
@@ -69,8 +70,45 @@ async function server_markers_check(end_row, end_col){
     // get markers to be flipped back from the server 
     const srv_markers_toFlip = srv_response.markers_toFlip;
 
+    let arrays_count = 0; // to be deleted
+    // getting indexes of scoring sub-spaces    
+    for (const mk_index_array of srv_response.scoring_details.sub_spaces_locs.values()) {
+        arrays_count = arrays_count+1;
+
+        for (const mk_index of mk_index_array.values()){
+            temp_global_ss.push(reshape_index(mk_index.I[0], mk_index.I[1]));
+        };
+
+    };
+
+    //console.log('temp global: '); console.log(temp_global_ss);
+    console.log(`arrays in temp_global: ${arrays_count}`)
+
+    // if there are scoring rows
+    num_scoring_rows = srv_response.num_scoring_rows 
+    if (num_scoring_rows >= 1) {
+
+        // getting scoring rows details (sel marker, ids to be removed from board, player) 
+        for (const row of srv_response.scoring_details.scoring_details.values()) {
+
+            for (const mk_index of row.locs.values()){
+                temp_mk_to_remove.push(reshape_index(mk_index.I[0], mk_index.I[1]));
+            };
+        };
+    
+        console.log("Markers to remove - scoring: "); 
+        console.log(temp_mk_to_remove);
+    };
+
+    
+
+    // this should be returned and not wrote to a global variable
+    // only data functions should write
+    // and they are only called by the game state
+
     // parse and store indexes of markers in the client's format
     let cli_markers_toFlip = [];
+    
 
     if (srv_response.flip_flag == true) {
         for (const mk_index of srv_markers_toFlip.values()) {

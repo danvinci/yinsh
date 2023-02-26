@@ -389,6 +389,21 @@ setup_graph = rings_marks_graph();
 # ╔═╡ edfa0b25-9132-4de9-bf11-3ea2f0952e4f
 row_start_n = locz[locz_index_n][1]; col_start_n = locz[locz_index_n][2];
 
+# ╔═╡ 31e5c210-0cc0-4c89-8045-fbba3d031bc7
+begin
+
+	rr_start = 16
+	cc_start = 8
+	#16/8
+jjj = rr_start+1:19
+kkk = cc_start+1:11
+		
+zip_range = zip(jjj, kkk)
+[CartesianIndex(z[1],z[2]) for z in zip_range]
+
+
+end
+
 # ╔═╡ 003f670b-d3b1-4905-b105-67504f16ba19
 # populate dictionary of locations search space 
 function populate_searchSpace!(store_dict::Dict)
@@ -460,8 +475,15 @@ function populate_searchSpace!(store_dict::Dict)
 
 		for range in zip_ranges
 
-			if length(range) > 0
-				push!(cartIndex_ranges, [CartesianIndex(z[1], z[2]) for z in range])
+			if !isempty(range)
+
+				# convert to cart_index and only keep valid locations
+				ci_range = [CartesianIndex(z[1], z[2]) for z in range]
+				filter!(c -> c in keys_loc, ci_range)
+
+				if !isempty(ci_range)
+					push!(cartIndex_ranges, ci_range)
+				end
 			end
 		end
 
@@ -484,6 +506,9 @@ begin
 	populate_searchSpace!(locs_searchSpace)
 end
 
+# ╔═╡ 7435fe56-8646-4754-b960-4c282da5ab78
+locs_searchSpace[CartesianIndex(row_start_n, col_start_n)]
+
 # ╔═╡ f0e9e077-f435-4f4b-bd69-f495dfccec27
 function sub_spaces_split(input_array, key)
 
@@ -495,7 +520,7 @@ len_array = length(input_array)
  
 	if len_array >= 5
 
-		# key is contained in the input_array and array is sorted
+		# key is granted as part of the input_array + array is sorted
 		key_index = findfirst(x -> x == key, input_array)
 
 		# scroll over a window of 5 elements
@@ -526,6 +551,8 @@ end
 # ╔═╡ a96a9a78-0aeb-4b00-8f3c-db61839deb5c
 # populate dictionary of locations search space for SCORING
 function populate_searchSpace_scoring!(store_dict::Dict)
+
+# first part of the function could be shared with other and bifurcated instead of duplicated
 
 	# board bounds 
 	last_row = 19
@@ -606,16 +633,22 @@ function populate_searchSpace_scoring!(store_dict::Dict)
 
 		for range in zip_ranges
 
-			# add starting location to all ranges
-			append!(range, [(row_start, col_start)])
+			# if not included, add starting location range
+			# the check shouldn't be needed but good practice
+			if !((row_start, col_start) in range)
+				append!(range, [(row_start, col_start)])
+			end
 
-			# sorted direction array (vertical, diag up, diag down)
-			dir_array = sort([CartesianIndex(z[1], z[2]) for z in range])
+			# sorted direction array (vertical, diag up, diag down) with cart indexes
+			ci_range = sort([CartesianIndex(z[1], z[2]) for z in range])
+
+			# keep only valid locations
+			filter!(c -> c in keys_loc, ci_range)
 			
 			## split in subarrays of len=5 that contain the starting location
-			# save results of splitting
-			sub_arrays = sub_spaces_split(dir_array, key)
+			sub_arrays = sub_spaces_split(ci_range, key)
 
+			# save results of splitting
 			for sub in sub_arrays
 				push!(cartIndex_ranges, sub)
 			end
@@ -744,47 +777,112 @@ function markers_toFlip_search(state, input_array)
 	# false -> something to flip
 
 	flip_flag = (length(loc_array) > 0) ? true : false
-			
+
+	# returns true/false if markers flip and their locations 
 	return flip_flag, loc_array
 
 end
 
 # ╔═╡ 53dec9b0-dac1-47a6-b242-9696ff45b91b
-function score_lookup(state, input_array)
-# for each of the markers the are going to flip (+ dropped one) search along lines if a point was scored
+function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
+	# for each of the markers the are going to flip (+ dropped one) search along lines if a point was scored
 
+	# input contains indexes of new markers (1 dropped + n flipped)
+	loc_input = append!([dropped_mk_index], markers_toFlip_indexes)
+	
+	# as the markers haven't been flipped (yet) we must anticipate it
+	## build object to reference when it comes to about-to-be mk states
+	anticipated_states = Dict()
 
-	# create a copy to avoid modifying input locations array
-	loc_array = input_array
+		# add state of dropped marker
+		setindex!(anticipated_states, state[dropped_mk_index], dropped_mk_index)
+	
+		# for each marker to be flipped, swapped its current state
+		# assumed that state will only return MW or MB - i.e. a marker is there
+		for mk_index in markers_toFlip_indexes
+	
+			anticipated_mk_state = (state[mk_index] == "MW") ? "MB" : "MW"
+	
+			setindex!(anticipated_states, anticipated_mk_state, mk_index)
+			
+		end
 
-	for mk_index in input_array
+	# values to be returned
+	num_scoring_rows = 0
+	scoring_details = Dict("sub_spaces_locs" => [], "scoring_details" => [])
 
-		# for each marker
-		
+	# helper array to store found locations for scoring markers
+	found_locs = []
 
+	for mk_index in loc_input
+
+		# for each marker retrieve search space for scoring
+		locs_arrays = locs_searchSpace_scoring[mk_index]
+
+		for locs in locs_arrays
+			# saving array of subspaces
+			push!(scoring_details["sub_spaces_locs"], locs)
+			
+			# reading states for all indexes in loc search array
+			# if the index is of a flipped array, read from anticipated states
+			# otherwise read from the existing state
+
+			states_array = []
+			for index in locs
+				
+				if index in loc_input
+					push!(states_array, anticipated_states[index])
+				else
+					push!(states_array, state[index])
+				end
+					
+			end
+	
+			# search if a score was made in loc
+			MB_count = count(s -> isequal(s, "MB"), states_array)
+				black_scoring = MB_count == 5 ? true : false
+			
+			MW_count = count(s -> isequal(s, "MW"), states_array)
+				white_scoring = MW_count == 5 ? true : false
+
+			# if a score was made
+			if black_scoring || white_scoring
+				# log who's the player
+				scoring_player = black_scoring ? "black" : "white"
+
+				# save the row but check that scoring row wasn't saved already
+				# scoring locs are the same for each marker in it due to sorting
+				# if not found already, save it
+				if !(locs in found_locs)
+
+					# save score_row details
+					score_row = Dict(   "mk_sel" => mk_index, 
+										"locs" => locs,
+										"player" => scoring_player)
+			
+					push!(scoring_details["scoring_details"], score_row)
+					num_scoring_rows += 1
+
+					# save array of locations to simplify future checks
+					push!(found_locs, locs)
+				
+				end		
+				
+			end	
+		end
 	end
 
-	# for each marker, retrieve search spaces with at at least other 4 slots
-		# for each search_space, keep combos with continous 5 markers of the same color
 
-	# SCORE_CASE -> maybe could be reduced to simple true/false
-	# 0 -> no scoring
-	# 1 -> simple scoring
-	# 2 -> multi-row scoring
-
-	score_flag = 0
-	markers_scoring = 0
-
-	return score_flag, markers_scoring
+	return num_scoring_rows, scoring_details
 
 end
 
 # ╔═╡ 8f2e4816-b60d-40eb-a9d8-acf4240c646a
-function markers_flip(state, row_start, col_start, row_end, col_end)
-	# change name of the function to reflect orch scope (flip + score)
+function markers_actions(state, row_start, col_start, row_end, col_end)
 
-	# it's useful that state is queried only once and then passed as an argument downstream
-
+	# it's useful that state is queried only once and then passed as an argument downstream (if/when the state will be stored somewhere all could be passed could be a game ID that points to an object that's updated by a separate function)
+	# to measure changes in latency under load
+	
 	end_index = CartesianIndex(row_end, col_end)
 	start_index = CartesianIndex(row_start, col_start)
 	
@@ -794,6 +892,7 @@ function markers_flip(state, row_start, col_start, row_end, col_end)
 		return [] 
 	end
 
+	# case of ring picked up and dropped in same location
 	if start_index == end_index 
 		return [] 
 	end
@@ -815,22 +914,16 @@ function markers_flip(state, row_start, col_start, row_end, col_end)
 	end
 
 	# return flag + markers to flip in direction of movement
-	flip_flag,  markers_toFlip = markers_toFlip_search(state, search_space[direction])
+	flip_flag, markers_toFlip = markers_toFlip_search(state, search_space[direction])
 
 
-	# if flip_flag true, include flipped markers for checking score
-	score_input_array = [start_index]
-	
-	if flip_flag == true
-		append!(score_input_array, markers_toFlip)
-	end
-
-	score_flag, markers_scoring = score_lookup(state, score_input_array)
+	# pass start_index and markers about to flip for checking score
+	num_scoring_rows, scoring_det = score_lookup(state, start_index, markers_toFlip)
 
 	return Dict("flip_flag" => flip_flag, 
 				"markers_toFlip" => markers_toFlip,
-				"score_flag" => score_flag,
-				"markers_scoring" => markers_scoring)
+				"num_scoring_rows" => num_scoring_rows,
+				"scoring_details" => scoring_det)
 
 	# to be translated to linear index
 
@@ -846,19 +939,34 @@ keys_loc_test = findall(x -> x==1, mm_yinsh_01)
 # ╔═╡ bf8c51dd-1898-4179-98a8-8192d855d4a6
 locs_searchSpace_scoring[key_slider]
 
-# ╔═╡ 516126c1-d081-4c0c-9862-74f2be9679df
-#=
+# ╔═╡ a6e49a17-a97a-45b1-8041-22e066e716b0
+function search_subspaces_graph(input_board, row_s::Int, col_s::Int, locs)
 
-for each marker of the loc_array (maybe also need to check original placed), look at their directions, and see if you can find 5 markers in continuous spots
+	
 
-if yes, return [id_marker_origin] [id_markers_score]
-=#
+# plot starting point
+	scatter!(input_board, [col_s], [row_s], msize = 12, mswidth = 2, mcolor = :darkblue, shape = :dtriangle)
+
+	
+# plot search locations
+for (ind,loc) in enumerate(locs)
+	for L in loc
+		scatter!(input_board, [L[2]], [L[1]], msize = 4, mswidth = 2, mcolor = :darkblue)
+	end
+	
+end
+
+return input_board
+end
+
+# ╔═╡ 5fad1e8f-51cc-4033-8b6b-2bbaeaa942e0
+search_subspaces_graph(draw_board(), key_slider[1], key_slider[2], locs_searchSpace_scoring[key_slider])
 
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1056
+port_test = 1077
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -911,13 +1019,13 @@ begin
 		body_json = JSON3.read(req.body)
 
 		# check markers that should be flipped
-		to_flip = markers_flip(
-								reshape([s for s in body_json[:state]], 19, 11),
-								body_json[:start_row], 
-								body_json[:start_col], 
-								body_json[:end_row], 
-								body_json[:end_col]
-								)
+		to_flip = markers_actions(
+									reshape([s for s in body_json[:state]], 19, 11),
+									body_json[:start_row], 
+									body_json[:start_col], 
+									body_json[:end_row], 
+									body_json[:end_col]
+									)
 		
 		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(to_flip))
 	
@@ -960,7 +1068,7 @@ begin
 
 
 # check markers that should be flipped
-to_flip = markers_flip(
+to_flip = markers_actions(
 						reshape([s for s in resp_js[:state]], 19, 11),
 						resp_js[:start_row], 
 						resp_js[:start_col], 
@@ -1031,7 +1139,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "86f3bb7cc1018d00e608136ed5881f3c91cdfdbc"
+project_hash = "1f5b2f45002af75bc27721f4b575706efa6bc38b"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -2047,6 +2155,8 @@ version = "1.4.1+0"
 # ╠═e767b0a7-282f-46c4-b2e7-1f737807a3cb
 # ╠═edfa0b25-9132-4de9-bf11-3ea2f0952e4f
 # ╠═ccbf567a-8923-4343-a2ff-53d81f2b6361
+# ╠═7435fe56-8646-4754-b960-4c282da5ab78
+# ╠═31e5c210-0cc0-4c89-8045-fbba3d031bc7
 # ╠═1d811aa5-940b-4ddd-908d-e94fe3635a6a
 # ╠═003f670b-d3b1-4905-b105-67504f16ba19
 # ╠═2cee3e2b-5061-40f4-a205-94d80cfdc20b
@@ -2054,14 +2164,15 @@ version = "1.4.1+0"
 # ╠═f0e9e077-f435-4f4b-bd69-f495dfccec27
 # ╟─bf2dce8c-f026-40e3-89db-d72edb0b041c
 # ╟─52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
-# ╟─8f2e4816-b60d-40eb-a9d8-acf4240c646a
+# ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
 # ╟─c67154cb-c8cc-406c-90a8-0ea8241d8571
 # ╠═53dec9b0-dac1-47a6-b242-9696ff45b91b
 # ╠═bf8c51dd-1898-4179-98a8-8192d855d4a6
 # ╠═72e778c2-f17c-4360-949e-9391128ba960
 # ╠═87c9f7f7-9a98-44d5-952e-4511433465bd
-# ╠═516126c1-d081-4c0c-9862-74f2be9679df
-# ╟─b170050e-cb51-47ec-9870-909ec141dc3d
+# ╠═5fad1e8f-51cc-4033-8b6b-2bbaeaa942e0
+# ╠═a6e49a17-a97a-45b1-8041-22e066e716b0
+# ╠═b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
 # ╠═75ce1c80-1dc6-4e0a-852a-830f88269022

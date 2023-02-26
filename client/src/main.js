@@ -48,12 +48,16 @@ game_state_target.addEventListener("ring_picked",
         // init highlight zones
         update_highlight_zones()
 
+        
+
     };
 
     // place marker in same location and update game_state (after asking for allowed moves)
     // this allows for scoring to be computed correclty from game_state, as this marker will stay in place at ring_drop
     // location must be copied and not referenced -> otherwise the marker will be drawn along the ring as it inherits the same location
     add_marker(loc = structuredClone(p_ring.loc), player = p_ring.player);
+
+    update_ss_scoring_zones(reset = true); // to be deleted
 
     refresh_draw_state();
 
@@ -137,9 +141,24 @@ game_state_target.addEventListener("ring_drop_attempt",
         refresh_draw_state(); 
         sfxr.play(ring_drop_sound); 
 
+        // temp test on drawing ss subspacess
+        update_ss_scoring_zones();
+        draw_ss_scoring_zones();
+
+
         // handle scoring cases
         // see if server was called, pause, act
         // NOTE: need to prevent interaction during pauses
+        
+        // this check should be done on response from the server
+        if (temp_mk_to_remove.length > 0) {
+
+            // markers should be removed both from object and game state 
+            setTimeout(remove_marker_multiple, 3000, temp_mk_to_remove);
+            //refresh_draw_state(); 
+       
+        };
+        
     
     } else{
 

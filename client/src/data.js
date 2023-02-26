@@ -39,6 +39,10 @@ let highlight_zones = [];
 let current_allowed_moves = [];
 let current_move = {active: false, loc: {}};
 
+let temp_global_ss = []; // to be killed
+let ss_scoring_zones = []; //array of shapes for ss_scoring_subspaces
+let temp_mk_to_remove = []; // kill this later
+
 // these values are used in defining rings/markers, log status, and check conditions within functions
 const ring_id = "R";
 const marker_id = "M";
@@ -64,7 +68,7 @@ function reshape_index(row, col) { return (col-1)*19 + row -1; };
 
 // function to write to the game state array
 function update_game_state(index, value){
-    // there shoul de some input arguments check
+    // there should be some input arguments check
 
     game_state[index] = value;
 
@@ -253,6 +257,15 @@ function remove_marker(mk_index){
 
 };
 
+// this should be killed and function above be made to work with arrays / [1], [1,1,1]
+function remove_marker_multiple(mk_index_array){
+
+    for (let i=0; i<mk_index_array.length; i++){
+        
+        remove_marker(mk_index_array[i]);
+    };
+};
+
 // resets global variable of current move data
 function reset_current_move(){
     // reset global variable for the current move
@@ -262,3 +275,29 @@ function reset_current_move(){
 
 
 
+// creates and destroys highlight intersection zones (subspaces for search of scoring options)
+function update_ss_scoring_zones(reset = false){
+    
+        // if passed true, the shapes array will be emptied
+        if (reset === true){
+            ss_scoring_zones = [];
+            temp_global_ss = [];
+    
+        } else {
+            // for each linear id of the allowed moves (reads from global variable)
+            for (const id of temp_global_ss.values()) {
+    
+                // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
+                for(let i=0; i<drop_zones.length; i++){
+                    if (drop_zones[i].loc.index == id) {
+    
+                        // create shape + coordinates and store in the global array
+                        let h_path = new Path2D()
+                        h_path.arc(drop_zones[i].loc.x, drop_zones[i].loc.y, S*0.1, 0, 2*Math.PI);
+                        ss_scoring_zones.push({path: h_path});
+                
+                    };
+                };        
+            };
+        }
+    };
