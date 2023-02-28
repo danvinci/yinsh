@@ -881,19 +881,59 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 
 end
 
+# ╔═╡ 2c1c4182-5654-46ad-b4fb-2c79727aba3d
+function reshape_lookupDicts_create()
+# create dictionaries for lookup-based conversion between linear and CI coordinates
+	
+	return_dict_IN = Dict()
+	return_dict_OUT = Dict()
+
+	# valid locations in CI
+	keys_loc_ci = findall(x -> x==1, mm_yinsh_01)
+
+	# this to save the same locations in linear coordinates
+	keys_loc_linear = []
+
+	# array comprhension on CI doesn't work, must iterate the old way
+	len = length(keys_loc_ci)
+	for j in 1:len
+
+		row, col = Tuple(keys_loc_ci[j])
+		push!(keys_loc_linear, (col-1)*19 + row - 1)
+
+	end
+
+
+	# map between the two 
+	for j in 1:length(keys_loc_ci)
+
+		
+		setindex!(return_dict_IN, keys_loc_ci[j], keys_loc_linear[j])
+		setindex!(return_dict_OUT, keys_loc_linear[j], keys_loc_ci[j])
+				
+	end
+
+	return return_dict_IN, return_dict_OUT
+
+end
+
+# ╔═╡ 8e400909-8cfd-4c46-b782-c73ffac03712
+return_IN_lookup, return_OUT_lookup = reshape_lookupDicts_create();
+
 # ╔═╡ 148d1418-76a3-462d-9049-d30e85a45f06
-function reshape_out(input_array)
+function reshape_out(input_array::AbstractVector)
 # CartesianIndex -> LinearIndex reshaping for the client
 # CARTESIAN to LINEAR > (col-1)*19 + row -1
+# lookup table in previously created return_dict_OUT
 
 	return_array = []
 
 	# array comprhension on CI doesn't work, must iterate the old way
+
 	len = length(input_array)
 	for j in 1:len
 
-		row, col = Tuple(input_array[j])
-		push!(return_array, (col-1)*19 + row - 1)
+		push!(return_array, return_OUT_lookup[input_array[j]])
 
 	end
 
@@ -901,11 +941,54 @@ function reshape_out(input_array)
 
 end
 
+# ╔═╡ fc68fa36-e2ea-40fa-9d0e-722167a2506e
+function reshape_out(input_ci::CartesianIndex)
+# CartesianIndex -> LinearIndex reshaping for the client
+# CARTESIAN to LINEAR > (col-1)*19 + row -1
+# lookup table in previously created return_dict_OUT
+
+	return return_OUT_lookup[input_ci]
+
+	
+end
+
+# ╔═╡ 7fe89538-b2fe-47db-a961-fdbdd4278963
+function reshape_in(input_array::AbstractVector)
+# LinearIndex -> CartesianIndex reshaping for incoming calls from the client
+# assumes vector of INTs
+
+	return_array = CartesianIndex[]
+
+	for i in input_array
+
+		push!(return_array, return_IN_lookup[i])
+
+	end
+
+	return return_array
+
+
+end
+
+# ╔═╡ c1fbbcf3-aeec-483e-880a-05d3c7a8a895
+function reshape_in(input_linear::Int64)
+# LinearIndex -> CartesianIndex reshaping for incoming calls from the client
+# assumes single INTs
+
+	return return_IN_lookup[input_linear]
+
+
+end
+
 # ╔═╡ bf2dce8c-f026-40e3-89db-d72edb0b041c
 # returns sub-array of valid moves
-function search_loc(ref_board, row_start::Int, col_start::Int)
+function search_loc(client_state, client_start_index::Int64)
 
-	start_index = CartesianIndex(row_start, col_start)
+	# the client state must be reshaped
+	ref_state = reshape([s for s in client_state], 19, 11)
+
+	# the client start index needs to be converted to CI (row, col)
+	start_index = reshape_in(client_start_index)
 	
 	# checks that row/col are valid
 	if !(start_index in keys(locs_searchSpace))
@@ -921,7 +1004,7 @@ function search_loc(ref_board, row_start::Int, col_start::Int)
 	for range in search_space
 
 		# check valid moves in each range and append them to returning array
-		append!(search_return, keepValid(ref_board, range)) 
+		append!(search_return, keepValid(ref_state, range)) 
 
 	end
 
@@ -936,14 +1019,20 @@ search_loc_graph(draw_board() ,row_start, col_start, search_loc(mm_states, row_s
 search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, row_start_n,col_start_n))
 
 # ╔═╡ 8f2e4816-b60d-40eb-a9d8-acf4240c646a
-function markers_actions(state, row_start, col_start, row_end, col_end)
+function markers_actions(client_state, client_start_index, client_end_index)
 
 	# it's useful that state is queried only once and then passed as an argument downstream (if/when the state will be stored somewhere all could be passed could be a game ID that points to an object that's updated by a separate function)
 	# to measure changes in latency under load
+
+	## HANDLE INPUT FROM CLIENT
+	# the client state must be reshaped
+	ref_state = reshape([s for s in client_state], 19, 11)
+
+	# the client start index needs to be converted to CI (row, col)
+	start_index = reshape_in(client_start_index)
+	end_index = reshape_in(client_end_index)
 	
-	end_index = CartesianIndex(row_end, col_end)
-	start_index = CartesianIndex(row_start, col_start)
-	
+	## DOES STUFF
 	# checks that end both start and end are valid -> otherwise return no markers
 	valid_locs = keys(locs_searchSpace)
 	if (!(start_index in valid_locs) || !(end_index in valid_locs))
@@ -972,11 +1061,10 @@ function markers_actions(state, row_start, col_start, row_end, col_end)
 	end
 
 	# return flag + markers to flip in direction of movement
-	flip_flag, markers_toFlip = markers_toFlip_search(state, search_space[direction])
-
+	flip_flag, markers_toFlip = markers_toFlip_search(ref_state, search_space[direction])
 
 	# pass start_index and markers about to flip for checking score
-	num_scoring_rows, sc_det = score_lookup(state, start_index, markers_toFlip)
+	num_scoring_rows, sc_det = score_lookup(ref_state, start_index, markers_toFlip)
 
 	# reshape indexes in scoring_detatils
 	sc_det["sub_spaces_locs"] = reshape_out(sc_det["sub_spaces_locs"])
@@ -1003,7 +1091,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1100
+port_test = 1105
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1038,13 +1126,9 @@ begin
 		body_json = JSON3.read(req.body)
 
 		# computes allowed moves
-		ok_moves = search_loc(
-								reshape([s for s in body_json[:state]], 19, 11), 
-								body_json[:row], 
-								body_json[:col]
-								)
+		legal_moves = search_loc(body_json[:state], body_json[:start_index])
 		
-		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(ok_moves))
+		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(legal_moves))
 	
 	end
 
@@ -1056,15 +1140,13 @@ begin
 		body_json = JSON3.read(req.body)
 
 		# check markers that should be flipped
-		to_flip = markers_actions(
-									reshape([s for s in body_json[:state]], 19, 11),
-									body_json[:start_row], 
-									body_json[:start_col], 
-									body_json[:end_row], 
-									body_json[:end_col]
+		mk_actions = markers_actions(
+									body_json[:state],
+									body_json[:start_index], 
+									body_json[:end_index]
 									)
 		
-		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(to_flip))
+		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(mk_actions))
 	
 	end
 
@@ -2196,7 +2278,12 @@ version = "1.4.1+0"
 # ╠═c67154cb-c8cc-406c-90a8-0ea8241d8571
 # ╠═c2797a4c-81d3-4409-9038-117fe50540a8
 # ╠═53dec9b0-dac1-47a6-b242-9696ff45b91b
-# ╠═148d1418-76a3-462d-9049-d30e85a45f06
+# ╟─148d1418-76a3-462d-9049-d30e85a45f06
+# ╟─fc68fa36-e2ea-40fa-9d0e-722167a2506e
+# ╟─7fe89538-b2fe-47db-a961-fdbdd4278963
+# ╟─c1fbbcf3-aeec-483e-880a-05d3c7a8a895
+# ╠═8e400909-8cfd-4c46-b782-c73ffac03712
+# ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83

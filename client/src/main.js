@@ -95,31 +95,24 @@ game_state_target.addEventListener("ring_drop_attempt",
         // update ring loc information
         rings[id_last_ring].loc = structuredClone(drop_coord_loc);
 
-        index = drop_coord_loc.index;
+        drop_index = drop_coord_loc.index;
         value = rings[id_last_ring].type.concat(rings[id_last_ring].player); // -> RB, RW
 
         // update game state
         // if ring dropped in same location, this automatically overrides MB/MW -> no need to handle it in remove_marker()
-        update_game_state(index, value);
-        console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${index}`);
+        update_game_state(drop_index, value);
+        console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${drop_index}`);
 
         // empty array of allowed zones
         update_highlight_zones(reset = true)
 
-        // drop row/col
-        end_row = drop_coord_loc.m_row;
-        end_col = drop_coord_loc.m_col;
 
-        // this removes the marker if the ring is dropped where picked
-        console.log(`Start row: ${current_move.loc.m_row}, start col: ${current_move.loc.m_col}`);
-        console.log(`End row: ${end_row}, end col: ${end_col}`);
-
-        if (end_row == current_move.loc.m_row && end_col == current_move.loc.m_col){
+        if (drop_index == current_move.loc.index){
             
-            remove_marker(index);
+            remove_marker(drop_index);
             // ring dropped in same location, overrides MB/MW -> no need to handle it explicitly
 
-            console.log(`Marker removed from index: ${index}`);
+            console.log(`Marker removed from index: ${drop_index}`);
 
             // CASE: same location drop, nothing to flip (no server call needed for this)
             // -> do nothing
@@ -127,7 +120,7 @@ game_state_target.addEventListener("ring_drop_attempt",
         // ring moved -> asks the server about markers and scoring options
         } else {
 
-            const markers_response = await server_markers_check(end_row, end_col);
+            const markers_response = await server_markers_check(drop_index);
 
             // NOTE: replace array with dictionary (so to use field names instead of 0/1/2/etc)
 
@@ -185,7 +178,7 @@ game_state_target.addEventListener("ring_drop_attempt",
 });
 
 
-
+// shoud be moved to separate library
 async function sleep(sec) {
     return new Promise(resolve => setTimeout(resolve, sec * 1000));
   }

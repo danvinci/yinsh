@@ -1,6 +1,6 @@
 // SERVER INTERFACE FUNCTIONS
 
-port_number = "1100"
+port_number = "1105"
 
 // server call for checking allowable moves 
 async function server_allowed_moves(){
@@ -15,8 +15,7 @@ async function server_allowed_moves(){
         body: JSON.stringify({
                                 "game_id": 'game_unique_id', 
                                 "state": game_state, 
-                                "row": current_move.loc.m_row,
-                                "col": current_move.loc.m_col
+                                "start_index": current_move.loc.index,
                             })
     });
 
@@ -52,7 +51,7 @@ async function server_allowed_moves(){
 
 // server call for checking which markers must be flipped
 // change endpoint name to markers_action
-async function server_markers_check(end_row, end_col){
+async function server_markers_check(end_move_index){
 
     let call_start = Date.now();
     // reads directly global variables for game_state and current move
@@ -61,10 +60,8 @@ async function server_markers_check(end_row, end_col){
         body: JSON.stringify({
                                 "game_id": 'game_unique_id', 
                                 "state": game_state, 
-                                "start_row": current_move.loc.m_row,
-                                "start_col": current_move.loc.m_col,
-                                "end_row": end_row,
-                                "end_col": end_col
+                                "start_index": current_move.loc.index,
+                                "end_index": end_move_index
 
                             })
     });
