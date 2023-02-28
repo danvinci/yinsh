@@ -39,8 +39,6 @@ let highlight_zones = [];
 let current_allowed_moves = [];
 let current_move = {active: false, loc: {}};
 
-let temp_global_ss = []; // to be killed
-let ss_scoring_zones = []; //array of shapes for ss_scoring_subspaces
 let temp_mk_to_remove = []; // kill this later
 
 // these values are used in defining rings/markers, log status, and check conditions within functions
@@ -296,29 +294,3 @@ function reset_mk_toRemove_scoring(){
     temp_mk_to_remove = [];
 }
 
-// creates and destroys highlight intersection zones (subspaces for search of scoring options)
-function update_ss_scoring_zones(reset = false){
-    
-        // if passed true, the shapes array will be emptied
-        if (reset === true){
-            ss_scoring_zones = [];
-            temp_global_ss = [];
-    
-        } else {
-            // for each linear id of the allowed moves (reads from global variable)
-            for (const id of temp_global_ss.values()) {
-    
-                // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
-                for(let i=0; i<drop_zones.length; i++){
-                    if (drop_zones[i].loc.index == id) {
-    
-                        // create shape + coordinates and store in the global array
-                        let h_path = new Path2D()
-                        h_path.arc(drop_zones[i].loc.x, drop_zones[i].loc.y, S*0.1, 0, 2*Math.PI);
-                        ss_scoring_zones.push({path: h_path});
-                
-                    };
-                };        
-            };
-        }
-    };

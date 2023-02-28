@@ -778,7 +778,7 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 
 	# values to be returned
 	num_scoring_rows = Dict("tot" => 0, "black" => 0, "white" => 0)
-	scoring_details = Dict("sub_spaces_locs" => [], "scoring_details" => [])
+	scoring_details = []
 
 	# helper array to store found locations for scoring markers
 	found_locs = []
@@ -789,11 +789,7 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 		locs_arrays = locs_searchSpace_scoring[mk_index]
 
 		for locs in locs_arrays
-			
-			# saving array of subspaces for visualization/debugging in the client
-			# this should be commented out
-			unique!(append!(scoring_details["sub_spaces_locs"], locs))
-			
+				
 			# reading states for all indexes in loc search array
 			# if the index is of a flipped array, read from anticipated states
 			# otherwise read from the existing state
@@ -830,7 +826,7 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 					score_row = Dict(   "locs" => locs,
 										"player" => scoring_player)
 			
-					push!(scoring_details["scoring_details"], score_row)
+					push!(scoring_details, score_row)
 					
 					# keep count of scoring rows (total and per player)
 					num_scoring_rows["tot"] += 1	
@@ -850,14 +846,14 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 		end
 	end
 
-	## handling case of multiple scoring rows in the same move
-	if num_scoring_rows["tot"] > 1
+	## handling case of multiple scoring rows in the same move + row selection
+	if num_scoring_rows["tot"] >= 1
 
 		# scoring rows: find markers outside intersection and use them for selection
 		# guaranteed to find at least 1 for each series (found_locs helps)
 
 		all_mk_ids = []
-		for row in scoring_details["scoring_details"]
+		for row in scoring_details
 			append!(all_mk_ids, row["locs"])
 		end
 
@@ -865,14 +861,13 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 		# markers with freq == 1 only appear in one array
 		mk_ids_fCount = countmap(all_mk_ids)
 		
-		for (row_id, row) in enumerate(scoring_details["scoring_details"])
+		for (row_id, row) in enumerate(scoring_details)
 			
 			# find first marker with freq count 1 and save its index in the loc array
 			mk_sel_index = findfirst(i -> mk_ids_fCount[i] == 1, row["locs"])
 			
 			# save mk_sel in row collection to be returned
-			setindex!(scoring_details["scoring_details"][row_id], 
-						row["locs"][mk_sel_index], "mk_sel")
+			setindex!(scoring_details[row_id], row["locs"][mk_sel_index], "mk_sel")
 		
 		end
 	end
@@ -1064,25 +1059,24 @@ function markers_actions(client_state, client_start_index, client_end_index)
 	flip_flag, markers_toFlip = markers_toFlip_search(ref_state, search_space[direction])
 
 	# pass start_index and markers about to flip for checking score
-	num_scoring_rows, sc_det = score_lookup(ref_state, start_index, markers_toFlip)
+	num_sc_rows, sc_details = score_lookup(ref_state, start_index, markers_toFlip)
 
-	# reshape indexes in scoring_detatils
-	sc_det["sub_spaces_locs"] = reshape_out(sc_det["sub_spaces_locs"])
-
-	# reshape indexes for scoring rows (if any)
-	if num_scoring_rows["tot"] > 0
-		for (row_id, row) in enumerate(sc_det["scoring_details"])
-			sc_det["scoring_details"][row_id]["locs"] = reshape_out(row["locs"])
+	# reshape indexes for scoring rows and mk_sel (if any) before returning
+	if num_sc_rows["tot"] > 0
+		for (row_id, row) in enumerate(sc_details)
+			sc_details[row_id]["locs"] = reshape_out(row["locs"])
+			sc_details[row_id]["mk_sel"] = reshape_out(row["mk_sel"])
 		end
 	end
-		
-		
-	return Dict("flip_flag" => flip_flag, 
-				"markers_toFlip" => reshape_out(markers_toFlip),
-				"num_scoring_rows" => num_scoring_rows,
-				"scoring_details" => sc_det)
 
-	# to be translated to linear index
+	# reshaping index of results -> doing this after array has been used as input
+	markers_toFlip = reshape_out(markers_toFlip)
+
+	
+	return Dict("flip_flag" => flip_flag, 
+				"markers_toFlip" => markers_toFlip,
+				"num_scoring_rows" => num_sc_rows,
+				"scoring_details" => sc_details)
 
 
 end
@@ -1091,7 +1085,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1105
+port_test = 1107
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1193,11 +1187,9 @@ begin
 
 # check markers that should be flipped
 to_flip = markers_actions(
-						reshape([s for s in resp_js[:state]], 19, 11),
-						resp_js[:start_row], 
-						resp_js[:start_col], 
-						resp_js[:end_row], 
-						resp_js[:end_col]
+						resp_js[:state],
+						resp_js[:start_index], 
+						resp_js[:end_index]
 						)
 
 end

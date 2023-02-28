@@ -38,26 +38,24 @@ game_state_target.addEventListener("ring_picked",
     // get allowed moves from the server
     // game_state and current move are read from global variables
     // NOTE : allowed moves are requested considering no ring nor marker at their current location due to game_state updates
-    const allowed_moves = await server_allowed_moves();
+    const srv_allowed_moves = await server_allowed_moves();
 
-    if (allowed_moves != "no_moves"){
+    if (srv_allowed_moves.length > 0){
 
         // writes allowed moves to a global variable
-        current_allowed_moves = allowed_moves;
+        current_allowed_moves = srv_allowed_moves;
 
         // init highlight zones
         update_highlight_zones()
 
+        console.log(`Allowed moves: ${current_allowed_moves}`); 
         
-
     };
 
     // place marker in same location and update game_state (after asking for allowed moves)
     // this allows for scoring to be computed correclty from game_state, as this marker will stay in place at ring_drop
     // location must be copied and not referenced -> otherwise the marker will be drawn along the ring as it inherits the same location
     add_marker(loc = structuredClone(p_ring.loc), player = p_ring.player);
-
-    update_ss_scoring_zones(reset = true); // to be deleted
 
     refresh_draw_state();
 
@@ -139,10 +137,6 @@ game_state_target.addEventListener("ring_drop_attempt",
         reset_current_move()
         refresh_draw_state(); 
         sfxr.play(ring_drop_sound); 
-
-        // temp test on drawing ss subspacess
-        update_ss_scoring_zones();
-        draw_ss_scoring_zones();
 
         
         // handle scoring cases

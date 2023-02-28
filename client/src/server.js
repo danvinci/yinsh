@@ -1,6 +1,6 @@
 // SERVER INTERFACE FUNCTIONS
 
-port_number = "1105"
+port_number = "1107"
 
 // server call for checking allowable moves 
 async function server_allowed_moves(){
@@ -20,32 +20,17 @@ async function server_allowed_moves(){
     });
 
     // the failed fetch should be handled -> game pause or automatic retry?
-
     // note: passing the state could be redundant, only game id should be necessary
     
     // get allowed moves back from the server (array)
     const srv_allowed_moves = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
 
-    if (srv_allowed_moves.length > 0) {
-        
-        console.log(`Allowed moves: ${srv_allowed_moves}`); 
-        
-        // logging time
-        let delta_time = Date.now() - call_start;
-        console.log(`RTT: ${delta_time}ms`);
+    // logging time
+    let delta_time = Date.now() - call_start;
+    console.log(`RTT: ${delta_time}ms`);
 
-        return srv_allowed_moves;
-
-    } else {
-
-        console.log("No allowed moves");
-        
-        // logging time
-        let delta_time = Date.now() - call_start;
-        console.log(`RTT: ${delta_time}ms`);
-        
-        return "no_moves";
-    };
+    // return response to game status handler
+    return srv_allowed_moves;
 
 };
 
@@ -71,18 +56,26 @@ async function server_markers_check(end_move_index){
     // get markers to be flipped back from the server (array)
     const srv_response = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
 
-    // get markers to be flipped back from the server 
-    const srv_markers_toFlip = srv_response.markers_toFlip;
-
-    // getting indexes of scoring search sub-spaces   -> global var should be named differently and/or value returned OR NOT RETURNED
-    temp_global_ss = srv_response.scoring_details.sub_spaces_locs
+    /*
+    // UNPACK RESPONSE FROM SERVER
+    // flipping flag + markers to be flipped 
+    const markers_flip_flag = srv_response.flip_flag;
+    const markers_toFlip_indexes = srv_response.markers_toFlip;
     
+    // scoring rows and scoring details
+    const num_scoring_rows = srv_response.num_scoring_rows.tot;
+    const scoring_details = srv_response.scoring_details;
+
+    */
+
+
+
     // if there are scoring rows
-    num_scoring_rows = srv_response.num_scoring_rows.tot 
+
     if (num_scoring_rows >= 1) {
 
         // getting scoring rows details (sel marker, ids to be removed from board, player) -> game_state should be handling whole response
-        for (const row of srv_response.scoring_details.scoring_details.values()) {
+        for (const row of srv_response.scoring_details.values()) {
 
             for (const mk_index of row.locs.values()){
                 temp_mk_to_remove.push(mk_index);

@@ -335,22 +335,4 @@ function numTriangles(array) {
 }
 
 
-// highlight subspaces scoring 
-function draw_ss_scoring_zones(){
-    ctx.save();
-
-    ctx.globalAlpha = 1; 
-    ctx.strokeStyle = "#668bd2";
-    ctx.fillStyle = "#ff0000";
-    ctx.lineWidth = 0.5;
-
-    for(let i=0; i<ss_scoring_zones.length; i++){
-    
-        ctx.fill(ss_scoring_zones[i].path); 
-        ctx.stroke(ss_scoring_zones[i].path); 
-        
-    };        
-    
-    ctx.restore();
-};
 
