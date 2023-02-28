@@ -256,33 +256,32 @@ function add_marker(loc = {}, player = ""){
 };
 
 // removes markers -> called when ring dropped in same location
-function remove_marker(mk_index){
+function remove_markers(mk_index_input){
 // this is just for removing a marker when a ring is dropped in the same location
-// could be reused for removing markers when scoring
-    
-    // we have to find the marker with the matching index and remove it
-    for (let i=0; i<markers.length; i++){
-        if (markers[i].loc.index == mk_index){
-            
-            markers.splice(i, 1);
+// handling input as single integer end array -> if array it calls itself N times
 
-            break; // we're supposed to only find one marker
+    if (Number.isInteger(mk_index_input)){
+        
+        // we have to find the marker with the matching index and remove it
+        for (let i=0; i<markers.length; i++){
+            if (markers[i].loc.index == mk_index_input){
+                
+                markers.splice(i, 1);
+
+                break; // we're supposed to only find one marker
+            };
         };
-    };
+            
+    } else if (Array.isArray(mk_index_input)) {
+
+        for (let i=0; i<mk_index_input.length; i++){
         
-    // if ring dropped in same location, its game_state update will overwrite MB/MW
-    // no need to call update_game_state() here, it would also cause weird behavior
+            remove_markers(mk_index_input[i]); // it calls iself!
+        };
 
-};
-
-// this should be killed and function above be made to work with arrays / [1], [1,1,1]
-function remove_marker_multiple(mk_index_array){
-
-    for (let i=0; i<mk_index_array.length; i++){
-        
-        remove_marker(mk_index_array[i]);
     };
 };
+
 
 // resets global variable of current move data
 function reset_current_move(){
@@ -291,6 +290,7 @@ function reset_current_move(){
     current_move.loc = {};
 };
 
+// temp variable and matching function, should be updated
 function reset_mk_toRemove_scoring(){
     // reset global var for the indexes of markers to be removed (scoring row)
     temp_mk_to_remove = [];

@@ -99,7 +99,7 @@ game_state_target.addEventListener("ring_drop_attempt",
         value = rings[id_last_ring].type.concat(rings[id_last_ring].player); // -> RB, RW
 
         // update game state
-        // if ring dropped in same location, this automatically overrides MB/MW -> no need to handle it in remove_marker()
+        // if ring dropped in same location, this automatically overrides MB/MW -> no need to handle it in funcion to remove marker(s)
         update_game_state(drop_index, value);
         console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${drop_index}`);
 
@@ -109,7 +109,7 @@ game_state_target.addEventListener("ring_drop_attempt",
 
         if (drop_index == current_move.loc.index){
             
-            remove_marker(drop_index);
+            remove_markers(drop_index);
             // ring dropped in same location, overrides MB/MW -> no need to handle it explicitly
 
             console.log(`Marker removed from index: ${drop_index}`);
@@ -154,7 +154,7 @@ game_state_target.addEventListener("ring_drop_attempt",
 
             await sleep(1);
             // markers removed both from object and game state 
-            remove_marker_multiple(temp_mk_to_remove);
+            remove_markers(temp_mk_to_remove);
             
             for (const mk_index of temp_mk_to_remove.values()) {
                 // clean markers from game state as well
