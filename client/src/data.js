@@ -187,7 +187,8 @@ function init_markers(){
     for (const id of random_picks_ids.values()) {
         const ref_drop_zone = drop_zones[id];   
         
-        let M = {   loc: structuredClone(ref_drop_zone.loc),
+        let M = {   path: {},
+                    loc: structuredClone(ref_drop_zone.loc),
                     type: marker_id, 
                     player: (id % 2 == 0) ? player_black_id : player_white_id 
                 };            
@@ -238,11 +239,10 @@ function flip_markers_game_state(markers_to_flip){
 function add_marker(loc = {}, player = ""){
 // this is just for adding a new marker when a ring is picked             
 
-    // handling locations should be reduced to a single (nested) object
     let M = { loc: loc, 
-                        type: marker_id, 
-                        player: player 
-                    };            
+                type: marker_id, 
+                player: player 
+            };            
     
     // add to array
     markers.push(M);  

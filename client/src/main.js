@@ -118,28 +118,75 @@ game_state_target.addEventListener("ring_drop_attempt",
         // ring moved -> asks the server about markers and scoring options
         } else {
 
-            const markers_response = await server_markers_check(drop_index);
+            const srv_mk_resp = await server_markers_check(drop_index);
 
-            // NOTE: replace array with dictionary (so to use field names instead of 0/1/2/etc)
 
             // CASE: something to flip
-            if (markers_response[0] == true){
+            if (srv_mk_resp.flip_flag == true){
                 // update drawing objects
-                flip_markers(markers_response[1]);
+                flip_markers(srv_mk_resp.markers_toFlip);
 
                 // update game state
-                flip_markers_game_state(markers_response[1])
+                flip_markers_game_state(srv_mk_resp.markers_toFlip)
             };
 
+            // CASE: scoring was made -> create and dispatch event for other handler
+
+            if (srv_mk_resp.num_scoring_rows.tot > 0){
+                const score_event = new CustomEvent("score", {detail: {num_scoring_rows: srv_mk_resp.num_scoring_rows, scoring_details: srv_mk_resp.scoring_details}});
+                game_state_target.dispatchEvent(score_event);
+
+            };
         };
 
         // complete move, redraw, and play sound
         reset_current_move()
+
         refresh_draw_state(); 
         sfxr.play(ring_drop_sound); 
+    
+    } else{
 
+        console.log("Invalid drop location");
+        // NOTE: we could play specific sound 
+    };
+});
+
+// listens to scoring events
+game_state_target.addEventListener("score", 
+    function (evt) {
+
+    // we could use global var to save the state -> useful for interaction later
+
+    console.log("Score!");
+
+    num_scoring_rows = evt.detail.num_scoring_rows;
+    scoring_details = evt.detail.scoring_details;
+
+    // CASE SINGLE ROW
+    if (num_scoring_rows.tot == 1) {
+
+        // retrieve mk_sel and scoring indexes
+        mk_sel = scoring_details[0].mk_sel;
+        mk_locs = scoring_details[0].mk_locs;
         
-        // handle scoring cases
+        // highlight mk_sel
+        // build another object / halo?
+
+        // on_hover -> highlight all other indexes
+        // on_click -> remove all markers
+        // ask for ring to remove of player's color -> score point for player?
+    };
+
+    // CASE MULTIPLE ROWS
+
+    // NOTE: to revisit to handle player detail !!
+
+});
+
+/*
+
+ // handle scoring cases
         // see if server was called, pause, act
         // NOTE: need to prevent interaction during pauses
         
@@ -162,14 +209,10 @@ game_state_target.addEventListener("ring_drop_attempt",
 
         await sleep(0.5);
         refresh_draw_state(); 
-        
-    
-    } else{
+*/
 
-        console.log("Invalid drop location");
-        // NOTE: we could play specific sound 
-    };
-});
+
+
 
 
 // shoud be moved to separate library

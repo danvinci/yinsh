@@ -263,32 +263,38 @@ function draw_markers(){
     ctx.save();
 
     // reads the global markers object
-    for (const s of markers.values()) {
+    for (const m of markers.values()) {
 
         let inner = S*0.25;
         let marker_lineWidth = inner/5;
 
         // draw black marker
-        if (s.player == player_black_id){ 
+        if (m.player == player_black_id){ 
 
             ctx.fillStyle = "#1A1A1A";
             
             let marker_path = new Path2D()
-            marker_path.arc(s.loc.x, s.loc.y, inner, 0, 2*Math.PI);
+            marker_path.arc(m.loc.x, m.loc.y, inner, 0, 2*Math.PI);
             ctx.stroke(marker_path);
             ctx.fill(marker_path);
+
+             // update path shape definition -> needed for marker selection (scoring)
+             m.path = marker_path;
     
         // draw white marker
-        } else if (s.player == player_white_id){ 
+        } else if (m.player == player_white_id){ 
             
             ctx.strokeStyle = "#000";
             ctx.fillStyle = "#F6F7F6";
             ctx.lineWidth = marker_lineWidth/2;            
-            
+        
             let marker_path = new Path2D()
-            marker_path.arc(s.loc.x, s.loc.y, inner, 0, 2*Math.PI);
+            marker_path.arc(m.loc.x, m.loc.y, inner, 0, 2*Math.PI);
             ctx.stroke(marker_path);
             ctx.fill(marker_path);
+            
+            // update path shape definition -> needed for marker selection (scoring)
+            m.path = marker_path;
     
         };
     };

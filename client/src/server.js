@@ -1,6 +1,6 @@
 // SERVER INTERFACE FUNCTIONS
 
-port_number = "1107"
+port_number = "1108"
 
 // server call for checking allowable moves 
 async function server_allowed_moves(){
@@ -56,6 +56,16 @@ async function server_markers_check(end_move_index){
     // get markers to be flipped back from the server (array)
     const srv_response = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
 
+
+
+    // logging time
+    let delta_time = Date.now() - call_start;
+    console.log(`RTT: ${delta_time}ms`);
+
+    // return response to game status handler
+    return srv_response;
+
+
     /*
     // UNPACK RESPONSE FROM SERVER
     // flipping flag + markers to be flipped 
@@ -65,8 +75,6 @@ async function server_markers_check(end_move_index){
     // scoring rows and scoring details
     const num_scoring_rows = srv_response.num_scoring_rows.tot;
     const scoring_details = srv_response.scoring_details;
-
-    */
 
 
 
@@ -113,6 +121,9 @@ async function server_markers_check(end_move_index){
         return [srv_response.flip_flag];
        
     };
+
+
+    */
 
 };
 

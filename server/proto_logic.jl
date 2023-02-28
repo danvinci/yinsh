@@ -823,7 +823,7 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 				if !(locs in found_locs)
 
 					# save score_row details
-					score_row = Dict(   "locs" => locs,
+					score_row = Dict(   "mk_locs" => locs,
 										"player" => scoring_player)
 			
 					push!(scoring_details, score_row)
@@ -854,7 +854,7 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 
 		all_mk_ids = []
 		for row in scoring_details
-			append!(all_mk_ids, row["locs"])
+			append!(all_mk_ids, row["mk_locs"])
 		end
 
 		# frequency count of each marker location ID
@@ -864,10 +864,10 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 		for (row_id, row) in enumerate(scoring_details)
 			
 			# find first marker with freq count 1 and save its index in the loc array
-			mk_sel_index = findfirst(i -> mk_ids_fCount[i] == 1, row["locs"])
+			mk_sel_index = findfirst(i -> mk_ids_fCount[i] == 1, row["mk_locs"])
 			
 			# save mk_sel in row collection to be returned
-			setindex!(scoring_details[row_id], row["locs"][mk_sel_index], "mk_sel")
+			setindex!(scoring_details[row_id], row["mk_locs"][mk_sel_index], "mk_sel")
 		
 		end
 	end
@@ -1064,7 +1064,7 @@ function markers_actions(client_state, client_start_index, client_end_index)
 	# reshape indexes for scoring rows and mk_sel (if any) before returning
 	if num_sc_rows["tot"] > 0
 		for (row_id, row) in enumerate(sc_details)
-			sc_details[row_id]["locs"] = reshape_out(row["locs"])
+			sc_details[row_id]["mk_locs"] = reshape_out(row["mk_locs"])
 			sc_details[row_id]["mk_sel"] = reshape_out(row["mk_sel"])
 		end
 	end
@@ -1085,7 +1085,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1107
+port_test = 1108
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
