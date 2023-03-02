@@ -36,8 +36,12 @@ let rings = [];
 let markers = [];
 let drop_zones = [];
 let highlight_zones = [];
+let mk_halos = [];
+
 let current_allowed_moves = [];
 let current_move = {active: false, loc: {}};
+
+let score_handling_on = false;
 
 let temp_mk_to_remove = []; // kill this later
 
@@ -125,7 +129,7 @@ function init_drop_zones(){
 
 };
 
-// creates and destroys highlight intersection zones (for allowable moves)
+// creates and destroys highlights on intersection zones for allowed moves
 function update_highlight_zones(reset = false){
 // manipulates global variable of allowed moves for current ring
 
@@ -151,6 +155,33 @@ function update_highlight_zones(reset = false){
         };
     }
 };
+
+// creates and destroys highlight around markers for row selection/highlight in scoring
+function update_mk_halos(mk_indexes = [], reset = false){
+    // manipulates global variable 
+    
+        // if passed true, the array will be emptied
+        if (reset === true){
+            mk_halos = [];
+    
+        } else {
+            // for each linear id of the allowed moves (reads from global variable)
+            for (const id of mk_indexes.values()) {
+    
+                // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
+                for(let i=0; i<drop_zones.length; i++){
+                    if (drop_zones[i].loc.index == id) {
+    
+                        // create shape + coordinates and store in the global array
+                        let h_path = new Path2D()
+                        h_path.arc(drop_zones[i].loc.x, drop_zones[i].loc.y, S*0.35, 0, 2*Math.PI);
+                        mk_halos.push({path: h_path});
+                
+                    };
+                };        
+            };
+        }
+    };
 
 // initializes rings
 function init_rings(){

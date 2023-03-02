@@ -171,9 +171,12 @@ game_state_target.addEventListener("score",
         mk_locs = scoring_details[0].mk_locs;
         
         // highlight mk_sel
-        // build another object / halo?
+        update_mk_halos([mk_sel]);
+        refresh_draw_state();
 
         // on_hover -> highlight all other indexes
+        // listen to on_hover and click events on mk_sel -> how to listen to multiple events from 
+
         // on_click -> remove all markers
         // ask for ring to remove of player's color -> score point for player?
     };

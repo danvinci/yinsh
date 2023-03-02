@@ -19,6 +19,8 @@ function refresh_draw_state(){
     draw_markers();
     draw_rings();
 
+    // Draw markers halos
+    draw_mk_halos();
 
 }; 
 
@@ -302,7 +304,7 @@ function draw_markers(){
     ctx.restore();
 };
 
-// highlight allowable moves
+// highlight allowed moves
 function draw_highlight_zones(){
     ctx.save();
 
@@ -316,6 +318,22 @@ function draw_highlight_zones(){
         ctx.fill(highlight_zones[i].path); 
         ctx.stroke(highlight_zones[i].path); 
         
+    };        
+    
+    ctx.restore();
+};
+
+// highlight markers in scoring row
+function draw_mk_halos(){
+    ctx.save();
+
+    ctx.globalAlpha = 0.8; 
+    ctx.strokeStyle = "#aaccdd";
+    ctx.lineWidth = 4;
+
+    for(let i=0; i<mk_halos.length; i++){
+    
+        ctx.stroke(mk_halos[i].path); 
     };        
     
     ctx.restore();
