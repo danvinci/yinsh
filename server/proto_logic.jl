@@ -775,7 +775,7 @@ function score_lookup(state, mks_toFlip_ids)
 		end
 
 	# values to be returned
-	num_scoring_rows = Dict("tot" => 0, "B" => 0, "W" => 0)
+	num_scoring_rows = Dict(:tot => 0, :B => 0, :W => 0)
 	scoring_details = []
 
 	# helper array to store found locations for scoring markers
@@ -821,18 +821,17 @@ function score_lookup(state, mks_toFlip_ids)
 				if !(ss_locs in found_ss_locs)
 
 					# save score_row details
-					score_row = Dict(   "mk_locs" => ss_locs,
-										"player" => scoring_player)
+					score_row = Dict(:mk_locs => ss_locs, :player => scoring_player)
 			
 					push!(scoring_details, score_row)
 					
 					# keep count of scoring rows (total and per player)
-					num_scoring_rows["tot"] += 1	
+					num_scoring_rows[:tot] += 1	
 					
 						if black_scoring
-							num_scoring_rows["B"] += 1
+							num_scoring_rows[:B] += 1
 						elseif white_scoring
-							num_scoring_rows["W"] += 1
+							num_scoring_rows[:W] += 1
 						end
 
 					# save array of locations to simplify future checks
@@ -845,18 +844,17 @@ function score_lookup(state, mks_toFlip_ids)
 	end
 
 	## handling case of multiple scoring rows in the same move + row selection
-	if num_scoring_rows["tot"] >= 1
+	if num_scoring_rows[:tot] >= 1
 
 		# scoring rows: find markers outside intersection and use them for selection
 		# guaranteed to find at least 1 for each series (found_locs helps)
 
 		all_scoring_mk_ids = []
 		for row in scoring_details
-			append!(all_scoring_mk_ids, row["mk_locs"])
+			append!(all_scoring_mk_ids, row[:mk_locs])
 		end
 
 		# frequency count of each marker location ID
-		# markers with freq == 1 only appear in one array
 		mk_ids_fCount = countmap(all_scoring_mk_ids)
 
 		# keep track of sel markers already taken (by CartIndex)
@@ -865,7 +863,7 @@ function score_lookup(state, mks_toFlip_ids)
 		for (row_id, row) in enumerate(scoring_details)
 
 			# temp copy of locations, to avoid modifying the original array
-			temp_locs = copy(row["mk_locs"])
+			temp_locs = copy(row[:mk_locs])
 
 			# build search array of locations in row by exluding taken locations
 			if !isempty(mk_sel_taken)
@@ -883,7 +881,7 @@ function score_lookup(state, mks_toFlip_ids)
 			mk_sel = temp_locs[min_fr_index]
 				
 			# save mk_sel in row collection to be returned
-			setindex!(scoring_details[row_id], mk_sel, "mk_sel")
+			setindex!(scoring_details[row_id], mk_sel, :mk_sel)
 
 			# store mk_sel in array (useful for solving conflicts later)
 			push!(mk_sel_taken, mk_sel)
@@ -1080,10 +1078,10 @@ function markers_actions(client_state, client_start_index, client_end_index)
 	num_sc_rows, sc_details = score_lookup(ref_state, markers_toFlip)
 
 	# reshape indexes for scoring rows and mk_sel (if any) before returning
-	if num_sc_rows["tot"] > 0
+	if num_sc_rows[:tot] > 0
 		for (row_id, row) in enumerate(sc_details)
-			sc_details[row_id]["mk_locs"] = reshape_out(row["mk_locs"])
-			sc_details[row_id]["mk_sel"] = reshape_out(row["mk_sel"])
+			sc_details[row_id][:mk_locs] = reshape_out(row[:mk_locs])
+			sc_details[row_id][:mk_sel] = reshape_out(row[:mk_sel])
 		end
 	end
 
@@ -1103,7 +1101,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1128
+port_test = 1130
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
