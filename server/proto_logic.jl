@@ -866,7 +866,8 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 		
 		for (row_id, row) in enumerate(scoring_details)
 
-			temp_locs = row["mk_locs"]
+			# temp copy of locations, to avoid modifying the original array
+			temp_locs = copy(row["mk_locs"])
 
 			# build search array of locations in row by exluding taken locations
 			if !isempty(mk_sel_taken)
@@ -1104,7 +1105,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1120
+port_test = 1122
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1208,8 +1209,7 @@ begin
 to_flip = markers_actions(
 						resp_js[:state],
 						resp_js[:start_index], 
-						resp_js[:end_index]
-						)
+						resp_js[:end_index])
 
 end
 
