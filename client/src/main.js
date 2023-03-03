@@ -27,7 +27,7 @@ game_state_target.addEventListener("ring_picked",
     // clean game state for location
     update_game_state(p_ring.loc.index, "");
 
-    value = p_ring.type.concat(p_ring.player); // -> RB, RW, MB, MW
+    value = p_ring.type.concat(p_ring.player); // -> RB, RW
 
     console.log(`${value} picked from ${p_ring.loc.m_row}:${p_ring.loc.m_col} at -> ${p_ring.loc.index}`);
 

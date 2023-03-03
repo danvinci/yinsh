@@ -753,26 +753,24 @@ function markers_toFlip_search(state, input_array)
 end
 
 # ╔═╡ 53dec9b0-dac1-47a6-b242-9696ff45b91b
-function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
-	# for each of the markers the are going to flip (+ dropped one) search along lines if a point was scored
+function score_lookup(state, mks_toFlip_ids)
+	# look at the game state to check if a score was made
+	# passing markers about to flip as their state hasn't changed yet
 
-	# input contains indexes of new markers (1 dropped + n flipped)
-	loc_input = append!([dropped_mk_index], markers_toFlip_indexes)
+	# all markers locations
+	gs_markers_locs = findall(i -> contains(i, "M"), state)
 	
 	# as the markers haven't been flipped (yet) we must anticipate it
 	## build object to reference when it comes to about-to-be mk states
 	anticipated_states = Dict()
 
-		# add state of dropped marker
-		setindex!(anticipated_states, state[dropped_mk_index], dropped_mk_index)
-	
 		# for each marker to be flipped, swapped its current state
 		# assumed that state will only return MW or MB - i.e. a marker is there
-		for mk_index in markers_toFlip_indexes
+		for mk_index in mks_toFlip_ids
 	
-			anticipated_mk_state = (state[mk_index] == "MW") ? "MB" : "MW"
+			ant_mk_state = (state[mk_index] == "MW") ? "MB" : "MW"
 	
-			setindex!(anticipated_states, anticipated_mk_state, mk_index)
+			setindex!(anticipated_states, ant_mk_state, mk_index)
 			
 		end
 
@@ -781,23 +779,23 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 	scoring_details = []
 
 	# helper array to store found locations for scoring markers
-	found_locs = []
+	found_ss_locs = []
 
-	for mk_index in loc_input
+	for mk_index in gs_markers_locs
 
 		# for each marker retrieve search space for scoring
-		locs_arrays = locs_searchSpace_scoring[mk_index]
+		ss_locs_arrays = locs_searchSpace_scoring[mk_index]
 
-		for locs in locs_arrays
+		for ss_locs in ss_locs_arrays
 				
 			# reading states for all indexes in loc search array
 			# if the index is of a flipped array, read from anticipated states
 			# otherwise read from the existing state
 
 			states_array = []
-			for index in locs
+			for index in ss_locs
 				
-				if index in loc_input
+				if index in mks_toFlip_ids
 					push!(states_array, anticipated_states[index])
 				else
 					push!(states_array, state[index])
@@ -820,10 +818,10 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 				# save the row but check that scoring row wasn't saved already
 				# scoring locs are the same for each marker in it due to sorting
 				# if not found already, save it
-				if !(locs in found_locs)
+				if !(ss_locs in found_ss_locs)
 
 					# save score_row details
-					score_row = Dict(   "mk_locs" => locs,
+					score_row = Dict(   "mk_locs" => ss_locs,
 										"player" => scoring_player)
 			
 					push!(scoring_details, score_row)
@@ -838,7 +836,7 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 						end
 
 					# save array of locations to simplify future checks
-					push!(found_locs, locs)
+					push!(found_ss_locs, ss_locs)
 				
 				end		
 				
@@ -852,14 +850,14 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 		# scoring rows: find markers outside intersection and use them for selection
 		# guaranteed to find at least 1 for each series (found_locs helps)
 
-		all_mk_ids = []
+		all_scoring_mk_ids = []
 		for row in scoring_details
-			append!(all_mk_ids, row["mk_locs"])
+			append!(all_scoring_mk_ids, row["mk_locs"])
 		end
 
 		# frequency count of each marker location ID
 		# markers with freq == 1 only appear in one array
-		mk_ids_fCount = countmap(all_mk_ids)
+		mk_ids_fCount = countmap(all_scoring_mk_ids)
 
 		# keep track of sel markers already taken (by CartIndex)
 		mk_sel_taken = []
@@ -1078,8 +1076,8 @@ function markers_actions(client_state, client_start_index, client_end_index)
 	# return flag + markers to flip in direction of movement
 	flip_flag, markers_toFlip = markers_toFlip_search(ref_state, search_space[direction])
 
-	# pass start_index and markers about to flip for checking score
-	num_sc_rows, sc_details = score_lookup(ref_state, start_index, markers_toFlip)
+	# pass markers about to flip for checking score
+	num_sc_rows, sc_details = score_lookup(ref_state, markers_toFlip)
 
 	# reshape indexes for scoring rows and mk_sel (if any) before returning
 	if num_sc_rows["tot"] > 0
@@ -1105,7 +1103,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1122
+port_test = 1128
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1195,6 +1193,9 @@ req_test = global_states[end]
 
 # ╔═╡ 4c983857-8532-487c-bcc4-8843c9a3cc31
 resp_js = JSON3.read(req_test.body)
+
+# ╔═╡ dc912486-b94e-4d0d-b653-de91aad85c0a
+findall(i -> contains(i, "M"), reshape([i for i in resp_js.state], 19,11))
 
 # ╔═╡ 762330f8-88a7-4ef8-b67e-74663868f38b
 for row in 1:19
@@ -2303,6 +2304,7 @@ version = "1.4.1+0"
 # ╠═b13e5c1d-454f-4c87-9523-863a7d5d843f
 # ╠═f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
 # ╠═4c983857-8532-487c-bcc4-8843c9a3cc31
+# ╠═dc912486-b94e-4d0d-b653-de91aad85c0a
 # ╠═762330f8-88a7-4ef8-b67e-74663868f38b
 # ╠═e28edbf2-fd82-46fd-aca8-0070bc21c289
 # ╠═bbf4868c-eae4-4191-b4d0-9564bb236cbe
