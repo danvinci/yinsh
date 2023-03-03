@@ -1,6 +1,9 @@
 // MAIN 
 // game logic and orchestration
 
+// start
+console.log('<<< NEW GAME >>>');
+
 // init drop zones + markers y rings -> setup and first draw
 init_objects()
 refresh_draw_state(); 
@@ -195,7 +198,7 @@ game_state_target.addEventListener("mk_sel_hover_ON",
         if (mk_sel_hover_index == row.mk_sel){
 
             // highlight each marker in array
-            update_mk_halos(row.mk_locs);
+            update_mk_halos(row.mk_locs, hot = true);
             refresh_draw_state();
 
             break;
@@ -217,38 +220,42 @@ game_state_target.addEventListener("mk_sel_hover_OFF",
 
 });
 
-/*
 
- // handle scoring cases
-        // see if server was called, pause, act
-        // NOTE: need to prevent interaction during pauses
-        
-        // this check should be done on response from the server
-        if (temp_mk_to_remove.length > 0) {
+// listens to click event over sel_markers in scoring rows -> handle markers removal and ends score_handling
+game_state_target.addEventListener("mk_sel_clicked", 
+    function (event) {
 
-            await sleep(1);
-            // markers removed both from object and game state 
-            remove_markers(temp_mk_to_remove);
-            
-            for (const mk_index of temp_mk_to_remove.values()) {
-                // clean markers from game state as well
-                update_game_state(mk_index, "");
+   // retrieve index of marker being clicked on
+   mk_sel_clicked_index = event.detail;
+
+    // turn mk halos off
+    update_mk_halos();
+
+    // retrieve indexes of markers of matching scoring row and remove them
+    for (const row of score_handling_var.details.values()) {
+        if (mk_sel_clicked_index == row.mk_sel){
+
+             // remove markers objects from game
+            remove_markers(row.mk_locs);
+
+            // update game state
+            for (const mk_id of row.mk_locs.values()) {
+                update_game_state(mk_id, "");
             };
         
-            reset_mk_toRemove_scoring();
-            refresh_draw_state(); 
-       
+            break;
         };
+        
+    };
 
-        await sleep(0.5);
-        refresh_draw_state(); 
-*/
+    // conclude scoring handling
+    update_score_handling(on = false);
 
+    // play sound
+    sfxr.play(markers_row_removed_sound);
 
+    // re-draw everything
+    refresh_draw_state();
 
+});
 
-
-// shoud be moved to separate library
-async function sleep(sec) {
-    return new Promise(resolve => setTimeout(resolve, sec * 1000));
-  }

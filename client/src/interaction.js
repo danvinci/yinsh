@@ -27,6 +27,7 @@ canvas.addEventListener("mousedown",
                 };
             };
 
+        // move on -> ring is being dropped
         } else if (current_move.on == true){
             
             // move is active, ring drop attempt
@@ -44,6 +45,26 @@ canvas.addEventListener("mousedown",
                 // here we only take care of interaction and checking there's actually a nearby drop zone
 
             };  
+        };
+        // scoring action is in progress -> scoring row is being selected via mk_sel
+        if (score_handling_var.on == true){
+
+            // check which marker the mouse is clicking on
+            for(let i=0; i<markers.length; i++){
+                if (ctx.isPointInPath(markers[i].path, mousePos.x, mousePos.y)){
+
+                    // check that index of marker is among ones in mk_sel_array (selectable markers)
+                    if (score_handling_var.mk_sel_array.includes(markers[i].loc.index) == true){
+
+                        // create and dispatch event, send location index for matching marker
+                        const mk_sel_click_event = new CustomEvent("mk_sel_clicked", { detail: markers[i].loc.index});
+                        game_state_target.dispatchEvent(mk_sel_click_event);
+                        
+                        break; // no need to keep cycling
+
+                    };
+                };
+            };
         };
     });
 

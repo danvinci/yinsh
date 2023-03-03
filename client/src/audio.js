@@ -33,3 +33,37 @@ const ring_drop_sound = {
                 "p_duty_ramp": 0.537,
                 "mtime": 1674604666633
                 }
+
+
+const markers_row_removed_sound = {
+                "oldParams": true,
+                "wave_type": 2,
+                "p_env_attack": 0,
+                "p_env_sustain": 0.00449804704219039,
+                "p_env_punch": 0.4659364047271014,
+                "p_env_decay": 0.4507309469435691,
+                "p_base_freq": 0.49024989685084075,
+                "p_freq_limit": 0,
+                "p_freq_ramp": 0,
+                "p_freq_dramp": 0,
+                "p_vib_strength": 0,
+                "p_vib_speed": 0,
+                "p_arp_mod": 0.43053673201815656,
+                "p_arp_speed": 0.6962299446092799,
+                "p_duty": 0,
+                "p_duty_ramp": 0,
+                "p_repeat_speed": 0,
+                "p_pha_offset": 0,
+                "p_pha_ramp": 0,
+                "p_lpf_freq": 1,
+                "p_lpf_ramp": 0,
+                "p_lpf_resonance": 0,
+                "p_hpf_freq": 0,
+                "p_hpf_ramp": 0,
+                "sound_vol": 0.25,
+                "sample_rate": 44100,
+                "sample_size": 8,
+                "ctime": 1677879027977,
+                "mtime": 1677879034218,
+                "preset": "pickupCoin"
+                }

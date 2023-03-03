@@ -204,7 +204,7 @@ function draw_rings(){
     // reads the global rings object
     for (const s of rings.values()) {
 
-        let inner = S*0.42;
+        let inner = S*0.38;
         let ring_lineWidth = inner/3;
 
         // draw black ring
@@ -273,7 +273,7 @@ function draw_markers(){
         // draw black marker
         if (m.player == player_black_id){ 
 
-            ctx.fillStyle = "#1A1A1A";
+            ctx.fillStyle = "#13191b";
             
             let marker_path = new Path2D()
             marker_path.arc(m.loc.x, m.loc.y, inner, 0, 2*Math.PI);
@@ -286,7 +286,7 @@ function draw_markers(){
         // draw white marker
         } else if (m.player == player_white_id){ 
             
-            ctx.strokeStyle = "#000";
+            ctx.strokeStyle = "#13191b";
             ctx.fillStyle = "#F6F7F6";
             ctx.lineWidth = marker_lineWidth/2;            
         
@@ -327,9 +327,14 @@ function draw_highlight_zones(){
 function draw_mk_halos(){
     ctx.save();
 
+    // to be checked only if markers halos have been created
+    // this function is called anyway at each refresh
+    hot = false;
+    if (mk_halos.length > 0) {hot = mk_halos[0].hot_flag;};
+
     ctx.globalAlpha = 0.8; 
-    ctx.strokeStyle = "#aaccdd";
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = hot ? "#96ce96" : "#98C1D6";
+    ctx.lineWidth = S/10; // refer to global sizing var
 
     for(let i=0; i<mk_halos.length; i++){
     

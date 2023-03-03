@@ -43,8 +43,6 @@ let current_move = {on: false, start_index: null};
 
 let score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []};
 
-let temp_mk_to_remove = []; // kill this later
-
 // these values are used in defining rings/markers, log status, and check conditions within functions
 const ring_id = "R";
 const marker_id = "M";
@@ -53,7 +51,7 @@ const player_white_id = "W";
 
 // specify dimensions for the triangles in the grid
 // for now outside, so they can be set depending on possible canvas size
-let S = 40;
+let S = 47;
 let H = Math.round(S * Math.sqrt(3)/2);
 
 
@@ -157,7 +155,7 @@ function update_highlight_zones(reset = false){
 };
 
 // creates and destroys highlight around markers for row selection/highlight in scoring
-function update_mk_halos(mk_indexes = []){
+function update_mk_halos(mk_indexes = [], hot = false){
     // manipulates global variable 
 
     // empty variable every time before rebuilding it
@@ -173,8 +171,9 @@ function update_mk_halos(mk_indexes = []){
 
                     // create shape + coordinates and store in the global array
                     let h_path = new Path2D()
-                    h_path.arc(drop_zones[i].loc.x, drop_zones[i].loc.y, S*0.35, 0, 2*Math.PI);
-                    mk_halos.push({path: h_path});
+                    h_path.arc(drop_zones[i].loc.x, drop_zones[i].loc.y, S*0.33, 0, 2*Math.PI);
+            
+                    mk_halos.push({path: h_path, hot_flag: hot});
             
                 };
             };  
@@ -283,9 +282,8 @@ function add_marker(loc = {}, player = ""){
         
 };
 
-// removes markers -> called when ring dropped in same location
+// removes markers -> called when ring dropped in same location or scoring row selected
 function remove_markers(mk_index_input){
-// this is just for removing a marker when a ring is dropped in the same location
 // handling input as single integer end array -> if array it calls itself N times
 
     if (Number.isInteger(mk_index_input)){
@@ -328,11 +326,6 @@ function update_current_move(on = false, index = null){
 
 };
 
-// temp variable and matching function, should be updated
-function reset_mk_toRemove_scoring(){
-    // reset global var for the indexes of markers to be removed (scoring row)
-    temp_mk_to_remove = [];
-}
 
 function update_score_handling(on = false, mk_sel_array = [], num_rows = {}, details = []){
     // let score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []};
