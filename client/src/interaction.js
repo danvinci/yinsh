@@ -4,15 +4,15 @@
 // https://bencentra.com/code/2014/12/05/html5-canvas-touch-events.html
 
 let mousePos = { x:0, y:0 };
-let some_var = false;
+
 canvas.addEventListener("mousedown", 
-    function (evt) {
-        mousePos = getMousePos(canvas, evt);
+    function (event) {
+        mousePos = getMousePos(canvas, event);
         //console.log("down");
 
         // check if move currently underway
         // If not, check which ring is being picked and emit event
-        if (current_move.active == false){
+        if (current_move.on == false){
 
             // test which ring the mouse is selecting and send an event
             for(let i=0; i<rings.length; i++){
@@ -27,7 +27,7 @@ canvas.addEventListener("mousedown",
                 };
             };
 
-        } else {
+        } else if (current_move.on == true){
             
             // move is active, ring drop attempt
             // check snapping (geometric) coordinates
@@ -48,26 +48,64 @@ canvas.addEventListener("mousedown",
     });
 
 canvas.addEventListener("mouseup", 
-    function (evt) {
+    function (event) {
         //console.log("up");
     });
 
 canvas.addEventListener("mousemove", 
-    function (evt) {
-        mousePos = getMousePos(canvas, evt);
+    function (event) {
+        mousePos = getMousePos(canvas, event);
         //console.log("move");
 
-        // if a ring is active, let's drag it -> refresh everything as you move it
-        if (current_move.active == true){
+        // if a move is underway, dispatch event for moving ring
+        if (current_move.on == true){
 
             // create and dispatch event for mouse moving while move is active
-            // we could listen directly to this event from the game state target, but this way SOC is explicit AND we only send an event when a move is active
             const ringMove_event = new CustomEvent("ring_moved", {detail: mousePos});
             game_state_target.dispatchEvent(ringMove_event);
             
         };
 
+        
+        // if a scoring action is in progress, check on markers and dispatch events to turn on/off highlighting if hovering on the right one(s)
+        if (score_handling_var.on == true){
+
+            let on_sel_marker = false;
+
+            // check which markers the mouse is passing on
+            for(let i=0; i<markers.length; i++){
+                if (ctx.isPointInPath(markers[i].path, mousePos.x, mousePos.y)){
+
+                    // check that index of marker is among ones in mk_sel_array (selectable markers)
+                    if (score_handling_var.mk_sel_array.includes(markers[i].loc.index) == true){
+
+                        // create and dispatch event, send location index for matching marker
+                        const mk_sel_hover_event_ON = new CustomEvent("mk_sel_hover_ON", { detail: markers[i].loc.index});
+                        game_state_target.dispatchEvent(mk_sel_hover_event_ON);
+
+                        on_sel_marker = true; // -> to inform default behavior
+                        
+                        break; // as you get the one
+
+                    };
+                };
+            };
+
+            if (on_sel_marker == false){
+
+                // score handling underway but not on mk_sel_array, only original mk_sel should stay highlighted until handling is over
+                const mk_sel_hover_event_OFF = new CustomEvent("mk_sel_hover_OFF");
+                game_state_target.dispatchEvent(mk_sel_hover_event_OFF);
+
+            };
+            
+        };
+
     });
+
+
+
+
 
 // HELPER FUNCTIONS 
 
@@ -100,15 +138,18 @@ function closest_snap(xp, yp){
 
 
 
+
+
+
 /// SUPPORT FOR TOUCH EVENTS
 
 /*
 // Set up touch events 
 // Touch events are mapped to and dispatch mouse events, all events are handled from those!
 canvas.addEventListener("touchstart", 
-    function (evt) {
-        //mousePos = getTouchPos(canvas, evt); //might be redundant
-        let touch = evt.touches[0];
+    function (event) {
+        //mousePos = getTouchPos(canvas, event); //might be redundant
+        let touch = event.touches[0];
         let mouseEvent = new MouseEvent("mousedown", {
             clientX: touch.clientX,
             clientY: touch.clientY
@@ -118,14 +159,14 @@ canvas.addEventListener("touchstart",
     });
 
 canvas.addEventListener("touchend", 
-    function (evt) {
+    function (event) {
         let mouseEvent = new MouseEvent("mouseup", {});
         canvas.dispatchEvent(mouseEvent);
     });
 
 canvas.addEventListener("touchmove", 
-    function (evt) {
-        let touch = evt.touches[0];
+    function (event) {
+        let touch = event.touches[0];
         let mouseEvent = new MouseEvent("mousemove", {
             clientX: touch.clientX,
             clientY: touch.clientY
@@ -133,7 +174,7 @@ canvas.addEventListener("touchmove",
         canvas.dispatchEvent(mouseEvent);
     });
 
-// NOT SURE IF NEEDED, as we trigger the mouse evt and coordinates are adjusted already once
+// NOT SURE IF NEEDED, as we trigger the mouse event and coordinates are adjusted already once
 // Get the position of a touch relative to the canvas
 function getTouchPos(canvasDom, touchEvent) {
 var canvasRect = canvasDom.getBoundingClientRect();
@@ -147,23 +188,23 @@ return {
 
 // Prevent scrolling when touching the canvas given conflict with touch/drag gestures
 document.body.addEventListener("touchstart", 
-    function (evt) {
-        if (evt.target == canvas) {
-            evt.preventDefault();
+    function (event) {
+        if (event.target == canvas) {
+            event.preventDefault();
         }
     });
 
 document.body.addEventListener("touchend", 
-    function (evt) {
-        if (evt.target == canvas) {
-            evt.preventDefault();
+    function (event) {
+        if (event.target == canvas) {
+            event.preventDefault();
         }
     });
 
 document.body.addEventListener("touchmove", 
-    function (evt) {
-        if (evt.target == canvas) {
-            evt.preventDefault();
+    function (event) {
+        if (event.target == canvas) {
+            event.preventDefault();
         }
     });
     

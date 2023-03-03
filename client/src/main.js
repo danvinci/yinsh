@@ -12,10 +12,10 @@ let game_state_target = new EventTarget()
 
 // listens to ring picks and updates game state
 game_state_target.addEventListener("ring_picked", 
-    async function (evt) {
+    async function (event) {
 
     // detail contains index of picked ring in the rings array (array was already looped over once)
-    id_ring_evt = evt.detail;
+    id_ring_evt = event.detail;
 
     // remove the element and put it back at the end of the array, so it's always drawn last => on top
     // note: splice returns the array of removed elements
@@ -32,8 +32,7 @@ game_state_target.addEventListener("ring_picked",
     console.log(`${value} picked from ${p_ring.loc.m_row}:${p_ring.loc.m_col} at -> ${p_ring.loc.index}`);
 
     // write start of the currently active move to a global variable
-    current_move.active = true;
-    current_move.loc = p_ring.loc;        
+    update_current_move(on = true, index = structuredClone(p_ring.loc.index))
 
     // get allowed moves from the server
     // game_state and current move are read from global variables
@@ -64,14 +63,14 @@ game_state_target.addEventListener("ring_picked",
 
 // listens to a ring being moved -> updates ring state & redraws
 game_state_target.addEventListener("ring_moved", 
-    function (evt) {
+    function (event) {
 
-    // evt.detail -> mousePos
+    // event.detail -> mousePos
 
     id_last_ring = rings.length-1;
 
-    rings[id_last_ring].loc.x = evt.detail.x;
-    rings[id_last_ring].loc.y = evt.detail.y;
+    rings[id_last_ring].loc.x = event.detail.x;
+    rings[id_last_ring].loc.y = event.detail.y;
 
     refresh_draw_state();
 
@@ -80,9 +79,9 @@ game_state_target.addEventListener("ring_moved",
 
 // listens to ring drops, makes checks, and updates game state + redraw
 game_state_target.addEventListener("ring_drop_attempt", 
-    async function (evt) {
+    async function (event) {
 
-    drop_coord_loc = evt.detail;
+    drop_coord_loc = event.detail;
 
     // check if drop coordinates are valid 
     if (current_allowed_moves.includes(drop_coord_loc.index) == true){
@@ -90,7 +89,7 @@ game_state_target.addEventListener("ring_drop_attempt",
         // the active ring is always last in the array
         id_last_ring = rings.length-1;
 
-        // update ring loc information
+        // update ring loc information -> should go to dedicated function
         rings[id_last_ring].loc = structuredClone(drop_coord_loc);
 
         drop_index = drop_coord_loc.index;
@@ -99,13 +98,13 @@ game_state_target.addEventListener("ring_drop_attempt",
         // update game state
         // if ring dropped in same location, this automatically overrides MB/MW -> no need to handle it in funcion to remove marker(s)
         update_game_state(drop_index, value);
-        console.log(`${value} dropped at ${evt.detail.m_row}:${evt.detail.m_col} -> ${drop_index}`);
+        console.log(`${value} dropped at ${event.detail.m_row}:${event.detail.m_col} -> ${drop_index}`);
 
         // empty array of allowed zones
         update_highlight_zones(reset = true)
 
 
-        if (drop_index == current_move.loc.index){
+        if (drop_index == current_move.start_index){
             
             remove_markers(drop_index);
             // ring dropped in same location, overrides MB/MW -> no need to handle it explicitly
@@ -133,14 +132,15 @@ game_state_target.addEventListener("ring_drop_attempt",
             // CASE: scoring was made -> create and dispatch event for other handler
 
             if (srv_mk_resp.num_scoring_rows.tot > 0){
-                const score_event = new CustomEvent("score", {detail: {num_scoring_rows: srv_mk_resp.num_scoring_rows, scoring_details: srv_mk_resp.scoring_details}});
-                game_state_target.dispatchEvent(score_event);
+
+                const score_handling_start = new CustomEvent("score_handling_start", {detail: {num_scoring_rows: srv_mk_resp.num_scoring_rows, scoring_details: srv_mk_resp.scoring_details}});
+                game_state_target.dispatchEvent(score_handling_start);
 
             };
         };
 
         // complete move, redraw, and play sound
-        reset_current_move()
+        update_current_move(on = false);
 
         refresh_draw_state(); 
         sfxr.play(ring_drop_sound); 
@@ -152,38 +152,68 @@ game_state_target.addEventListener("ring_drop_attempt",
     };
 });
 
-// listens to scoring events
-game_state_target.addEventListener("score", 
-    function (evt) {
-
-    // we could use global var to save the state -> useful for interaction later
+// listens to scoring events -> begins score handling 
+game_state_target.addEventListener("score_handling_start", 
+    function (event) {
 
     console.log("Score!");
 
-    num_scoring_rows = evt.detail.num_scoring_rows;
-    scoring_details = evt.detail.scoring_details;
+    // TEMP values passed in event detail 
+    let num_scoring_rows = event.detail.num_scoring_rows;
+    let scoring_details = event.detail.scoring_details;
+    let markers_sel_array = [];
 
-    // CASE SINGLE ROW
-    if (num_scoring_rows.tot == 1) {
 
-        // retrieve mk_sel and scoring indexes
-        mk_sel = scoring_details[0].mk_sel;
-        mk_locs = scoring_details[0].mk_locs;
+    // exrtract mk_sel from each scoring row
+    for (const row of scoring_details.values()) {
+        markers_sel_array.push(row.mk_sel);
+    };
+    
+    // flag score handling action underway and save data in global var
+    update_score_handling(on = true, mk_sel_array = markers_sel_array, num_rows = num_scoring_rows, details = scoring_details)
+
+
+    // highlight each mk_sel in array
+    update_mk_halos(markers_sel_array);
+    refresh_draw_state();
+
+
+    // NOTE: to revisit to handle player detail ?
+
+});
+
+
+// listens to hovering event over sel_markers in scoring rows -> handle highlighting
+game_state_target.addEventListener("mk_sel_hover_ON", 
+    function (event) {
+
+    // retrieve index of marker being hovered on
+    mk_sel_hover_index = event.detail;
+
+    // retrieve indexes of markers of matching scoring row and highlight them
+    for (const row of score_handling_var.details.values()) {
+        if (mk_sel_hover_index == row.mk_sel){
+
+            // highlight each marker in array
+            update_mk_halos(row.mk_locs);
+            refresh_draw_state();
+
+            break;
+        };
         
-        // highlight mk_sel
-        update_mk_halos([mk_sel]);
-        refresh_draw_state();
-
-        // on_hover -> highlight all other indexes
-        // listen to on_hover and click events on mk_sel -> how to listen to multiple events from 
-
-        // on_click -> remove all markers
-        // ask for ring to remove of player's color -> score point for player?
     };
 
-    // CASE MULTIPLE ROWS
+});
 
-    // NOTE: to revisit to handle player detail !!
+
+// listens to hovering event over sel_markers in scoring rows -> handle highlighting
+game_state_target.addEventListener("mk_sel_hover_OFF", 
+    function (event) {
+
+    // turn everything off except original mk_sel
+    update_mk_halos(score_handling_var.mk_sel_array);
+
+    refresh_draw_state();
 
 });
 

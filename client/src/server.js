@@ -1,6 +1,6 @@
 // SERVER INTERFACE FUNCTIONS
 
-port_number = "1109"
+port_number = "1119"
 
 // server call for checking allowable moves 
 async function server_allowed_moves(){
@@ -15,7 +15,7 @@ async function server_allowed_moves(){
         body: JSON.stringify({
                                 "game_id": 'game_unique_id', 
                                 "state": game_state, 
-                                "start_index": current_move.loc.index,
+                                "start_index": current_move.start_index
                             })
     });
 
@@ -45,7 +45,7 @@ async function server_markers_check(end_move_index){
         body: JSON.stringify({
                                 "game_id": 'game_unique_id', 
                                 "state": game_state, 
-                                "start_index": current_move.loc.index,
+                                "start_index": current_move.start_index,
                                 "end_index": end_move_index
 
                             })
@@ -55,8 +55,6 @@ async function server_markers_check(end_move_index){
     
     // get markers to be flipped back from the server (array)
     const srv_response = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
-
-
 
     // logging time
     let delta_time = Date.now() - call_start;

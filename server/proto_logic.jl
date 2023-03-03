@@ -777,7 +777,7 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 		end
 
 	# values to be returned
-	num_scoring_rows = Dict("tot" => 0, "black" => 0, "white" => 0)
+	num_scoring_rows = Dict("tot" => 0, "B" => 0, "W" => 0)
 	scoring_details = []
 
 	# helper array to store found locations for scoring markers
@@ -860,15 +860,35 @@ function score_lookup(state, dropped_mk_index, markers_toFlip_indexes)
 		# frequency count of each marker location ID
 		# markers with freq == 1 only appear in one array
 		mk_ids_fCount = countmap(all_mk_ids)
+		println("freq count for all markers: $mk_ids_fCount")
+
+		# keep track of sel markers already taken (by CartIndex)
+		mk_sel_taken = []
 		
 		for (row_id, row) in enumerate(scoring_details)
-			
-			# find first marker with freq count 1 and save its index in the loc array
-			mk_sel_index = findfirst(i -> mk_ids_fCount[i] == 1, row["mk_locs"])
-			
+
+			temp_search = row["mk_locs"]
+
+			# build search array of locations in row by exluding taken locations
+			if !isempty(mk_sel_taken)
+
+				indexes_toRemove = findall(m -> m in mk_sel_taken, temp_search)
+				if !isempty(indexes_toRemove)
+
+					deleteat!(temp_search, indexes_toRemove)
+				end
+			end
+				
+
+			# find marker with min frequency that hasn't been already taken
+			min_fr, min_fr_index = findmin(i -> mk_ids_fCount[i], temp_search)
+			mk_sel = temp_search[min_fr_index]
+				
 			# save mk_sel in row collection to be returned
-			setindex!(scoring_details[row_id], row["mk_locs"][mk_sel_index], "mk_sel")
-		
+			setindex!(scoring_details[row_id], mk_sel, "mk_sel")
+
+			# store mk_sel in array (useful for solving conflicts later)
+			push!(mk_sel_taken, mk_sel)
 		end
 	end
 
@@ -1085,7 +1105,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1109
+port_test = 1119
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []

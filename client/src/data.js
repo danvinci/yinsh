@@ -39,9 +39,9 @@ let highlight_zones = [];
 let mk_halos = [];
 
 let current_allowed_moves = [];
-let current_move = {active: false, loc: {}};
+let current_move = {on: false, start_index: null};
 
-let score_handling_on = false;
+let score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []};
 
 let temp_mk_to_remove = []; // kill this later
 
@@ -157,31 +157,30 @@ function update_highlight_zones(reset = false){
 };
 
 // creates and destroys highlight around markers for row selection/highlight in scoring
-function update_mk_halos(mk_indexes = [], reset = false){
+function update_mk_halos(mk_indexes = []){
     // manipulates global variable 
-    
-        // if passed true, the array will be emptied
-        if (reset === true){
-            mk_halos = [];
-    
-        } else {
-            // for each linear id of the allowed moves (reads from global variable)
-            for (const id of mk_indexes.values()) {
-    
-                // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
-                for(let i=0; i<drop_zones.length; i++){
-                    if (drop_zones[i].loc.index == id) {
-    
-                        // create shape + coordinates and store in the global array
-                        let h_path = new Path2D()
-                        h_path.arc(drop_zones[i].loc.x, drop_zones[i].loc.y, S*0.35, 0, 2*Math.PI);
-                        mk_halos.push({path: h_path});
-                
-                    };
-                };        
-            };
-        }
+
+    // empty variable every time before rebuilding it
+    mk_halos = [];
+        
+    if (mk_indexes.length > 0) {
+        // for each linear id 
+        for (const id of mk_indexes.values()) {
+
+            // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
+            for(let i=0; i<drop_zones.length; i++){
+                if (drop_zones[i].loc.index == id) {
+
+                    // create shape + coordinates and store in the global array
+                    let h_path = new Path2D()
+                    h_path.arc(drop_zones[i].loc.x, drop_zones[i].loc.y, S*0.35, 0, 2*Math.PI);
+                    mk_halos.push({path: h_path});
+            
+                };
+            };  
+        };      
     };
+ };
 
 // initializes rings
 function init_rings(){
@@ -312,11 +311,21 @@ function remove_markers(mk_index_input){
 };
 
 
-// resets global variable of current move data
-function reset_current_move(){
-    // reset global variable for the current move
-    current_move.active = false;
-    current_move.loc = {};
+// manipulates global variable of current move data
+function update_current_move(on = false, index = null){
+    
+    if(on == false){
+        // reset global variable for the current move
+        current_move.on = false;
+        current_move.start_index = null;
+
+    } else if (on == true){
+         // write data to global variable for the current move
+         current_move.on = true;
+         current_move.start_index = index;
+
+    };
+
 };
 
 // temp variable and matching function, should be updated
@@ -325,3 +334,20 @@ function reset_mk_toRemove_scoring(){
     temp_mk_to_remove = [];
 }
 
+function update_score_handling(on = false, mk_sel_array = [], num_rows = {}, details = []){
+    // let score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []};
+
+    if (on == true){
+        score_handling_var.on = true;
+        score_handling_var.mk_sel_array = mk_sel_array;
+        score_handling_var.num_rows = num_rows;
+        score_handling_var.details = details;
+
+    } else if (on == false){
+        score_handling_var.on = false;
+        score_handling_var.mk_sel_array = null;
+        score_handling_var.num_rows = {};
+        score_handling_var.details = [];
+
+    };
+};
