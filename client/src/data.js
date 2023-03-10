@@ -36,12 +36,13 @@ let rings = [];
 let markers = [];
 let drop_zones = [];
 let highlight_zones = [];
-let mk_halos = [];
 
 let current_allowed_moves = [];
 let current_move = {on: false, start_index: null};
 
-let score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []};
+let mk_halos = [];
+let mk_sel_scoring = {ids:[], hot:false} // -> used for drawing support, stores last request sent 
+let score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []}; // -> used for handling scoring scenarios
 
 // these values are used in defining rings/markers, log status, and check conditions within functions
 const ring_id = "R";
@@ -54,6 +55,18 @@ const player_white_id = "W";
 let S = 47;
 let H = Math.round(S * Math.sqrt(3)/2);
 
+
+// function to edit S & H
+function update_sizing(win_height) {
+    
+    opt_S = Math.round(win_height/12);
+    
+    S = opt_S;
+    H = Math.round(S * Math.sqrt(3)/2);
+    
+    console.log(`New S: ${S}`);
+
+};
 
 // Empty game state, string -> it will be reshaped to a matrix on the server side
 let game_state = Array(19*11).fill(""); 
@@ -89,6 +102,9 @@ function init_objects(){
 // initialize drop zones -> used propagate location data
 function init_drop_zones(){
     
+    // empty array (this function is also used for refreshing)
+    drop_zones = [];
+
     // create paths for listening to click events on all intersections
     for (let j = 1; j <= mm_points_rows; j++) {
         for (let k = 1; k <= mm_points_cols; k++) {
@@ -128,20 +144,21 @@ function init_drop_zones(){
 };
 
 // creates and destroys highlights on intersection zones for allowed moves
-function update_highlight_zones(reset = false){
+function update_highlight_zones(){
 // manipulates global variable of allowed moves for current ring
 
-    // if passed true, the array will be emptied
-    if (reset === true){
+
+    if (current_allowed_moves.length > 0) {
+    
+        // empty array (to handle refreshes)
         highlight_zones = [];
 
-    } else {
         // for each linear id of the allowed moves (reads from global variable)
         for (const id of current_allowed_moves.values()) {
 
             // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
             for(let i=0; i<drop_zones.length; i++){
-                if (drop_zones[i].loc.index == id) {
+                if (drop_zones[i].loc.index == id){
 
                     // create shape + coordinates and store in the global array
                     let h_path = new Path2D()
@@ -151,19 +168,33 @@ function update_highlight_zones(reset = false){
                 };
             };        
         };
-    }
+
+    // case of empty array of legal moves
+    } else {
+
+        highlight_zones = [];
+
+    };
+    
+};
+
+function update_mk_sel_scoring(input_ids = [], hot_flag = false){
+    
+    mk_sel_scoring.ids = input_ids;
+    mk_sel_scoring.hot = hot_flag;
+
 };
 
 // creates and destroys highlight around markers for row selection/highlight in scoring
-function update_mk_halos(mk_indexes = [], hot = false){
+function update_mk_halos(){
     // manipulates global variable 
 
     // empty variable every time before rebuilding it
     mk_halos = [];
         
-    if (mk_indexes.length > 0) {
+    if (mk_sel_scoring.ids.length > 0) {
         // for each linear id 
-        for (const id of mk_indexes.values()) {
+        for (const id of mk_sel_scoring.ids.values()) {
 
             // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
             for(let i=0; i<drop_zones.length; i++){
@@ -173,7 +204,7 @@ function update_mk_halos(mk_indexes = [], hot = false){
                     let h_path = new Path2D()
                     h_path.arc(drop_zones[i].loc.x, drop_zones[i].loc.y, S*0.33, 0, 2*Math.PI);
             
-                    mk_halos.push({path: h_path, hot_flag: hot});
+                    mk_halos.push({path: h_path, hot_flag: mk_sel_scoring.hot});
             
                 };
             };  
@@ -205,6 +236,42 @@ function init_rings(){
 
     };
     
+};
+
+// refresh rings, markers, etc -> handling case of changes to underlying drop_zones
+function refresh_objects(){
+
+    // iterate over all the drop zones
+    for (const drop_zone of drop_zones.values()){
+
+        // check rings
+        for (let i=0; i<rings.length; i++){
+            if (rings[i].loc.index == drop_zone.loc.index){
+
+                // update location of ring
+                rings[i].loc = structuredClone(drop_zone.loc);
+
+            };
+        };
+    
+        // check markers
+        for (let i=0; i<markers.length; i++){
+            if (markers[i].loc.index == drop_zone.loc.index){
+
+                // update location of ring
+                markers[i].loc = structuredClone(drop_zone.loc);
+
+            };
+        };
+    
+
+        // refresh highlight zones (in case move is in progress)
+        update_highlight_zones();
+
+        // updates markers' halos (score handling)
+        update_mk_halos();
+
+    };
 };
 
 // initializes markers

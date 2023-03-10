@@ -282,23 +282,6 @@ row_start = locz[locz_index][1]
 # ╔═╡ 37ff4698-4418-4abc-b726-c5f719b8f792
 col_start = locz[locz_index][2]
 
-# ╔═╡ 403d52da-464e-42df-8739-269eb5f98df1
-function search_loc_graph(input_board, row_s::Int, col_s::Int, locs)
-# function to plot possible moves
-
-# plot starting point
-	scatter!(input_board, [col_s], [row_s], msize = 12, mswidth = 2, mcolor = :darkblue, shape = :dtriangle)
-
-	
-# plot search locations
-for (ind,loc) in enumerate(locs)
-	scatter!(input_board, [loc[2]], [loc[1]], msize = 4, mswidth = 2, mcolor = :darkblue)
-	
-end
-
-return input_board
-end
-
 # ╔═╡ 387eeec5-f483-48af-a27c-468683fe497b
 # helper function to place how_many elem_type we need in free spots
 function place_elem!(input_board, elem_type::String, how_many::Int)
@@ -991,6 +974,24 @@ function reshape_in(input_linear::Int64)
 
 end
 
+# ╔═╡ 403d52da-464e-42df-8739-269eb5f98df1
+function search_loc_graph(input_board, row_s::Int, col_s::Int, locs)
+# function to plot possible moves
+
+# plot starting point
+	scatter!(input_board, [col_s], [row_s], msize = 12, mswidth = 2, mcolor = :darkblue, shape = :dtriangle)
+
+	
+# plot search locations
+for (ind,loc) in enumerate(locs)
+	loc_ci = reshape_in(loc)
+	scatter!(input_board, [loc_ci[2]], [loc_ci[1]], msize = 4, mswidth = 2, mcolor = :darkblue)
+	
+end
+
+return input_board
+end
+
 # ╔═╡ bf2dce8c-f026-40e3-89db-d72edb0b041c
 # returns sub-array of valid moves
 function search_loc(client_state, client_start_index::Int64)
@@ -1024,10 +1025,10 @@ return reshape_out(search_return) # convert to linear indexes
 end
 
 # ╔═╡ abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
-search_loc_graph(draw_board() ,row_start, col_start, search_loc(mm_states, row_start,col_start))
+search_loc_graph(draw_board(), row_start, col_start, search_loc(mm_states, reshape_out(CartesianIndex(row_start,col_start))))
 
 # ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
-search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, row_start_n,col_start_n))
+search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, reshape_out(CartesianIndex(row_start_n,col_start_n))))
 
 # ╔═╡ 8f2e4816-b60d-40eb-a9d8-acf4240c646a
 function markers_actions(client_state, client_start_index, client_end_index)
@@ -1101,7 +1102,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1130
+port_test = 1131
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1135,10 +1136,14 @@ begin
 		# parses request body to json
 		body_json = JSON3.read(req.body)
 
-		# computes allowed moves
-		legal_moves = search_loc(body_json[:state], body_json[:start_index])
-		
-		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(legal_moves))
+		try 
+			# computes allowed moves
+			legal_moves = search_loc(body_json[:state], body_json[:start_index])
+			
+			return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(legal_moves))
+		catch
+			return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
+		end
 	
 	end
 
@@ -1149,14 +1154,19 @@ begin
 		# parses request body to json
 		body_json = JSON3.read(req.body)
 
-		# check markers that should be flipped
-		mk_actions = markers_actions(
-									body_json[:state],
-									body_json[:start_index], 
-									body_json[:end_index]
-									)
-		
-		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(mk_actions))
+		try 
+			# check markers that should be flipped
+			mk_actions = markers_actions(
+										body_json[:state],
+										body_json[:start_index], 
+										body_json[:end_index]
+										)
+			
+			return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(mk_actions))
+
+		catch
+			return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
+		end
 	
 	end
 
@@ -1259,7 +1269,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "b409f71bce698d04c7967507034ba6326af72c36"
+project_hash = "ca54cac99f440edca9ca9e356fef22f8f44495fa"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]

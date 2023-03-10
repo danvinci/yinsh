@@ -2,6 +2,8 @@
 
 // glue function called by orchestrator after data manipulation
 function refresh_draw_state(){
+
+    //let drawing_start = Date.now();
     
     // clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -21,6 +23,10 @@ function refresh_draw_state(){
 
     // Draw markers halos
     draw_mk_halos();
+
+    // logging time -> repaint topping at 1ms 
+    //let delta_time = Date.now() - drawing_start;
+    //console.log(`Repaint time: ${delta_time}ms`);
 
 }; 
 

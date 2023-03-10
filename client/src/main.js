@@ -103,8 +103,9 @@ game_state_target.addEventListener("ring_drop_attempt",
         update_game_state(drop_index, value);
         console.log(`${value} dropped at ${event.detail.m_row}:${event.detail.m_col} -> ${drop_index}`);
 
-        // empty array of allowed zones
-        update_highlight_zones(reset = true)
+        // empty array of allowed moves & matching drawing objects
+        current_allowed_moves = [];
+        update_highlight_zones()
 
 
         if (drop_index == current_move.start_index){
@@ -145,6 +146,7 @@ game_state_target.addEventListener("ring_drop_attempt",
         // complete move, redraw, and play sound
         update_current_move(on = false);
 
+
         refresh_draw_state(); 
         sfxr.play(ring_drop_sound); 
     
@@ -177,7 +179,8 @@ game_state_target.addEventListener("score_handling_start",
 
 
     // highlight each mk_sel in array
-    update_mk_halos(markers_sel_array);
+    update_mk_sel_scoring(markers_sel_array);
+    update_mk_halos();
     refresh_draw_state();
 
 
@@ -198,7 +201,8 @@ game_state_target.addEventListener("mk_sel_hover_ON",
         if (mk_sel_hover_index == row.mk_sel){
 
             // highlight each marker in array
-            update_mk_halos(row.mk_locs, hot = true);
+            update_mk_sel_scoring(row.mk_locs, true);
+            update_mk_halos();
             refresh_draw_state();
 
             break;
@@ -214,7 +218,8 @@ game_state_target.addEventListener("mk_sel_hover_OFF",
     function (event) {
 
     // turn everything off except original mk_sel
-    update_mk_halos(score_handling_var.mk_sel_array);
+    update_mk_sel_scoring(score_handling_var.mk_sel_array);
+    update_mk_halos();
 
     refresh_draw_state();
 
@@ -229,6 +234,7 @@ game_state_target.addEventListener("mk_sel_clicked",
    mk_sel_clicked_index = event.detail;
 
     // turn mk halos off
+    update_mk_sel_scoring(); // -> empties array
     update_mk_halos();
 
     // retrieve indexes of markers of matching scoring row and remove them
@@ -238,7 +244,7 @@ game_state_target.addEventListener("mk_sel_clicked",
              // remove markers objects from game
             remove_markers(row.mk_locs);
 
-            // update game state
+            // update game state -> function above should be evolved to operate on both objects (?)
             for (const mk_id of row.mk_locs.values()) {
                 update_game_state(mk_id, "");
             };
@@ -259,3 +265,22 @@ game_state_target.addEventListener("mk_sel_clicked",
 
 });
 
+
+// handling case of window resizing, impacts board and objects 
+// NOTE: could be revisited so to fire on first load
+window.addEventListener("resize", 
+    function () {
+
+        win_height = window.innerHeight;
+        win_width = window.innerWidth;
+        update_sizing(win_height);
+
+        init_drop_zones(); // -> drop zones are re-created from scratch
+        refresh_objects();
+
+        canvas.height = win_height;
+        canvas.width = win_width;
+
+        refresh_draw_state();
+
+});
