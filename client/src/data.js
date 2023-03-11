@@ -57,14 +57,26 @@ let H = Math.round(S * Math.sqrt(3)/2);
 
 
 // function to edit S & H
-function update_sizing(win_height) {
+function update_sizing(win_height, win_width) {
+
+    // copy values -> these may change and ref should take into account UI elements
+    // note: canvas should be resized first, S & H from there
+    let ref_height = win_height
+    let ref_width = win_width
+   
+    // compute S_h and S_w (H) taking into account height and width respectively
+    // use the smaller one
+    let opt_S_Height = Math.round(ref_height/11.5);
+
+    let opt_H_Width = Math.round(ref_width/11.5);
+    let opt_S_Width = Math.round(opt_H_Width / (Math.sqrt(3)/2));
     
-    opt_S = Math.round(win_height/12);
-    
-    S = opt_S;
+    S = Math.min(opt_S_Width, opt_S_Height);
     H = Math.round(S * Math.sqrt(3)/2);
-    
-    console.log(`New S: ${S}`);
+
+    // update canvas sizing -> note: this should be aware of UI elements on screen
+    canvas.height = win_height;
+    canvas.width = win_width;
 
 };
 

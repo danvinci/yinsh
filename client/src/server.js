@@ -2,6 +2,25 @@
 
 port_number = "1131"
 
+// server call for generating new game
+async function new_code_gen(){
+
+    let call_start = Date.now();
+
+    response = await fetch(`http://localhost:${port_number}/api/v1/new_game_code_gen`, {method: 'GET'});
+    
+    const srv_new_game_code = await response.json(); 
+
+    // logging time
+    let delta_time = Date.now() - call_start;
+    console.log(`RTT: ${delta_time}ms`);
+
+    // return response to game status handler
+    return srv_new_game_code;
+
+};
+
+
 // server call for checking allowable moves 
 async function server_allowed_moves(){
 
@@ -62,66 +81,6 @@ async function server_markers_check(end_move_index){
 
     // return response to game status handler
     return srv_response;
-
-
-    /*
-    // UNPACK RESPONSE FROM SERVER
-    // flipping flag + markers to be flipped 
-    const markers_flip_flag = srv_response.flip_flag;
-    const markers_toFlip_indexes = srv_response.markers_toFlip;
-    
-    // scoring rows and scoring details
-    const num_scoring_rows = srv_response.num_scoring_rows.tot;
-    const scoring_details = srv_response.scoring_details;
-
-
-
-    // if there are scoring rows
-
-    if (num_scoring_rows >= 1) {
-
-        // getting scoring rows details (sel marker, ids to be removed from board, player) -> game_state should be handling whole response
-        for (const row of srv_response.scoring_details.values()) {
-
-            for (const mk_index of row.locs.values()){
-                temp_mk_to_remove.push(mk_index);
-            };
-        };
-    
-        console.log(`Markers to remove - scoring: ${temp_mk_to_remove}`); 
-    };
-
-    
-
-    // this should be returned and not wrote to a global variable (scoring options)
-    // only data functions should write
-    // and they are only called by the game state
-
-
-    if (srv_response.flip_flag == true) {
-        
-        console.log(`Markers to flip: ${srv_markers_toFlip}`); 
-
-        // logging time
-        let delta_time = Date.now() - call_start;
-        console.log(`RTT: ${delta_time}ms`);
-
-        return [srv_response.flip_flag, srv_markers_toFlip];
-
-    } else {
-
-        console.log("No markers to flip");
-        
-        // logging time
-        let delta_time = Date.now() - call_start;
-        console.log(`RTT: ${delta_time}ms`);
-
-        return [srv_response.flip_flag];
-       
-    };
-
-
-    */
 
 };
 

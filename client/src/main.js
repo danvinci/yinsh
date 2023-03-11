@@ -1,16 +1,27 @@
 // MAIN 
 // game logic and orchestration
 
+
+// instatiate event target for game state (orchestrator)
+let game_state_target = new EventTarget()
+
+
+// handle new game start by code gen 
+game_state_target.addEventListener("new_game_code_gen", 
+    async function (event) {
+
+
+
+
+});
+
+
 // start
 console.log('<<< NEW GAME >>>');
 
 // init drop zones + markers y rings -> setup and first draw
 init_objects()
 refresh_draw_state(); 
-
-
-// instatiate event target for game state (orchestrator)
-let game_state_target = new EventTarget()
 
 
 // listens to ring picks and updates game state
@@ -266,21 +277,19 @@ game_state_target.addEventListener("mk_sel_clicked",
 });
 
 
-// handling case of window resizing, impacts board and objects 
-// NOTE: could be revisited so to fire on first load
-window.addEventListener("resize", 
-    function () {
+// handling case of window resizing and first load -> impacts canvas, board, and objects 
+["load", "resize"].forEach(event => window.addEventListener(event, sizing_handler));
 
-        win_height = window.innerHeight;
-        win_width = window.innerWidth;
-        update_sizing(win_height);
+function sizing_handler() {
 
-        init_drop_zones(); // -> drop zones are re-created from scratch
-        refresh_objects();
+    win_height = window.innerHeight;
+    win_width = window.innerWidth;
 
-        canvas.height = win_height;
-        canvas.width = win_width;
+    update_sizing(win_height, win_width); // adjusts canvas and computes new S & H values
 
-        refresh_draw_state();
+    init_drop_zones(); // -> drop zones are re-created from scratch as S changes
+    refresh_objects(); // -> all objects are updated as S changes
 
-});
+    refresh_draw_state();
+
+};
