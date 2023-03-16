@@ -17,7 +17,7 @@ game_state_target.addEventListener("new_game_code_gen",
 
 
 // start
-console.log('<<< NEW GAME >>>');
+console.log('<< FIRST LOADING >>');
 
 // init drop zones + markers y rings -> setup and first draw
 init_objects()
@@ -48,24 +48,24 @@ game_state_target.addEventListener("ring_picked",
     // write start of the currently active move to a global variable
     update_current_move(on = true, index = structuredClone(p_ring.loc.index))
 
-    // get allowed moves from the server
+    // get legal moves from the server
     // game_state and current move are read from global variables
-    // NOTE : allowed moves are requested considering no ring nor marker at their current location due to game_state updates
-    const srv_allowed_moves = await server_allowed_moves();
+    // NOTE : legal moves are requested considering no ring nor marker at their current location due to game_state updates
+    const srv_legal_moves = await server_legal_moves();
 
-    if (srv_allowed_moves.length > 0){
+    if (srv_legal_moves.length > 0){
 
-        // writes allowed moves to a global variable
-        current_allowed_moves = srv_allowed_moves;
+        // writes legal moves to a global variable
+        current_legal_moves = srv_legal_moves;
 
         // init highlight zones
         update_highlight_zones()
 
-        console.log(`Allowed moves: ${current_allowed_moves}`); 
+        console.log(`Legal moves: ${current_legal_moves}`); 
         
     };
 
-    // place marker in same location and update game_state (after asking for allowed moves)
+    // place marker in same location and update game_state (after asking for legal moves)
     // this allows for scoring to be computed correclty from game_state, as this marker will stay in place at ring_drop
     // location must be copied and not referenced -> otherwise the marker will be drawn along the ring as it inherits the same location
     add_marker(loc = structuredClone(p_ring.loc), player = p_ring.player);
@@ -98,7 +98,7 @@ game_state_target.addEventListener("ring_drop_attempt",
     drop_coord_loc = event.detail;
 
     // check if drop coordinates are valid 
-    if (current_allowed_moves.includes(drop_coord_loc.index) == true){
+    if (current_legal_moves.includes(drop_coord_loc.index) == true){
 
         // the active ring is always last in the array
         id_last_ring = rings.length-1;
@@ -114,8 +114,8 @@ game_state_target.addEventListener("ring_drop_attempt",
         update_game_state(drop_index, value);
         console.log(`${value} dropped at ${event.detail.m_row}:${event.detail.m_col} -> ${drop_index}`);
 
-        // empty array of allowed moves & matching drawing objects
-        current_allowed_moves = [];
+        // empty array of legal moves & matching drawing objects
+        current_legal_moves = [];
         update_highlight_zones()
 
 
@@ -274,6 +274,32 @@ game_state_target.addEventListener("mk_sel_clicked",
     // re-draw everything
     refresh_draw_state();
 
+});
+
+
+// creates new game and instatiate it
+game_state_target.addEventListener("new_game", 
+    async function (event) {
+
+        // ask the server for a new game code and state
+        const srv_newGame_resp = await server_newGame_gen();
+
+        // update global variables
+        game_id = srv_newGame_resp.game_id;
+        player_id = srv_newGame_resp.player_color;
+        
+        whiteRings_ids = srv_newGame_resp.whiteRings_ids;
+        blackRings_ids = srv_newGame_resp.blackRings_ids;
+        
+        console.log(`Game ID: ${game_id}`);
+
+        // update game state
+
+        // init rings objects & redraw
+
+        // create and dispatch event for the UI
+        const new_game_ready_uiEvent = new CustomEvent("newGame_ready", { detail: game_id});
+        ui_target.dispatchEvent(new_game_ready_uiEvent);
 });
 
 

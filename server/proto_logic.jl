@@ -23,6 +23,9 @@ using Plots, PlotThemes;  plotly() ; theme(:default)
 # ╔═╡ c2797a4c-81d3-4409-9038-117fe50540a8
 using StatsBase
 
+# ╔═╡ 6f0ad323-1776-4efd-bf1e-667e8a834f41
+using Random
+
 # ╔═╡ 64b1f98e-2e04-4db2-a827-4bc74ead76ab
 using JLD2
 
@@ -1098,11 +1101,51 @@ function markers_actions(client_state, client_start_index, client_end_index)
 
 end
 
+# ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
+function initRand_ringsLoc()
+# returns random locations for 5 + 5 rings
+
+	# keys mapping to valid board locations
+	keys_loc = findall(x -> x==1, mm_yinsh_01)
+
+	# sample 10 random starting locations (without replacement)
+	sampled_locs = sample(keys_loc, 10, replace = false)
+
+	# return the halved array of locations
+	return sampled_locs[1:5], sampled_locs[6:10]
+	
+end
+
+# ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
+function newGame()
+## instatiate new game
+# generate unique game ID
+# randomly assign black/white to invoking player
+# init board with rings randomly placed 
+
+	game_id = randstring(5)
+	
+	player_invokingUser = rand(["B", "W"])
+	
+	whiteRings_locs, blackRings_locs = initRand_ringsLoc()
+	
+	
+	return Dict(:game_id => game_id,
+				:player_color => player_invokingUser,
+				:whiteRings_ids => reshape_out(whiteRings_locs),
+				:blackRings_ids => reshape_out(blackRings_locs)
+				)
+	
+end
+
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1131
+port_test = 1104
+
+# ╔═╡ c520ba8a-effb-4dae-af3d-2cbb0ca50a87
+#close(server_ws)
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1129,7 +1172,8 @@ begin
 	
 	# FUNCTIONS
 
-	function allowed_moves(req::HTTP.Request)
+	function legalMoves_handler(req::HTTP.Request)
+		
 		# saves request to global states store
 		push!(global_states, req)
 
@@ -1137,7 +1181,7 @@ begin
 		body_json = JSON3.read(req.body)
 
 		try 
-			# computes allowed moves
+			# computes legal moves
 			legal_moves = search_loc(body_json[:state], body_json[:start_index])
 			
 			return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(legal_moves))
@@ -1147,7 +1191,8 @@ begin
 	
 	end
 
-	function markers_check(req::HTTP.Request)
+	function mkActions_handler(req::HTTP.Request)
+		
 		# saves request to global states store
 		push!(global_states, req)
 
@@ -1170,13 +1215,31 @@ begin
 	
 	end
 
+
+	function newGame_handler(req::HTTP.Request)
+		
+		# saves request to global states store
+		push!(global_states, req)
+		
+		try
+
+			return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(newGame()))
+
+		catch
+			return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
+		end
+
+
+	end
 	
 
 
 	# define REST endpoints to dispatch calls to functions
-	const simple_router = HTTP.Router()
-	HTTP.register!(simple_router, "POST", "/api/v1/allowed_moves", allowed_moves)
-	HTTP.register!(simple_router, "POST", "/api/v1/markers_check", markers_check)
+	const ROUTER = HTTP.Router()
+	HTTP.register!(ROUTER, "POST", "/v1/legal_moves", legalMoves_handler)
+	HTTP.register!(ROUTER, "POST", "/v1/markers_check", mkActions_handler)
+	HTTP.register!(ROUTER, "GET", "/v1/new_game", newGame_handler)
+	
 	
 
 end
@@ -1185,10 +1248,36 @@ end
 begin
 
 # start server 
-simple_srv = HTTP.serve!(simple_router, Sockets.localhost, port_test)
+simple_srv = HTTP.serve!(ROUTER, Sockets.localhost, port_test)
 
 # force server shutdown
 #HTTP.forceclose(simple_srv)
+
+
+end
+
+# ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+begin
+
+#WebSocket Examples
+
+	server_ws = WebSockets.listen!("127.0.0.1", 8082) do ws
+		for msg in ws
+			msg = msg * "_by_the_server"
+			send(ws, msg)
+		end
+    end
+
+end
+
+# ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
+begin
+
+	WebSockets.open("ws://127.0.0.1:8082") do ws
+           send(ws, "Hello")
+           s = WebSockets.receive(ws)
+           println(s)
+       end
 
 
 end
@@ -1250,15 +1339,16 @@ JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 PlotThemes = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 HTTP = "~1.7.4"
-JLD2 = "~0.4.30"
+JLD2 = "~0.4.31"
 JSON3 = "~1.12.0"
 PlotThemes = "~3.1.0"
-Plots = "~1.38.5"
+Plots = "~1.38.7"
 PlutoUI = "~0.7.50"
 StatsBase = "~0.33.21"
 """
@@ -1269,7 +1359,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "ca54cac99f440edca9ca9e356fef22f8f44495fa"
+project_hash = "f65aae0a3dd47b01ad3230398f58d1ebb1c60dbe"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1348,9 +1438,9 @@ version = "0.12.10"
 
 [[deps.Compat]]
 deps = ["Dates", "LinearAlgebra", "UUIDs"]
-git-tree-sha1 = "61fdd77467a5c3ad071ef8277ac6bd6af7dd4c04"
+git-tree-sha1 = "7a60c856b9fa189eb34f5f8a6f6b5529b7942957"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.6.0"
+version = "4.6.1"
 
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1536,15 +1626,15 @@ uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
 version = "0.1.8"
 
 [[deps.IrrationalConstants]]
-git-tree-sha1 = "637b58b3c037d3877f263418de820920b47ceeb5"
+git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
-version = "0.2.0"
+version = "0.2.2"
 
 [[deps.JLD2]]
-deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "Pkg", "Printf", "Reexport", "TranscodingStreams", "UUIDs"]
-git-tree-sha1 = "c3244ef42b7d4508c638339df1bdbf4353e144db"
+deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "Pkg", "Printf", "Reexport", "Requires", "TranscodingStreams", "UUIDs"]
+git-tree-sha1 = "42c17b18ced77ff0be65957a591d34f4ed57c631"
 uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
-version = "0.4.30"
+version = "0.4.31"
 
 [[deps.JLFzf]]
 deps = ["Pipe", "REPL", "Random", "fzf_jll"]
@@ -1800,9 +1890,9 @@ version = "10.40.0+0"
 
 [[deps.Parsers]]
 deps = ["Dates", "SnoopPrecompile"]
-git-tree-sha1 = "6f4fbcd1ad45905a5dee3f4256fabb49aa2110c6"
+git-tree-sha1 = "478ac6c952fddd4399e71d4779797c538d0ff2bf"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.5.7"
+version = "2.5.8"
 
 [[deps.Pipe]]
 git-tree-sha1 = "6842804e7867b115ca9de748a0cf6b364523c16d"
@@ -1834,9 +1924,9 @@ version = "1.3.4"
 
 [[deps.Plots]]
 deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "JLFzf", "JSON", "LaTeXStrings", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "Preferences", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "RelocatableFolders", "Requires", "Scratch", "Showoff", "SnoopPrecompile", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
-git-tree-sha1 = "8ac949bd0ebc46a44afb1fdca1094554a84b086e"
+git-tree-sha1 = "cfcd24ebf8b066b4f8e42bade600c8558212ed83"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.38.5"
+version = "1.38.7"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
@@ -1903,9 +1993,9 @@ version = "0.7.0"
 
 [[deps.Scratch]]
 deps = ["Dates"]
-git-tree-sha1 = "f94f779c94e58bf9ea243e77a37e16d9de9126bd"
+git-tree-sha1 = "30449ee12237627992a99d5e30ae63e4d78cd24a"
 uuid = "6c6a2e73-6563-6170-7368-637461726353"
-version = "1.1.1"
+version = "1.2.0"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
@@ -2304,10 +2394,16 @@ version = "1.4.1+0"
 # ╟─c1fbbcf3-aeec-483e-880a-05d3c7a8a895
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
+# ╠═6f0ad323-1776-4efd-bf1e-667e8a834f41
+# ╠═f1949d12-86eb-4236-b887-b750916d3493
+# ╠═466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
 # ╠═75ce1c80-1dc6-4e0a-852a-830f88269022
+# ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+# ╠═c520ba8a-effb-4dae-af3d-2cbb0ca50a87
+# ╠═2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 # ╠═5a0a2a61-57e6-4044-ad00-c8f0f569159d
 # ╠═b13e5c1d-454f-4c87-9523-863a7d5d843f
 # ╠═f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6

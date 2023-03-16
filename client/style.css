@@ -1,3 +1,7 @@
 button.hidden_button {
   display: none; /* Hide button */
 }
+
+p.hidden_text {
+  display: none; /* Hide text */  
+}

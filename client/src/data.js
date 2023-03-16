@@ -37,7 +37,7 @@ let markers = [];
 let drop_zones = [];
 let highlight_zones = [];
 
-let current_allowed_moves = [];
+let current_legal_moves = [];
 let current_move = {on: false, start_index: null};
 
 let mk_halos = [];
@@ -49,6 +49,13 @@ const ring_id = "R";
 const marker_id = "M";
 const player_black_id = "B";
 const player_white_id = "W";
+
+// storing details for current game => updated with response from server
+let game_id = "";
+let player_id = "";
+
+// Empty game state, string -> reshaped to a matrix on the server
+let game_state = Array(19*11).fill(""); 
 
 // specify dimensions for the triangles in the grid
 // for now outside, so they can be set depending on possible canvas size
@@ -80,8 +87,7 @@ function update_sizing(win_height, win_width) {
 
 };
 
-// Empty game state, string -> it will be reshaped to a matrix on the server side
-let game_state = Array(19*11).fill(""); 
+
 
 
 // DATA functions below
@@ -155,18 +161,18 @@ function init_drop_zones(){
 
 };
 
-// creates and destroys highlights on intersection zones for allowed moves
+// creates and destroys highlights on intersection zones for legal moves
 function update_highlight_zones(){
-// manipulates global variable of allowed moves for current ring
+// manipulates global variable of legal moves for current ring
 
 
-    if (current_allowed_moves.length > 0) {
+    if (current_legal_moves.length > 0) {
     
         // empty array (to handle refreshes)
         highlight_zones = [];
 
-        // for each linear id of the allowed moves (reads from global variable)
-        for (const id of current_allowed_moves.values()) {
+        // for each linear id of the legal moves (reads from global variable)
+        for (const id of current_legal_moves.values()) {
 
             // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
             for(let i=0; i<drop_zones.length; i++){

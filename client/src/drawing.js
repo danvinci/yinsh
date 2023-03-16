@@ -310,7 +310,7 @@ function draw_markers(){
     ctx.restore();
 };
 
-// highlight allowed moves
+// highlight legal moves
 function draw_highlight_zones(){
     ctx.save();
 

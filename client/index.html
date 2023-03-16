@@ -1,23 +1,28 @@
 <html>
 <head>
 
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' sfxr.me; connect-src localhost:* ws://127.0.0.1:*;">
-<!--
-# more info on how CSP works
-https://content-security-policy.com/
-https://stackoverflow.com/questions/30280370/how-does-content-security-policy-csp-work
--->
-<link rel="stylesheet" type="text/css" href="style.css">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' sfxr.me; connect-src localhost:* ws://127.0.0.1:*;">
+    <!--
+    # more info on how CSP works
+    https://content-security-policy.com/
+    https://stackoverflow.com/questions/30280370/how-does-content-security-policy-csp-work
+    -->
+    
+    <link rel="stylesheet" type="text/css" href="style.css">
 
 </head>
 
 <body> 
 
-    <button type="button" id="play_btn" onclick="show_menu()">Play</button>
+    <button type="button" id="play_btn" onclick="showMenu_ui()">Play</button>
 
-    <button type="button" id="back_btn" class="hidden_button" onclick="go_back()"><</button>
-    <button type="button" id="gen_code_btn" class="hidden_button">Generate code</button>
+    <button type="button" id="back_btn" class="hidden_button" onclick="goBack_ui()"><</button>
+    
+    <button type="button" id="newGame_btn" class="hidden_button" onclick="newGame_ui()">Generate code</button>
+    
     <button type="button" id="enter_code_btn" class="hidden_button">Enter code</button>
+
+    <p id="game_code_text" class="hidden_text">placeholder</p>
 
     <canvas width="500" height="500" id="canvas"></canvas>
 
