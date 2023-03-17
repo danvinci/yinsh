@@ -230,33 +230,38 @@ function update_mk_halos(){
     };
  };
 
-// initializes rings
-function init_rings(){
+// initializes rings and updates game state
+function init_rings(rings_ids = [84, 182, 120, 52], rings_player = player_black_id){
 
-    // pick N drop zones at random (note: it should be random)
-    random_picks_ids = [15, 36, 55, 82]; // max = 85
+    // place N rings at specified ids (defaults to some pre-chosen but random values)
+    // rings will be black unless color is specified
 
-    for (const id of random_picks_ids.values()) {
-        const ref_drop_zone = drop_zones[id];   
-            
-        let R = {   path: {}, // needed as we check if we're clicking it
-                    loc: structuredClone(ref_drop_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
-                    type: ring_id, 
-                    player: (id % 2 == 0) ? player_black_id : player_white_id 
-                };            
+    for (const id of rings_ids.values()) {
         
-        // add to array
-        rings.push(R);  
-                    
-        // update game state and log change
-        update_game_state(R.loc.index, R.type.concat(R.player)); // -> RB, RW at index
-        console.log(`${R.type.concat(R.player)} init at ${R.loc.m_row}:${R.loc.m_col} -> ${R.loc.index}`);
+        // iterate over all the drop zones and find one with matching index
+        for (const drop_zone of drop_zones.values()){
 
+            if (id == drop_zone.loc.index){
+                
+                let R = {   path: {}, // needed as we check if we're clicking it
+                            loc: structuredClone(drop_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
+                            type: ring_id, 
+                            player: rings_player
+                        };            
+        
+                // add to array
+                rings.push(R);  
+                    
+                // update game state and log change
+                update_game_state(R.loc.index, R.type.concat(R.player)); // -> RB, RW at index
+                console.log(`${R.type.concat(R.player)} init at ${R.loc.m_row}:${R.loc.m_col} -> ${R.loc.index}`);
+            };
+        };
     };
     
 };
 
-// refresh rings, markers, etc -> handling case of changes to underlying drop_zones
+// refresh rings, markers, legal moves, and markers halos -> handling case of changes to underlying drop_zones
 function refresh_objects(){
 
     // iterate over all the drop zones
@@ -292,6 +297,7 @@ function refresh_objects(){
     };
 };
 
+
 // initializes markers
 function init_markers(){
 
@@ -315,6 +321,29 @@ function init_markers(){
         console.log(`${M.type.concat(M.player)} init at ${M.loc.m_row}:${M.loc.m_col} -> ${M.loc.index}`);
 
     };
+};
+
+// destroys objects (both global variables and array of objects to draw)
+function destroy_objects(){
+
+    // game state
+    game_state = Array(19*11).fill(""); 
+
+    // objects
+    rings = [];
+    markers = [];
+    highlight_zones = [];
+
+    // moves
+    current_legal_moves = [];
+    current_move = {on: false, start_index: null};
+
+    // scoring 
+    mk_halos = [];
+    mk_sel_scoring = {ids:[], hot:false}
+    score_handling_var 
+
+
 };
 
 // flips markers (changes player of game objects)
