@@ -26,6 +26,15 @@ using StatsBase
 # ╔═╡ 6f0ad323-1776-4efd-bf1e-667e8a834f41
 using Random
 
+# ╔═╡ 13cb8a74-8f5e-48eb-89c6-f7429d616fb9
+using Dates
+
+# ╔═╡ ac38576f-7796-4edb-aa21-391fe9fa9f5b
+using .Threads
+
+# ╔═╡ db228222-fcfa-4e4b-a96d-d8c7adc9c149
+using BenchmarkTools
+
 # ╔═╡ 64b1f98e-2e04-4db2-a827-4bc74ead76ab
 using JLD2
 
@@ -1116,6 +1125,20 @@ function initRand_ringsLoc()
 	
 end
 
+# ╔═╡ 57153574-e5ca-4167-814e-2d176baa0de9
+function save_newGame!(new_game_details, games_log)
+# handles writing to dict (redis in the future?)
+
+	# saves starting state of new game
+	setindex!(games_log, new_game_details, new_game_details[:game_id])
+
+
+end
+
+# ╔═╡ bc19e42a-fc82-4191-bca5-09622198d102
+# global variable with log of games -> should be a database with a trail of moves
+global games_log_dict = Dict()
+
 # ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
 function newGame()
 ## instatiate new game
@@ -1128,24 +1151,142 @@ function newGame()
 	player_invokingUser = rand(["B", "W"])
 	
 	whiteRings_locs, blackRings_locs = initRand_ringsLoc()
+
+	# should compute allowable moves for the starting player
+
+	new_game_details = Dict(:game_id => game_id,
+							:starting_player_color => player_invokingUser,
+							:whiteRings_ids => reshape_out(whiteRings_locs),
+							:blackRings_ids => reshape_out(blackRings_locs),
+							:init_dateTime => now()
+							)
+
+	save_newGame!(new_game_details, games_log_dict)
 	
 	
-	return Dict(:game_id => game_id,
-				:player_color => player_invokingUser,
-				:whiteRings_ids => reshape_out(whiteRings_locs),
-				:blackRings_ids => reshape_out(blackRings_locs)
-				)
+	return new_game_details
 	
+end
+
+# ╔═╡ 22845433-0722-4406-af31-2b9afcb72652
+games_log_dict
+
+# ╔═╡ b58b0aa9-817d-4f04-842e-7ee834b5759e
+function joinGame(game_code::String)
+
+	try
+		return games_log_dict[game_code]
+
+	catch
+		error("ERROR retrieving game")
+	end
+	
+
 end
 
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1104
+port_test = 1102
+
+# ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+begin
+#=
+#WebSocket Examples
+
+	server_ws = WebSockets.listen!("127.0.0.10", 8082) do ws
+		for msg in ws
+			msg = msg * "_by_the_server"
+			send(ws, msg)
+		end
+    end
+=#
+end
+
+# ╔═╡ 713d2f73-d050-4304-8c34-d742370c4306
+# server + router + service functions definition
+#=
+begin
+	
+	# FUNCTIONS
+
+	function test_async_fun(req::HTTP.Request)
+
+		sleep(0.1)
+			
+		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write("resp"))
+		
+	end
+
+
+	# define REST endpoints to dispatch calls to functions
+	const ROUTER_async = HTTP.Router()
+	HTTP.register!(ROUTER_async, "GET", "/async_test", test_async_fun)
+
+	
+	
+
+end
+=#
+
+# ╔═╡ c64be7c3-720a-4e7c-a4f4-c5a0673ef6c3
+#port_test_async = 8863
+
+# ╔═╡ 8d63ef76-fbd4-4cb4-8878-7a1964eb3e55
+#=
+begin
+
+# start server 
+simple_srv_async = HTTP.serve!(ROUTER_async, Sockets.localhost, port_test_async)
+
+# force server shutdown
+#HTTP.forceclose(simple_srv)
+
+
+end
+=#
 
 # ╔═╡ c520ba8a-effb-4dae-af3d-2cbb0ca50a87
-#close(server_ws)
+#close(simple_srv_async)
+
+# ╔═╡ 594b3872-3cde-4cc9-ba68-6d78c431ace6
+#=
+@btime begin
+
+for i in 1:300
+
+	HTTP.request("GET", "http://127.0.0.1:$port_test_async/async_test")
+end
+	
+end
+=#
+
+# ╔═╡ fe8284e2-194b-4db4-8ef5-e38cb13b391a
+#=@btime begin
+
+@sync begin
+	for i in 1:300
+	
+		@async HTTP.request("GET", "http://127.0.0.1:$port_test_async/async_test")
+	end
+
+end
+end
+=#
+
+# ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
+begin
+	#=
+
+	WebSockets.open("127.0.0.10:8082") do ws
+           send(ws, "Hello")
+           s = WebSockets.receive(ws)
+           println(s)
+       end
+
+=#
+end
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1231,6 +1372,29 @@ begin
 
 
 	end
+
+
+	function joinGame_handler(req::HTTP.Request)
+		
+		# saves request to global states store
+		push!(global_states, req)
+
+		# parses request body to json
+		body_json = JSON3.read(req.body)
+		
+		try
+			game_details = joinGame(body_json[:game_code])
+			return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(game_details))
+
+		catch
+			return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
+		end
+
+
+	end
+
+
+	
 	
 
 
@@ -1239,6 +1403,7 @@ begin
 	HTTP.register!(ROUTER, "POST", "/v1/legal_moves", legalMoves_handler)
 	HTTP.register!(ROUTER, "POST", "/v1/markers_check", mkActions_handler)
 	HTTP.register!(ROUTER, "GET", "/v1/new_game", newGame_handler)
+	HTTP.register!(ROUTER, "POST", "/v1/join_game", joinGame_handler)
 	
 	
 
@@ -1252,32 +1417,6 @@ simple_srv = HTTP.serve!(ROUTER, Sockets.localhost, port_test)
 
 # force server shutdown
 #HTTP.forceclose(simple_srv)
-
-
-end
-
-# ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
-begin
-
-#WebSocket Examples
-
-	server_ws = WebSockets.listen!("127.0.0.1", 8082) do ws
-		for msg in ws
-			msg = msg * "_by_the_server"
-			send(ws, msg)
-		end
-    end
-
-end
-
-# ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
-begin
-
-	WebSockets.open("ws://127.0.0.1:8082") do ws
-           send(ws, "Hello")
-           s = WebSockets.receive(ws)
-           println(s)
-       end
 
 
 end
@@ -1333,6 +1472,8 @@ read_states = jldopen("states.jld2")
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
@@ -1344,6 +1485,7 @@ Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
+BenchmarkTools = "~1.3.2"
 HTTP = "~1.7.4"
 JLD2 = "~0.4.31"
 JSON3 = "~1.12.0"
@@ -1359,7 +1501,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "f65aae0a3dd47b01ad3230398f58d1ebb1c60dbe"
+project_hash = "4d4fa7280d7b24d17a74b7f5a1fa09f524deedb1"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1376,6 +1518,12 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "d9a9701b899b30332bbcb3e1679c41cce81fb0e8"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.3.2"
 
 [[deps.BitFlags]]
 git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
@@ -1944,6 +2092,10 @@ version = "1.3.0"
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
+[[deps.Profile]]
+deps = ["Printf"]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+
 [[deps.Qt5Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "xkbcommon_jll"]
 git-tree-sha1 = "0c03844e2231e12fda4d0086fd7cbe4098ee8dc5"
@@ -2395,14 +2547,26 @@ version = "1.4.1+0"
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╠═6f0ad323-1776-4efd-bf1e-667e8a834f41
+# ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 # ╠═f1949d12-86eb-4236-b887-b750916d3493
 # ╠═466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
+# ╠═57153574-e5ca-4167-814e-2d176baa0de9
+# ╠═bc19e42a-fc82-4191-bca5-09622198d102
+# ╠═22845433-0722-4406-af31-2b9afcb72652
+# ╠═b58b0aa9-817d-4f04-842e-7ee834b5759e
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
 # ╠═75ce1c80-1dc6-4e0a-852a-830f88269022
 # ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+# ╠═713d2f73-d050-4304-8c34-d742370c4306
+# ╠═c64be7c3-720a-4e7c-a4f4-c5a0673ef6c3
+# ╠═8d63ef76-fbd4-4cb4-8878-7a1964eb3e55
 # ╠═c520ba8a-effb-4dae-af3d-2cbb0ca50a87
+# ╠═ac38576f-7796-4edb-aa21-391fe9fa9f5b
+# ╠═db228222-fcfa-4e4b-a96d-d8c7adc9c149
+# ╠═594b3872-3cde-4cc9-ba68-6d78c431ace6
+# ╠═fe8284e2-194b-4db4-8ef5-e38cb13b391a
 # ╠═2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 # ╠═5a0a2a61-57e6-4044-ad00-c8f0f569159d
 # ╠═b13e5c1d-454f-4c87-9523-863a7d5d843f

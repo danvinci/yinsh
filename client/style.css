@@ -2,6 +2,10 @@ button.hidden_button {
   display: none; /* Hide button */
 }
 
+input.hidden_input {
+  display: none; /* Hide button */
+}
+
 p.hidden_text {
   display: none; /* Hide text */  
 }

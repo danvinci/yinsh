@@ -12,7 +12,6 @@ game_state_target.addEventListener("new_game_code_gen",
 
 
 
-
 });
 
 
@@ -168,6 +167,9 @@ game_state_target.addEventListener("ring_drop_attempt",
     };
 });
 
+
+
+
 // listens to scoring events -> begins score handling 
 game_state_target.addEventListener("score_handling_start", 
     function (event) {
@@ -286,16 +288,18 @@ game_state_target.addEventListener("new_game",
 
         // update global variables
         game_id = srv_newGame_resp.game_id;
-        player_id = srv_newGame_resp.player_color;
+        client_player_id = srv_newGame_resp.starting_player_color;
+
+        client_player_msg = (client_player_id == "W") ? "WHITE" : "BLACK"
         
         whiteRings_ids = srv_newGame_resp.whiteRings_ids;
         blackRings_ids = srv_newGame_resp.blackRings_ids;
         
-        console.log(`<< NEW GAME >>`);
+        console.log(`<< NEW GAME (CREATED)>>`);
 
         console.log(`Game ID: ${game_id}`);
         // create and dispatch event for the UI
-        const new_game_ready_uiEvent = new CustomEvent("newGame_ready", { detail: game_id});
+        const new_game_ready_uiEvent = new CustomEvent("newGame_ready", {detail: {id: game_id, msg: client_player_msg}});
         ui_target.dispatchEvent(new_game_ready_uiEvent);
         
 
@@ -311,6 +315,49 @@ game_state_target.addEventListener("new_game",
 
         
 });
+
+
+// creates new game and instatiate it
+game_state_target.addEventListener("join_game", 
+    async function (event) {
+
+        let game_code = event.detail;
+
+        // ask the server for a new game code and state
+        const srv_joinGame_resp = await server_joinGame(game_code);
+
+        // update global variables
+        game_id = srv_joinGame_resp.game_id;
+
+        // this client is the non-starting player
+        client_player_id = (srv_joinGame_resp.starting_player_color == "W") ? "B" : "W";
+        client_player_msg = (client_player_id == "W") ? "WHITE" : "BLACK"
+        
+        whiteRings_ids = srv_joinGame_resp.whiteRings_ids;
+        blackRings_ids = srv_joinGame_resp.blackRings_ids;
+        
+        console.log(`<< NEW GAME (JOINING)>>`);
+
+        console.log(`Game ID: ${game_id}`);
+        // create and dispatch event for the UI
+        const join_game_ready_uiEvent = new CustomEvent("joinGame_ready", {detail: {id: game_id, msg: client_player_msg}});
+        ui_target.dispatchEvent(join_game_ready_uiEvent);
+        
+
+        // clean everything up => shouldn't be needed later, this is here because we already have a starting state
+        destroy_objects();
+
+        // init rings objects & update game state
+        init_rings(rings_ids = whiteRings_ids, rings_player = player_white_id);
+        init_rings(rings_ids = blackRings_ids, rings_player = player_black_id);
+
+        // redraw everything
+        refresh_draw_state();
+
+        
+});
+
+
 
 
 // handling case of window resizing and first load -> impacts canvas, board, and objects 

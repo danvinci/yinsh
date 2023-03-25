@@ -238,7 +238,7 @@ function draw_rings(){
             ctx.stroke(ring_path);
 
             // outer border
-            ctx.strokeStyle = "#000";
+            ctx.strokeStyle = "#3D3F3D";
             ctx.lineWidth = ring_lineWidth/12; 
             
             let outerB_path = new Path2D()
@@ -248,7 +248,7 @@ function draw_rings(){
             ring_path.addPath(outerB_path);
 
             // inner border
-            ctx.strokeStyle = "#000";
+            ctx.strokeStyle = "#3D3F3D";
             ctx.lineWidth = ring_lineWidth/12;  
 
             let innerB_path = new Path2D()
@@ -292,7 +292,7 @@ function draw_markers(){
         // draw white marker
         } else if (m.player == player_white_id){ 
             
-            ctx.strokeStyle = "#13191b";
+            ctx.strokeStyle = "#3D3F3D";
             ctx.fillStyle = "#F6F7F6";
             ctx.lineWidth = marker_lineWidth/2;            
         

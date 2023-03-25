@@ -52,7 +52,7 @@ const player_white_id = "W";
 
 // storing details for current game => updated with response from server
 let game_id = "";
-let player_id = "";
+let client_player_id = "";
 
 // Empty game state, string -> reshaped to a matrix on the server
 let game_state = Array(19*11).fill(""); 

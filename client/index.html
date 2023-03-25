@@ -14,15 +14,24 @@
 
 <body> 
 
-    <button type="button" id="play_btn" onclick="showMenu_ui()">Play</button>
 
-    <button type="button" id="back_btn" class="hidden_button" onclick="goBack_ui()"><</button>
+    <button type="button" id="play_button" onclick="showMenu_ui()">Play</button>
+
+    <button type="button" id="back_button" class="hidden_button" onclick="goBack_ui()"><</button>
     
-    <button type="button" id="newGame_btn" class="hidden_button" onclick="newGame_ui()">Generate code</button>
+    <button type="button" id="option_new_game_button" class="hidden_button" onclick="newGame_ui()">Generate code</button>
     
-    <button type="button" id="enter_code_btn" class="hidden_button">Enter code</button>
+    <button type="button" id="option_enter_code_button" class="hidden_button" onclick="enter_gameCode_ui()">Enter code</button>
 
     <p id="game_code_text" class="hidden_text">placeholder</p>
+
+    <input type="text" id="game_code_input" class="hidden_input" placeholder="Enter game code">
+    
+    <button type="button" id="join_game_code_button" class="hidden_button" onclick="join_with_code_ui()">Join game</button>
+
+    <p id="text_explainer" class="hidden_text"></p>
+
+ 
 
     <canvas width="500" height="500" id="canvas"></canvas>
 
@@ -37,7 +46,7 @@
     <script defer src="https://sfxr.me/sfxr.js"></script> 
 
     <script defer src="src/audio.js"></script>
- 
+
     <script defer src="src/data.js"></script>
     <script defer src="src/drawing.js"></script>
     <script defer src="src/interaction.js"></script>   
