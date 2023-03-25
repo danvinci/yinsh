@@ -4,7 +4,7 @@
 // https://www.pubnub.com/blog/http-long-polling/
 // trying with long polling before digging into websockets
 
-port_number = "1102"
+port_number = "1099"
 
 // server call for generating new game
 async function server_newGame_gen(){

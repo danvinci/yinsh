@@ -288,12 +288,17 @@ game_state_target.addEventListener("new_game",
 
         // update global variables
         game_id = srv_newGame_resp.game_id;
-        client_player_id = srv_newGame_resp.starting_player_color;
 
+        // assign color to local player (this client is the caller)
+        client_player_id = srv_newGame_resp.caller_color;
         client_player_msg = (client_player_id == "W") ? "WHITE" : "BLACK"
         
+        // save rings locations
         whiteRings_ids = srv_newGame_resp.whiteRings_ids;
         blackRings_ids = srv_newGame_resp.blackRings_ids;
+
+        // save pre-computed possible legal moves
+        next_legal_moves = srv_newGame_resp.next_legalMoves;
         
         console.log(`<< NEW GAME (CREATED)>>`);
 
@@ -330,11 +335,15 @@ game_state_target.addEventListener("join_game",
         game_id = srv_joinGame_resp.game_id;
 
         // this client is the non-starting player
-        client_player_id = (srv_joinGame_resp.starting_player_color == "W") ? "B" : "W";
+        client_player_id = (srv_joinGame_resp.caller_color == "W") ? "B" : "W";
         client_player_msg = (client_player_id == "W") ? "WHITE" : "BLACK"
         
+        // save rings locations
         whiteRings_ids = srv_joinGame_resp.whiteRings_ids;
         blackRings_ids = srv_joinGame_resp.blackRings_ids;
+
+        // save pre-computed possible legal moves
+        next_legal_moves = srv_joinGame_resp.next_legalMoves;
         
         console.log(`<< NEW GAME (JOINING)>>`);
 
@@ -343,7 +352,6 @@ game_state_target.addEventListener("join_game",
         const join_game_ready_uiEvent = new CustomEvent("joinGame_ready", {detail: {id: game_id, msg: client_player_msg}});
         ui_target.dispatchEvent(join_game_ready_uiEvent);
         
-
         // clean everything up => shouldn't be needed later, this is here because we already have a starting state
         destroy_objects();
 

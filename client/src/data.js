@@ -37,7 +37,9 @@ let markers = [];
 let drop_zones = [];
 let highlight_zones = [];
 
-let current_legal_moves = [];
+let current_legal_moves = []; // used when server pinged at ring pick
+let next_legal_moves = {}; // used when receiving the lock, pre-computed by the server {ring_id => [id, id, id, ...]}
+
 let current_move = {on: false, start_index: null};
 
 let mk_halos = [];

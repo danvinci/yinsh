@@ -958,6 +958,41 @@ function reshape_out(input_ci::CartesianIndex)
 	
 end
 
+# ╔═╡ 33707130-7703-4aa0-84e6-23ab387c0c4d
+# returns sub-array of valid moves
+# this function is used by the server to compute allowable moves in advance 
+# using server types (matrix, cartesian indexes) vs client types (array, int)
+# functions could be unified but likely the other will be killed
+function search_loc_srv(game_state_srv, start_index_srv::CartesianIndex)
+
+	# the client state must be reshaped
+	ref_state = game_state_srv
+
+	# copying startstart index needs no conversion
+	start_index = start_index_srv
+	
+	# checks that row/col are valid
+	if !(start_index in keys(locs_searchSpace))
+		return [] 
+	end
+
+	# retrieve search space for the starting point
+	search_space = locs_searchSpace[start_index]
+
+	# array to be returned
+	search_return = CartesianIndex[]
+
+	for range in search_space
+
+		# check valid moves in each range and append them to returning array
+		append!(search_return, keepValid(ref_state, range)) 
+
+	end
+
+return reshape_out(search_return) # convert to linear indexes
+
+end
+
 # ╔═╡ 7fe89538-b2fe-47db-a961-fdbdd4278963
 function reshape_in(input_array::AbstractVector)
 # LinearIndex -> CartesianIndex reshaping for incoming calls from the client
@@ -1110,6 +1145,9 @@ function markers_actions(client_state, client_start_index, client_end_index)
 
 end
 
+# ╔═╡ 746df99a-fc9b-4bd4-950d-a2a48df8882d
+client_state_test = fill("",19,11)
+
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
 # returns random locations for 5 + 5 rings
@@ -1148,16 +1186,38 @@ function newGame()
 
 	game_id = randstring(5)
 	
-	player_invokingUser = rand(["B", "W"])
+	caller_color = rand(["B", "W"])
 	
 	whiteRings_locs, blackRings_locs = initRand_ringsLoc()
 
-	# should compute allowable moves for the starting player
+	## map locations to game state (server representation)
+		# empty state
+		game_state = fill("",19,11)
+	
+		# write white rings
+		for loc in whiteRings_locs
+			game_state[loc] = "RW"
+		end
 
+		# write black rings
+		for loc in blackRings_locs
+			game_state[loc] = "RB"
+		end
+
+	# compute legal moves in advance for starting (white) player
+	next_legalMoves = Dict()
+
+	for loc in whiteRings_locs
+		legal_ids = search_loc_srv(game_state, loc) # returns ids in client format
+		setindex!(next_legalMoves, legal_ids, reshape_out(loc))
+	end
+
+	# package response for client
 	new_game_details = Dict(:game_id => game_id,
-							:starting_player_color => player_invokingUser,
+							:caller_color => caller_color,
 							:whiteRings_ids => reshape_out(whiteRings_locs),
 							:blackRings_ids => reshape_out(blackRings_locs),
+							:next_legalMoves => next_legalMoves,
 							:init_dateTime => now()
 							)
 
@@ -1188,7 +1248,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1102
+port_test = 1099
 
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 begin
@@ -1425,10 +1485,13 @@ end
 global_states
 
 # ╔═╡ f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
-req_test = global_states[end]
+req_test = global_states[end-1]
 
 # ╔═╡ 4c983857-8532-487c-bcc4-8843c9a3cc31
 resp_js = JSON3.read(req_test.body)
+
+# ╔═╡ 4132e5bd-540a-4467-aa41-5e8d5b82ae11
+resp_js[:state]
 
 # ╔═╡ dc912486-b94e-4d0d-b653-de91aad85c0a
 findall(i -> contains(i, "M"), reshape([i for i in resp_js.state], 19,11))
@@ -2535,6 +2598,7 @@ version = "1.4.1+0"
 # ╠═a96a9a78-0aeb-4b00-8f3c-db61839deb5c
 # ╠═f0e9e077-f435-4f4b-bd69-f495dfccec27
 # ╠═bf2dce8c-f026-40e3-89db-d72edb0b041c
+# ╠═33707130-7703-4aa0-84e6-23ab387c0c4d
 # ╠═52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
 # ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
 # ╠═c67154cb-c8cc-406c-90a8-0ea8241d8571
@@ -2549,6 +2613,7 @@ version = "1.4.1+0"
 # ╠═6f0ad323-1776-4efd-bf1e-667e8a834f41
 # ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 # ╠═f1949d12-86eb-4236-b887-b750916d3493
+# ╠═746df99a-fc9b-4bd4-950d-a2a48df8882d
 # ╠═466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
@@ -2572,6 +2637,7 @@ version = "1.4.1+0"
 # ╠═b13e5c1d-454f-4c87-9523-863a7d5d843f
 # ╠═f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
 # ╠═4c983857-8532-487c-bcc4-8843c9a3cc31
+# ╠═4132e5bd-540a-4467-aa41-5e8d5b82ae11
 # ╠═dc912486-b94e-4d0d-b653-de91aad85c0a
 # ╠═762330f8-88a7-4ef8-b67e-74663868f38b
 # ╠═e28edbf2-fd82-46fd-aca8-0070bc21c289
