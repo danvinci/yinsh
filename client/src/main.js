@@ -47,6 +47,10 @@ game_state_target.addEventListener("ring_picked",
     // write start of the currently active move to a global variable
     update_current_move(on = true, index = structuredClone(p_ring.loc.index))
 
+    // place marker in same location & draw changes
+    add_marker(loc = structuredClone(p_ring.loc), player = p_ring.player);
+    refresh_draw_state();
+
     // get legal moves from the server
     // game_state and current move are read from global variables
     // NOTE : legal moves are requested considering no ring nor marker at their current location due to game_state updates
@@ -64,11 +68,7 @@ game_state_target.addEventListener("ring_picked",
         
     };
 
-    // place marker in same location and update game_state (after asking for legal moves)
-    // this allows for scoring to be computed correclty from game_state, as this marker will stay in place at ring_drop
-    // location must be copied and not referenced -> otherwise the marker will be drawn along the ring as it inherits the same location
-    add_marker(loc = structuredClone(p_ring.loc), player = p_ring.player);
-
+    // draw changes
     refresh_draw_state();
 
 });
@@ -117,22 +117,25 @@ game_state_target.addEventListener("ring_drop_attempt",
         current_legal_moves = [];
         update_highlight_zones()
 
+        // re-draw everything and play sound (don't wait for server-dependent checks)
+        refresh_draw_state(); 
+        sfxr.play(ring_drop_sound); 
 
         if (drop_index == current_move.start_index){
-            
+             // CASE: same location drop, nothing to flip (no server call needed for this)
+
             remove_markers(drop_index);
             // ring dropped in same location, overrides MB/MW -> no need to handle it explicitly
 
             console.log(`Marker removed from index: ${drop_index}`);
-
-            // CASE: same location drop, nothing to flip (no server call needed for this)
-            // -> do nothing
-
+            
         // ring moved -> asks the server about markers and scoring options
         } else {
 
-            const srv_mk_resp = await server_markers_check(drop_index);
+            // play sound (don't wait for server response)
+            sfxr.play(ring_drop_sound); 
 
+            const srv_mk_resp = await server_markers_check(drop_index);
 
             // CASE: something to flip
             if (srv_mk_resp.flip_flag == true){
@@ -153,12 +156,10 @@ game_state_target.addEventListener("ring_drop_attempt",
             };
         };
 
-        // complete move, redraw, and play sound
+        // MOVE COMPLETED
+        // mark move as completed and redraw changes
         update_current_move(on = false);
-
-
         refresh_draw_state(); 
-        sfxr.play(ring_drop_sound); 
     
     } else{
 

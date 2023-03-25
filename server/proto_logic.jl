@@ -989,6 +989,9 @@ function search_loc_srv(game_state_srv, start_index_srv::CartesianIndex)
 
 	end
 
+	# append starting index (can drop the ring from where picked)
+	append!(search_return, [start_index]) 
+
 return reshape_out(search_return) # convert to linear indexes
 
 end
@@ -1067,6 +1070,9 @@ function search_loc(client_state, client_start_index::Int64)
 
 	end
 
+	# append starting index (can drop the ring from where picked)
+	append!(search_return, [start_index]) 
+
 return reshape_out(search_return) # convert to linear indexes
 
 end
@@ -1144,9 +1150,6 @@ function markers_actions(client_state, client_start_index, client_end_index)
 
 
 end
-
-# ╔═╡ 746df99a-fc9b-4bd4-950d-a2a48df8882d
-client_state_test = fill("",19,11)
 
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
@@ -1231,6 +1234,9 @@ end
 # ╔═╡ 22845433-0722-4406-af31-2b9afcb72652
 games_log_dict
 
+# ╔═╡ 071e66a5-4c4f-4ce9-b39e-79e24f4c63f1
+games_log_dict["LFvMr"][:next_legalMoves]
+
 # ╔═╡ b58b0aa9-817d-4f04-842e-7ee834b5759e
 function joinGame(game_code::String)
 
@@ -1248,7 +1254,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1099
+port_test = 1095
 
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 begin
@@ -2613,11 +2619,11 @@ version = "1.4.1+0"
 # ╠═6f0ad323-1776-4efd-bf1e-667e8a834f41
 # ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 # ╠═f1949d12-86eb-4236-b887-b750916d3493
-# ╠═746df99a-fc9b-4bd4-950d-a2a48df8882d
 # ╠═466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╠═22845433-0722-4406-af31-2b9afcb72652
+# ╠═071e66a5-4c4f-4ce9-b39e-79e24f4c63f1
 # ╠═b58b0aa9-817d-4f04-842e-7ee834b5759e
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
