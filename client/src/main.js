@@ -119,7 +119,7 @@ game_state_target.addEventListener("ring_drop_attempt",
 
         // re-draw everything and play sound (don't wait for server-dependent checks)
         refresh_draw_state(); 
-        sfxr.play(ring_drop_sound); 
+        ring_drop_sound.play(); 
 
         if (drop_index == current_move.start_index){
              // CASE: same location drop, nothing to flip (no server call needed for this)
@@ -133,7 +133,7 @@ game_state_target.addEventListener("ring_drop_attempt",
         } else {
 
             // play sound (don't wait for server response)
-            sfxr.play(ring_drop_sound); 
+            ring_drop_sound.play(); 
 
             const srv_mk_resp = await server_markers_check(drop_index);
 
@@ -272,7 +272,7 @@ game_state_target.addEventListener("mk_sel_clicked",
     update_score_handling(on = false);
 
     // play sound
-    sfxr.play(markers_row_removed_sound);
+    markers_row_removed_sound.play();
 
     // re-draw everything
     refresh_draw_state();
