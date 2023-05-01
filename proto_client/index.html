@@ -1,0 +1,57 @@
+<html>
+<head>
+
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' sfxr.me; connect-src localhost:* ws://127.0.0.1:*;">
+    <!--
+    # more info on how CSP works
+    https://content-security-policy.com/
+    https://stackoverflow.com/questions/30280370/how-does-content-security-policy-csp-work
+    -->
+    
+    <link rel="stylesheet" type="text/css" href="style.css">
+
+</head>
+
+<body> 
+
+
+    <button type="button" id="play_button" onclick="showMenu_ui()">Play</button>
+
+    <button type="button" id="back_button" class="hidden_button" onclick="goBack_ui()"><</button>
+    
+    <button type="button" id="option_new_game_button" class="hidden_button" onclick="newGame_ui()">Generate code</button>
+    
+    <button type="button" id="option_enter_code_button" class="hidden_button" onclick="enter_gameCode_ui()">Enter code</button>
+
+    <p id="game_code_text" class="hidden_text">placeholder</p>
+
+    <input type="text" id="game_code_input" class="hidden_input" placeholder="Enter game code">
+    
+    <button type="button" id="join_game_code_button" class="hidden_button" onclick="join_with_code_ui()">Join game</button>
+
+    <p id="text_explainer" class="hidden_text"></p>
+
+ 
+
+    <canvas width="500" height="500" id="canvas"></canvas>
+
+    <!--
+        Info on defer attr for scripts:
+        https://html.spec.whatwg.org/multipage/scripting.html#attr-script-defer
+
+        In our case we want fetching to complete for all before execution starts
+    -->
+
+
+    <script defer src="src/audio.js"></script>
+
+    <script defer src="src/data.js"></script>
+    <script defer src="src/drawing.js"></script>
+    <script defer src="src/interaction.js"></script>   
+    <script defer src="src/server.js"></script> 
+
+    <script defer src="src/main.js"></script>
+    <script defer src="src/ui.js"></script>
+
+</body>
+</html>
