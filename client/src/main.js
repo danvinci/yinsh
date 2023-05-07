@@ -6,14 +6,6 @@
 let game_state_target = new EventTarget()
 
 
-// handle new game start by code gen 
-game_state_target.addEventListener("new_game_code_gen", 
-    async function (event) {
-
-
-
-});
-
 
 // start
 console.log('<< FIRST LOADING >>');

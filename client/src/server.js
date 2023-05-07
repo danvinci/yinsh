@@ -4,20 +4,21 @@
 // https://www.pubnub.com/blog/http-long-polling/
 // trying with long polling before digging into websockets
 
-port_number = "1095"
+const port_number = "1095"
 
 // server call for generating new game
-async function server_newGame_gen(){
+// NOTE: should handle errors directly (e.g. server unavailable)
+export async function server_newGame_gen(){
 
     let call_start = Date.now();
 
-    response = await fetch(`http://localhost:${port_number}/v1/new_game`, {method: 'GET'});
+    const response = await fetch(`http://localhost:${port_number}/v1/new_game`, {method: 'GET'});
     
     const srv_new_game_resp = await response.json(); 
 
     // logging time
     let delta_time = Date.now() - call_start;
-    console.log(`RTT new game: ${delta_time}ms`);
+    console.log(`RTT server request for new game: ${delta_time}ms`);
 
     // return response to game status handler
     return srv_new_game_resp;
