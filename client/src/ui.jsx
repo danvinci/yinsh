@@ -1,5 +1,5 @@
-import { createSignal, Show, Switch, Match } from "solid-js";
-import { init_game_dispatch, test_event_from_UI } from "./game_dispatch";
+import { createSignal, Show, Switch, Match, createResource } from "solid-js";
+import { init_newGame_dispatcher } from "./game_dispatch";
 
 function Play() {
   
@@ -106,6 +106,7 @@ function C_playLocal() {
     when = {startLocal()}
     fallback = {<button type="button" onClick={toggle_StartLocal}>Start local game</button>}
     >
+      <GameHandler></GameHandler>
       <GameCanvas></GameCanvas>
 
     </Show>
@@ -115,20 +116,46 @@ function C_playLocal() {
 
 function GameCanvas(){
 
-  // initializes game dispatcher (NOTE: should be inside a function call depending on user action)
-  init_game_dispatch()
+  return (
+    <>
+    <canvas width="500" height="500" id="canvas"></canvas>
+    </>
+  );
+  
+}
 
-  // manage 'state of game started' option 
-  // NOTE: could also use setResource here for fetching data 
-  const [local_gameReady, set_local_gameReady] = createSignal(false);
+
+function GameHandler(){
+
+  // function wrapper for requesting new game
+  const fn_newGame = async () => (await init_newGame_dispatcher());
+
+  // signal for triggering fetching of game details
+  const [reqCount, set_reqCount] = createSignal(0);
+  const fn_increment_reqCount = () => set_reqCount(reqCount()+1);  
+
+  // solid-wrapping the function call to the new game setup
+  const [req_outcome] = createResource(reqCount, fn_newGame);
+
 
   return (
-    <Show
-    when={local_gameReady()}
-    fallback={<><p>Loading game...</p><button onClick={test_event_from_UI}>TEST EVENT</button></>}>
+    <>
+    <button type="button" onClick={fn_increment_reqCount}>Request new game code</button>
 
-    </Show>
+    <Switch
+      fallback={<p>{"Have fun!"}</p>}
+    >
+      
+      <Match when = {req_outcome.loading}>
+        <p>{"Loading..."}</p>
+      </Match>
 
+      <Match when = {req_outcome.error}>
+        <p>{"ERROR !"}</p>
+      </Match>
+
+    </Switch>
+    </>
   );
   
 }

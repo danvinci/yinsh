@@ -1234,9 +1234,6 @@ end
 # ╔═╡ 22845433-0722-4406-af31-2b9afcb72652
 games_log_dict
 
-# ╔═╡ 071e66a5-4c4f-4ce9-b39e-79e24f4c63f1
-games_log_dict["LFvMr"][:next_legalMoves]
-
 # ╔═╡ b58b0aa9-817d-4f04-842e-7ee834b5759e
 function joinGame(game_code::String)
 
@@ -2623,7 +2620,6 @@ version = "1.4.1+0"
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╠═22845433-0722-4406-af31-2b9afcb72652
-# ╠═071e66a5-4c4f-4ce9-b39e-79e24f4c63f1
 # ╠═b58b0aa9-817d-4f04-842e-7ee834b5759e
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc

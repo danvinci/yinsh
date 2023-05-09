@@ -1,8 +1,51 @@
 import { server_newGame_gen } from "./server.js"
-import { set, get } from 'idb-keyval'
+import { init_game_constants, save_srv_response_NewGame, init_game_objects } from './data.js'
 
 
-// using idb-keyval for storage -> avoid having a global object
+// initializes new game with information from the server
+export async function init_newGame_dispatcher() {
+
+    console.log(' -- Requesting new game --');
+
+    // initialize constants used across the game (do first, used to interpret data from server)
+    await init_game_constants()
+
+    try{
+        // asks for new game to the server
+        const srv_newGame_resp = await server_newGame_gen();
+
+        // save server response to DB
+        await save_srv_response_NewGame(srv_newGame_resp);
+    
+        // initialize new game with data in the server response (saved at previous step)
+        await init_game_objects();
+
+        // bind the canvas to a global variable
+        globalThis.ctx = document.getElementById('canvas').getContext('2d', { alpha: true }); 
+
+
+        // drawing test
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = '#1e52b7';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.55;
+
+        ctx.translate(50, 50);
+        ctx.beginPath();
+        ctx.moveTo(0,0); 
+        ctx.lineTo(0,50); 
+        ctx.lineTo(40,50/2);
+        ctx.closePath(); 
+        ctx.stroke();
+
+
+
+    } catch (err) {
+        
+        throw new Error("Something off when requesting new game")
+    } 
+
+};
 
 
 
@@ -14,38 +57,6 @@ export function init_game_dispatch() {
     // define global event target
     globalThis.game_dispatch_et = new EventTarget()
 
-
-    // creates new LOCAL GAME and instatiate it
-    game_dispatch_et.addEventListener("test_event_from_UI", 
-        async function (event) {
-
-            console.log("TEST EVENT RECEIVED")
-
-            const srv_newGame_resp = await server_newGame_gen();
-
-            // call above could also return error
-                // if okay -> write everything to local storage
-                
-                console.log(`Game ID from server: ${srv_newGame_resp.game_id}`);
-
-                // SAVE data to indexedDB via idb-keyval library
-                set("game_id", srv_newGame_resp.game_id) // game ID
-                //get("game_id").then( (val) => console.log(`Game ID written in DB: ${val}`) ); // test
-
-                // assign color to local player (this client is the caller)
-                set("client_player_id", srv_newGame_resp.caller_color); // player ID (B ~ Black, W ~ White)
-                get("client_player_id").then( (val) => console.log(`This client will be the ${val} player`) ); // test
-
-                // save initial rings locations
-                set("whiteRings_initial_locs", srv_newGame_resp.whiteRings_ids); 
-                set("blackRings_initial_locs", srv_newGame_resp.blackRings_ids);
-
-                // save pre-computed possible legal moves if this client is the WHITE player
-                if (srv_newGame_resp.caller_color == "W") {
-                    set("next_legal_moves", srv_newGame_resp.next_legalMoves);
-                };
-
-        });
 
     // creates new LOCAL GAME and instatiate it
     game_dispatch_et.addEventListener("new_local_game", 
@@ -92,10 +103,3 @@ export function init_game_dispatch() {
 };
 
 
-// CALLER FUNCTIONS - exposed to the UI module
-// dispatch event to ask server for new game code
-
-// NOTE -> turn everything into function calls ?
-export function test_event_from_UI() {
-    game_dispatch_et.dispatchEvent(new CustomEvent("test_event_from_UI"));
-  };

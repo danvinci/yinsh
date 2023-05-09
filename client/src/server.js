@@ -10,15 +10,13 @@ const port_number = "1095"
 // NOTE: should handle errors directly (e.g. server unavailable)
 export async function server_newGame_gen(){
 
+    // start timing
     let call_start = Date.now();
 
-    const response = await fetch(`http://localhost:${port_number}/v1/new_game`, {method: 'GET'});
-    
-    const srv_new_game_resp = await response.json(); 
+    const srv_new_game_resp = (await fetch(`http://localhost:${port_number}/v1/new_game`, {method: 'GET'})).json();
 
-    // logging time
-    let delta_time = Date.now() - call_start;
-    console.log(`RTT server request for new game: ${delta_time}ms`);
+    // end timing
+    console.log(`LOG - RTT for server request: ${Date.now() - call_start}ms`);
 
     // return response to game status handler
     return srv_new_game_resp;

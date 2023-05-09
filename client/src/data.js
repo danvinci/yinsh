@@ -1,4 +1,4 @@
-
+import { set, get } from 'idb-keyval'
 
 // DATA
 // global data objects and functions operating on them + utils like reshape_index
@@ -30,8 +30,8 @@ const mm_points_rows = 19 // mm_points.length;
 const mm_points_cols = 11 // mm_points[0].length;
 
 // bind canvas to variable
-const canvas = document.getElementById('canvas'); 
-const ctx = canvas.getContext('2d', { alpha: true }); 
+//const canvas = document.getElementById('canvas'); 
+//const ctx = canvas.getContext('2d', { alpha: true }); 
 
 // initialize array for markers and rings + drop zones + highlight zones
 let rings = [];
@@ -91,10 +91,97 @@ function update_sizing(win_height, win_width) {
 
 };
 
+// DATA FUNCTIONS (REWRITE)
+export async function init_game_constants(){
+
+    // constant used across the game for:
+    // defining rings/markers, log status, and check conditions within functions
+    
+    const s1 = set("ring_id", "R")
+    const s2 = set("marker_id", "M")
+    const s3 = set("player_black_id", "B")
+    const s4 = set("player_white_id", "W")
+
+    // matrix of active points on the grid
+    const mm_points = [
+        [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0], 
+        [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0], 
+        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+        [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0], 
+        [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0] 
+        ];
+
+    const s5 = set("mm_points", mm_points) // matrix used for drawing game board
+    const s6 = set("mm_points_rows", 19)
+    const s7 = set("mm_points_cols", 11)
+
+    await Promise.allSettled([s1, s2, s3, s4, s5, s6, s7]).then(()=> console.log('LOG - Game constants initialized'));
+
+};
 
 
+// inits/resets game objects
+export async function init_game_objects(){
 
-// DATA functions below
+    // game state
+    const s1 = set("game_state", Array(19*11).fill(""))
+
+    // objects
+    const s2 = set("rings", [])  // -> array for rings
+    const s3 = set("markers", []) // -> array for markers
+    const s4 = set("drop_zones", []) // -> array for drop zones (markers and rings are placed at their coordinates only)
+    const s5 = set("highlight_zones", []) // -> array for highlight_zones (drawn on/off based on legal moves)
+
+    // moves
+    const s6 = set("current_legal_moves", []) // -> location IDs for legal moves
+    const s7 = set("current_move", {on: false, start_index: null}) // -> details for move currently in progress 
+
+    // scoring 
+    const s8 = set("mk_halos", []) // -> halos around markers when scoring
+    const s9 = set("mk_sel_scoring", {ids:[], hot:false}) // -> tracking IDs of markers/halos that can be selected for finalizing the score
+    const s10 = set("score_handling_var", {on: false, mk_sel_array: [], num_rows: {}, details: []}) // // -> object with all scoring information, used for handling scoring scenarios
+
+    await Promise.allSettled([s1, s2, s3, s4, s5, s6, s7]).then(() => console.log('LOG - Game objects initialized'));
+
+
+};
+
+// dedicated function for saving server response data
+export async function save_srv_response_NewGame(srv_resp_NewGame){
+    
+    // SAVE data to indexedDB via idb-keyval library
+    const s1 = set("game_id", srv_resp_NewGame.game_id) // game ID
+
+    // assign color to local player (this client is the caller)
+    const s2 = set("client_player_id", srv_resp_NewGame.caller_color); // player ID (B ~ Black, W ~ White)
+
+    // save initial rings locations
+    const s3 = set("whiteRings_initial_locs", srv_resp_NewGame.whiteRings_ids); 
+    const s4 = set("blackRings_initial_locs", srv_resp_NewGame.blackRings_ids);
+
+    // save pre-computed possible legal moves / now just for WHITE player, later expose as a setting?
+    const s5 = set("next_legal_moves", srv_resp_NewGame.next_legalMoves);
+    
+    await Promise.allSettled([s1, s2, s3, s4, s5]).then(() => console.log('LOG - SRV response saved'));
+
+};
+
+
+// (OLD) DATA functions below
 
 // from col/row in a matrix to a linear index 
 // Julia expects col-major for building a matrix from an index
@@ -349,6 +436,8 @@ function destroy_objects(){
 
 
 };
+
+
 
 // flips markers (changes player of game objects)
 function flip_markers(markers_to_flip){
