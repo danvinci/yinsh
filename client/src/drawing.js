@@ -1,15 +1,17 @@
-// DRAWING
+import { get } from "idb-keyval";
+
+// DRAWING FUNCTIONS
 
 // glue function called by orchestrator after data manipulation
-function refresh_draw_state(){
+export async function refresh_draw_state(){
 
-    //let drawing_start = Date.now();
-    
+    const drawing_start_time = Date.now()
+
     // clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Draw board
-    draw_board();
+    await draw_board();
 
     // keep drop zones up
     draw_drop_zones();
@@ -25,8 +27,8 @@ function refresh_draw_state(){
     draw_mk_halos();
 
     // logging time -> repaint topping at 1ms 
-    //let delta_time = Date.now() - drawing_start;
-    //console.log(`Repaint time: ${delta_time}ms`);
+    const delta_time = Date.now() - drawing_start_time;
+    console.log(`LOG - Drawing time: ${delta_time}ms`);
 
 }; 
 
@@ -54,9 +56,34 @@ canvas.style.height = `${rect.height}px`;
 */
 
 // drawing main board
-function draw_board(){
+async function draw_board(){
 
+    // this whole function should be simplified at some point -> re-using premade paths?
+    // use getMany!
+
+    // pull out drawing constants from DB
+    const mm_points = await get("mm_points");
+    const mm_points_rows = await get("mm_points_rows");
+    const mm_points_cols = await get("mm_points_cols");
+
+    // hardcoding triangles to be drawn for each column (fn call results in silent error)
+    const triangles_toDraw_byCol = {0:3, 1:6, 2:7, 3:8, 4:9, 5:8, 6:9, 7:8, 8:7, 9:6, 10:3 };
+ 
+    // recovering S & H constants for drawing
+    const H = await get("H");
+    const S = await get("S");
+
+    // save current canvas drawing settings
+    // this points to globalThis.ctx
     ctx.save();
+
+    // drawing settings -> these should go to the DB too at some point
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = '#1e52b7';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.35;
+
+
     /* RECIPE
     - get to first starting point for column
     - draw triangle, if first extra bit
@@ -70,30 +97,30 @@ function draw_board(){
     - last column, 3 vertical strokes
     */
 
-    // drawing settings
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = '#1e52b7';
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.35;
-
-
     for (let k = 1; k <= mm_points_cols-1; k++) {
-        
+
+        console.log(`LOG - column ${k}`);
+
         // number of triangles we're expected to draw for each column
-        triangle_ToDraw = numTriangles(getCol(mm_points, k-1));
-        triangle_Drew = 0;
+        //let t_toDraw = triangles_toDraw_byCol(mm_points, k-1);
+        let t_toDraw = triangles_toDraw_byCol[k-1];   
+        let t_Drew = 0;
 
         // move right for each new column (-H/3 reduces left canvas border)
         ctx.translate(H*k - H/3, H);
 
         // going down the individual columns
         for (let j = 1; j <= mm_points_rows; j++) {
+
+            console.log(`LOG - column ${k}, row ${j}`);
+            // error after col 1 row 7
             
             let point = mm_points[j-1][k-1];
 
             // manual handling of last column 
-            if (k == mm_points_cols-1 && (j == 4 || j > 13) ){point = 0;}
-            
+            if (k == mm_points_cols-1 && (j == 4 || j > 13) ){
+                point = 0;
+            }
 
             // if point is not active just translate down
             if (point == 0) {
@@ -101,7 +128,8 @@ function draw_board(){
             
             // DRAWING LOOP!
             // draw triangle but only if we're not done drawing them all
-            } else if (point == 1 && triangle_Drew < triangle_ToDraw) {
+            } else if (point == 1 && t_Drew < t_toDraw) {
+                
                 ctx.beginPath();
                 ctx.moveTo(0,0); // starting point for drawing
                 ctx.lineTo(0,S); // first point down
@@ -109,41 +137,40 @@ function draw_board(){
                 ctx.closePath(); // close shape
                 ctx.stroke();
                 triangle_Drew ++;
-
                 
                 // check if the next column has more triangles
-                let mustDraw_stick = triangle_ToDraw < numTriangles(getCol(mm_points, k));
+                let mustDraw_stick = (t_toDraw < triangles_toDraw_byCol[k]);
                 
-                // we do this for all columns except last
-                if (mustDraw_stick && k < mm_points_cols) {
+                    // we do this for all columns except last
+                    if (mustDraw_stick && k < mm_points_cols) {
 
-                    // first triangle bridging up
-                    if (triangle_Drew == 1){
-                        ctx.beginPath();
-                        ctx.moveTo(0,0); 
-                        ctx.lineTo(H,-S/2); 
-                        //ctx.strokeStyle = "#FA5537";
-                        ctx.stroke();
-                        
-                        //ctx.strokeStyle = colT;
+                        // first triangle bridging up
+                        if (triangle_Drew == 1){
+                            ctx.beginPath();
+                            ctx.moveTo(0,0); 
+                            ctx.lineTo(H,-S/2); 
+                            //ctx.strokeStyle = "#FA5537";
+                            ctx.stroke();
+                            
+                            //ctx.strokeStyle = colT;
+                        }
+
+                        // last triangle bridging down
+                        if (t_Drew == t_toDraw){
+                            ctx.beginPath();
+                            ctx.moveTo(0,S);
+                            ctx.lineTo(H,S+S/2);
+                            //ctx.strokeStyle = "#32CBFF";
+                            ctx.stroke();
+                            
+                            //ctx.strokeStyle = colT; // reset color
+                        }
+
                     }
-
-                    // last triangle bridging down
-                    if (triangle_Drew == triangle_ToDraw){
-                        ctx.beginPath();
-                        ctx.moveTo(0,S);
-                        ctx.lineTo(H,S+S/2);
-                        //ctx.strokeStyle = "#32CBFF";
-                        ctx.stroke();
-                        
-                        //ctx.strokeStyle = colT; // reset color
-                    }
-
-                }
 
                 // draw vertical strokes 
                 // last column, last triangle done (+2 hack as we disqualify points above)
-                if (k == mm_points_cols-1 && triangle_ToDraw == triangle_Drew + 2) {
+                if (k == mm_points_cols-1 && t_toDraw == t_Drew + 2) {
                     // stroke down
                     ctx.beginPath();
                     ctx.moveTo(0,S); 
@@ -173,7 +200,7 @@ function draw_board(){
 
         
             } // stop going down the column and drawing if you're done 
-            else if ( triangle_Drew == triangle_ToDraw) {
+            else if ( t_Drew == t_toDraw ) {
                 break;
             }
         }
@@ -182,7 +209,9 @@ function draw_board(){
     }
         
     ctx.restore();
-}
+    console.log("LOG - Board drawn on canvas");
+
+};
 
 // drop zones
 function draw_drop_zones(){
@@ -370,4 +399,18 @@ function numTriangles(array) {
 }
 
 
+// helper function to know how many triangles we should draw
+function triangles_toDraw_byCol(ref_matrix, col_number) {
+
+    col_array = ref_matrix.map(s => s[col_number]).flat();
+
+    let counter = 0;
+    for (const i of col_array) {
+        if (i == 1) {
+            counter++;
+        }
+    }
+
+    return (counter - 1);
+}
 

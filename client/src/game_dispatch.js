@@ -1,5 +1,6 @@
 import { server_newGame_gen } from "./server.js"
-import { init_game_constants, save_srv_response_NewGame, init_game_objects } from './data.js'
+import { init_game_constants, save_srv_response_NewGame, init_new_game_data } from './data.js'
+import { refresh_draw_state } from './drawing.js'
 
 
 // initializes new game with information from the server
@@ -16,29 +17,14 @@ export async function init_newGame_dispatcher() {
 
         // save server response to DB
         await save_srv_response_NewGame(srv_newGame_resp);
-    
-        // initialize new game with data in the server response (saved at previous step)
-        await init_game_objects();
 
         // bind the canvas to a global variable
         globalThis.ctx = document.getElementById('canvas').getContext('2d', { alpha: true }); 
 
+        // initialize new game with data in the server response (saved at previous step)
+        await init_new_game_data();
 
-        // drawing test
-        ctx.lineJoin = "round";
-        ctx.strokeStyle = '#1e52b7';
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.55;
-
-        ctx.translate(50, 50);
-        ctx.beginPath();
-        ctx.moveTo(0,0); 
-        ctx.lineTo(0,50); 
-        ctx.lineTo(40,50/2);
-        ctx.closePath(); 
-        ctx.stroke();
-
-
+        await refresh_draw_state();
 
     } catch (err) {
         

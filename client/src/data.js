@@ -1,4 +1,4 @@
-import { set, get } from 'idb-keyval'
+import { set, get } from "idb-keyval";
 
 // DATA
 // global data objects and functions operating on them + utils like reshape_index
@@ -91,8 +91,17 @@ function update_sizing(win_height, win_width) {
 
 };
 
-// DATA FUNCTIONS (REWRITE)
+////////////////////////////////////////// 
+//////////////// DATA FUNCTIONS (REWRITE)
+//////////////////////////////////////////
+
+// from col-major julia matrix to linear index in js
+const reshape_index = (row, col) => ((col-1)*19 + row -1); // js arrays start at 0, hence the -1 offset
+
+// sets IDs and values used by other functions
 export async function init_game_constants(){
+
+    // I should use setMany and getMany !
 
     // constant used across the game for:
     // defining rings/markers, log status, and check conditions within functions
@@ -133,9 +142,19 @@ export async function init_game_constants(){
 
 };
 
+// sets S and H for drawing the board and game objects
+async function init_drawing_constants(){
 
-// inits/resets game objects
-export async function init_game_objects(){
+    // constants for drawing on canvas
+    const s1 = set("S", 47);
+    const s2 = set("H", Math.round(47 * Math.sqrt(3)/2)); 
+
+    await Promise.allSettled([s1, s2]).then(()=> console.log('LOG - Drawing constants set'));
+
+};
+
+// inits/resets game objects (rings, markers, visual cues)
+async function init_empty_game_objects(){
 
     // game state
     const s1 = set("game_state", Array(19*11).fill(""))
@@ -155,12 +174,13 @@ export async function init_game_objects(){
     const s9 = set("mk_sel_scoring", {ids:[], hot:false}) // -> tracking IDs of markers/halos that can be selected for finalizing the score
     const s10 = set("score_handling_var", {on: false, mk_sel_array: [], num_rows: {}, details: []}) // // -> object with all scoring information, used for handling scoring scenarios
 
-    await Promise.allSettled([s1, s2, s3, s4, s5, s6, s7]).then(() => console.log('LOG - Game objects initialized'));
+
+    await Promise.allSettled([s1, s2, s3, s4, s5, s6, s7, s8, s9, s10]).then(() => console.log('LOG - Empty game objects initialized'));
 
 
 };
 
-// dedicated function for saving server response data
+// dedicated function for saving server response data when asking for new game
 export async function save_srv_response_NewGame(srv_resp_NewGame){
     
     // SAVE data to indexedDB via idb-keyval library
@@ -170,8 +190,8 @@ export async function save_srv_response_NewGame(srv_resp_NewGame){
     const s2 = set("client_player_id", srv_resp_NewGame.caller_color); // player ID (B ~ Black, W ~ White)
 
     // save initial rings locations
-    const s3 = set("whiteRings_initial_locs", srv_resp_NewGame.whiteRings_ids); 
-    const s4 = set("blackRings_initial_locs", srv_resp_NewGame.blackRings_ids);
+    const s3 = set("whiteRings_locs", srv_resp_NewGame.whiteRings_ids); 
+    const s4 = set("blackRings_locs", srv_resp_NewGame.blackRings_ids);
 
     // save pre-computed possible legal moves / now just for WHITE player, later expose as a setting?
     const s5 = set("next_legal_moves", srv_resp_NewGame.next_legalMoves);
@@ -180,39 +200,21 @@ export async function save_srv_response_NewGame(srv_resp_NewGame){
 
 };
 
-
-// (OLD) DATA functions below
-
-// from col/row in a matrix to a linear index 
-// Julia expects col-major for building a matrix from an index
-// also, js arrays start at 0, hence the -1 offset
-function reshape_index(row, col) { return (col-1)*19 + row -1; };
-
-// function to write to the game state array
-function update_game_state(index, value){
-    // there should be some input arguments check
-
-    game_state[index] = value;
-
-};
-
-// glue function to setup new game
-function init_objects(){
-
-    // initialize drop zones
-    init_drop_zones();
-
-    // init random rings and markers
-    init_rings();
-    init_markers();
-
-};
-
-// initialize drop zones -> used propagate location data
-function init_drop_zones(){
+// initialize drop zones -> used to propagate location data to rings, markers, and visual cues
+// depends on canvas size !
+async function init_drop_zones(){
     
-    // empty array (this function is also used for refreshing)
-    drop_zones = [];
+    // empty array
+    const drop_zones = await get("drop_zones");
+
+    // recovering constants -> maybe they can be retrieved in parallel and all awaited later?
+    const mm_points = await get("mm_points");
+    const mm_points_rows = await get("mm_points_rows");
+    const mm_points_cols = await get("mm_points_cols");
+
+    // recovering S & H constants for drawing
+    const H = await get("H");
+    const S = await get("S");
 
     // create paths for listening to click events on all intersections
     for (let j = 1; j <= mm_points_rows; j++) {
@@ -250,12 +252,143 @@ function init_drop_zones(){
         }
     }
 
+    const s1 = set("drop_zones", drop_zones);
+
+    await Promise.allSettled([s1]).then(() => console.log('LOG - Drop zones initialized'));
+
+};
+
+// initializes rings and updates game state -> reads from rings data in DB
+async function init_rings(){
+
+    // retrieve rings data from DB
+
+        // initial locations of rings from server
+        const whiteRings_locs = await get("whiteRings_locs"); 
+        const blackRings_locs = await get("blackRings_locs");
+
+        // constants used in logic
+        const ring_id = await get("ring_id");
+        const player_black_id = await get("player_black_id");
+        const player_white_id = await get("player_white_id");
+
+        // drop zones (already initialized)
+        const drop_zones = await get("drop_zones");
+
+        const temp_rings_array = await get("rings");
+        const temp_game_state = await get("game_state");
+
+
+    // INITIALIZE RINGS
+    // loop over drop zones and init rings in matching their loc indexes
+    // note: we could get a single array from the server? there shouldn't be code repetition
+    for (const d_zone of drop_zones){
+        
+        // loop and match over WHITE rings
+        for (const ring_loc_index of whiteRings_locs) {
+            
+            let white_found_flag = false; // use this to minimze loops
+            if (ring_loc_index == d_zone.loc.index){
+                
+                white_found_flag = true;
+
+                const ring = {  path: {}, //  will hold the shape + we also use the shape for interaction checks
+                                loc: structuredClone(d_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
+                                type: ring_id, 
+                                player: player_white_id
+                            };            
+        
+                // add to temporary array
+                temp_rings_array.push(ring);  
+                    
+                // update game state and log change
+                temp_gs_value = ring.type.concat(ring.player); // -> RB, RW at index
+                temp_game_state[ring.loc.index] = temp_gs_value
+                
+                // log to console
+                console.log(`LOG - ${temp_gs_value} init at row ${ring.loc.m_row} / col ${ring.loc.m_col} -> ${ring.loc.index}`);
+            };
+        };
+
+        // loop and match over BLACK rings - only if white not found
+        if (!white_found_flag) {
+            for (const ring_loc_index of blackRings_locs) {
+                
+                if (ring_loc_index == d_zone.loc.index){
+                    
+                    const ring = {  path: {}, //  will hold the shape + we also use the shape for interaction checks
+                                    loc: structuredClone(d_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
+                                    type: ring_id, 
+                                    player: player_black_id
+                                };            
+            
+                    // add to temporary array
+                    temp_rings_array.push(ring);  
+                        
+                    // update game state and log change
+                    temp_gs_value = ring.type.concat(ring.player); // -> RB, RW at index
+                    temp_game_state[ring.loc.index] = temp_gs_value
+                    
+                    // log to console
+                    console.log(`LOG - ${temp_gs_value} init at row ${ring.loc.m_row} / col ${ring.loc.m_col} -> ${ring.loc.index}`);
+                };
+            };
+        };
+    };
+
+    // save temp ring and game_state arrays
+    const s1 = set("game_state", temp_game_state);
+    const s2 = set("rings", temp_rings_array);
+
+    await Promise.allSettled([s1, s2]).then(() => console.log('LOG - Rings initialized'));
+    
+};
+
+export async function init_new_game_data(){
+
+    // init drawing constants -> ideally should be adjusted automatically or take parameter
+    await init_drawing_constants();
+    
+    // initialize new game with data in the server response (saved at previous step)
+    await init_empty_game_objects();
+
+    // setups drop zones
+    await init_drop_zones();
+
+    // init rings
+    await init_rings();
+
+
+};
+
+////////////////////////////////////
+////////////////////////////////////
+// (OLD) DATA functions below
+////////////////////////////////////
+
+// function to write to the game state array
+function update_game_state(index, value){
+    // there should be some input arguments check
+
+    game_state[index] = value;
+
+};
+
+// glue function to setup new game
+function init_objects(){
+
+    // initialize drop zones
+    init_drop_zones();
+
+    // init random rings and markers
+    init_rings();
+    init_markers();
+
 };
 
 // creates and destroys highlights on intersection zones for legal moves
 function update_highlight_zones(){
 // manipulates global variable of legal moves for current ring
-
 
     if (current_legal_moves.length > 0) {
     
@@ -321,36 +454,7 @@ function update_mk_halos(){
     };
  };
 
-// initializes rings and updates game state
-function init_rings(rings_ids = [84, 182, 120, 52], rings_player = player_black_id){
 
-    // place N rings at specified ids (defaults to some pre-chosen but random values)
-    // rings will be black unless color is specified
-
-    for (const id of rings_ids.values()) {
-        
-        // iterate over all the drop zones and find one with matching index
-        for (const drop_zone of drop_zones.values()){
-
-            if (id == drop_zone.loc.index){
-                
-                let R = {   path: {}, // needed as we check if we're clicking it
-                            loc: structuredClone(drop_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
-                            type: ring_id, 
-                            player: rings_player
-                        };            
-        
-                // add to array
-                rings.push(R);  
-                    
-                // update game state and log change
-                update_game_state(R.loc.index, R.type.concat(R.player)); // -> RB, RW at index
-                console.log(`${R.type.concat(R.player)} init at ${R.loc.m_row}:${R.loc.m_col} -> ${R.loc.index}`);
-            };
-        };
-    };
-    
-};
 
 // refresh rings, markers, legal moves, and markers halos -> handling case of changes to underlying drop_zones
 function refresh_objects(){

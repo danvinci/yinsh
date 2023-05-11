@@ -8,7 +8,13 @@
     "build": "vite build",
     "serve": "vite preview"
   },
-  "license": "MIT",
+  "eslintConfig": {
+    "env": {
+      "browser": true,
+      "node": true
+    }
+  },
+  "license": "UNLICENSED",
   "devDependencies": {
     "vite": "^4.1.1",
     "vite-plugin-solid": "^2.5.0"
