@@ -1251,7 +1251,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1095
+port_test = 1096
 
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 begin

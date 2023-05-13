@@ -96,7 +96,7 @@ function update_sizing(win_height, win_width) {
 //////////////////////////////////////////
 
 // from col-major julia matrix to linear index in js
-const reshape_index = (row, col) => ((col-1)*19 + row -1); // js arrays start at 0, hence the -1 offset
+const reshape_index = (row, col) => ( (col-1)*19 + row - 1); // js arrays start at 0, hence the -1 offset
 
 // sets IDs and values used by other functions
 export async function init_game_constants(){
@@ -177,6 +177,14 @@ async function init_empty_game_objects(){
 
     await Promise.allSettled([s1, s2, s3, s4, s5, s6, s7, s8, s9, s10]).then(() => console.log('LOG - Empty game objects initialized'));
 
+    // we're defining some globals, as indexedDB seems not to be able to handle Path2D objects
+
+    globalThis.drop_zones = [];
+    globalThis.rings = [];
+    globalThis.markers = [];
+    globalThis.legal_moves_cues = [];
+    globalThis.markers_halos = [];
+
 
 };
 
@@ -205,7 +213,8 @@ export async function save_srv_response_NewGame(srv_resp_NewGame){
 async function init_drop_zones(){
     
     // empty array
-    const drop_zones = await get("drop_zones");
+    // let drop_zones = await get("drop_zones"); // -> idb-keyval might not handle path objects: Uncaught (in promise) DOMException: Path2D object could not be cloned.
+    // using a global variable for drop zones
 
     // recovering constants -> maybe they can be retrieved in parallel and all awaited later?
     const mm_points = await get("mm_points");
@@ -222,7 +231,7 @@ async function init_drop_zones(){
 
             // using indexes 1:N for accessing the matrix
             // these indexes then become row/col coordinates for rings & markers as inherited post-snapping
-            let point = mm_points[j-1][k-1];
+            const point = mm_points[j-1][k-1];
 
             if (point == 1) {
 
@@ -237,25 +246,29 @@ async function init_drop_zones(){
                 let drop_path = new Path2D()
                 drop_path.arc(apoint_x, apoint_y, S*0.35, 0, 2*Math.PI);
 
-                // all location data is in a nested object
-                drop_zones.push({   path: drop_path, 
-                                    loc: {
-                                        x: apoint_x, 
-                                        y: apoint_y, 
-                                        m_row: j, 
-                                        m_col: k, 
-                                        index: reshape_index(j,k)
-                                        }
-                                });
+                // create temporary object, loc/index data is in a nested object
+                const d_zone = {path: drop_path, 
+                                loc: {
+                                    x: apoint_x, 
+                                    y: apoint_y, 
+                                    m_row: j, 
+                                    m_col: k, 
+                                    index: reshape_index(j,k)
+                                    }
+                                }
 
-            }
-        }
-    }
+                // push object to array
+                drop_zones.push(d_zone);
 
-    const s1 = set("drop_zones", drop_zones);
+            };
+        };
+    };
 
-    await Promise.allSettled([s1]).then(() => console.log('LOG - Drop zones initialized'));
+    //const s1 = set("drop_zones", drop_zones);
 
+    //await Promise.allSettled([s1]).then(() => console.log('LOG - Drop zones initialized'));
+    console.log('LOG - Drop zones initialized (global var)')
+    
 };
 
 // initializes rings and updates game state -> reads from rings data in DB
@@ -263,86 +276,91 @@ async function init_rings(){
 
     // retrieve rings data from DB
 
-        // initial locations of rings from server
-        const whiteRings_locs = await get("whiteRings_locs"); 
-        const blackRings_locs = await get("blackRings_locs");
+    // initial locations of rings from server
+    const whiteRings_locs = await get("whiteRings_locs"); 
+    const blackRings_locs = await get("blackRings_locs");
 
-        // constants used in logic
-        const ring_id = await get("ring_id");
-        const player_black_id = await get("player_black_id");
-        const player_white_id = await get("player_white_id");
+    // console.log(`-- LOG - retrieved W rings ids: ${whiteRings_locs}`)
+    // console.log(`-- LOG - retrieved B rings ids: ${blackRings_locs}`)
 
-        // drop zones (already initialized)
-        const drop_zones = await get("drop_zones");
+    // constants used in logic
+    const ring_id = await get("ring_id");
+    const player_black_id = await get("player_black_id");
+    const player_white_id = await get("player_white_id");
 
-        const temp_rings_array = await get("rings");
-        const temp_game_state = await get("game_state");
+    // drop zones (already initialized) // NOTE: we're using a global variable now :(
+    // const drop_zones = await get("drop_zones");
 
+    // let temp_rings_array = await get("rings"); // note -> could/should be empty at first init
+    let temp_rings_array = [];
+    let temp_game_state = await get("game_state"); // note -> could/should be empty at first init
 
     // INITIALIZE RINGS
     // loop over drop zones and init rings in matching their loc indexes
     // note: we could get a single array from the server? there shouldn't be code repetition
     for (const d_zone of drop_zones){
-        
-        // loop and match over WHITE rings
-        for (const ring_loc_index of whiteRings_locs) {
-            
-            let white_found_flag = false; // use this to minimze loops
-            if (ring_loc_index == d_zone.loc.index){
-                
-                white_found_flag = true;
 
-                const ring = {  path: {}, //  will hold the shape + we also use the shape for interaction checks
-                                loc: structuredClone(d_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
-                                type: ring_id, 
-                                player: player_white_id
-                            };            
+        let index_match_flag = false; // use this to minimze loops
+        let player_to_write = "" // keep track of which player/color we're writing
         
-                // add to temporary array
-                temp_rings_array.push(ring);  
-                    
-                // update game state and log change
-                temp_gs_value = ring.type.concat(ring.player); // -> RB, RW at index
-                temp_game_state[ring.loc.index] = temp_gs_value
-                
-                // log to console
-                console.log(`LOG - ${temp_gs_value} init at row ${ring.loc.m_row} / col ${ring.loc.m_col} -> ${ring.loc.index}`);
+        // loop and match over WHITE rings ids first 
+        for (const index of whiteRings_locs) {
+            if (index == d_zone.loc.index){
+
+                index_match_flag = true; // at this drop zone we'll place a white ring
+                player_to_write = player_white_id;
             };
         };
 
-        // loop and match over BLACK rings - only if white not found
-        if (!white_found_flag) {
-            for (const ring_loc_index of blackRings_locs) {
-                
-                if (ring_loc_index == d_zone.loc.index){
-                    
-                    const ring = {  path: {}, //  will hold the shape + we also use the shape for interaction checks
-                                    loc: structuredClone(d_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
-                                    type: ring_id, 
-                                    player: player_black_id
-                                };            
-            
-                    // add to temporary array
-                    temp_rings_array.push(ring);  
-                        
-                    // update game state and log change
-                    temp_gs_value = ring.type.concat(ring.player); // -> RB, RW at index
-                    temp_game_state[ring.loc.index] = temp_gs_value
-                    
-                    // log to console
-                    console.log(`LOG - ${temp_gs_value} init at row ${ring.loc.m_row} / col ${ring.loc.m_col} -> ${ring.loc.index}`);
+        // loop and match over BLACK rings
+        // skip check on this drop_zone if we already found a white ring
+        if (!index_match_flag) {
+            for (const index of blackRings_locs) {
+                if (index == d_zone.loc.index){
+
+                    index_match_flag = true; // at this drop zone we'll place a white ring
+                    player_to_write = player_black_id;
                 };
             };
         };
+        
+        // save ring object if match found
+        if (index_match_flag){
+        
+            // create ring object
+            const ring = {  path: {}, //  will hold the path, filled in by drawing function
+                            loc: structuredClone(d_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
+                            type: ring_id, 
+                            player: player_to_write
+                        };            
+    
+            // add to temporary array
+            temp_rings_array.push(ring); 
+                
+            // update game state
+            temp_game_state[ring.loc.index] = ring.type.concat(ring.player); // -> RB, RW at index
+
+            // log to console
+            // console.log(`-- LOG - ${ring.type.concat(ring.player)} init at row ${ring.loc.m_row} / col ${ring.loc.m_col} -> ${ring.loc.index}`);
+            
+        };
+        // continue iteration
+
     };
 
     // save temp ring and game_state arrays
-    const s1 = set("game_state", temp_game_state);
-    const s2 = set("rings", temp_rings_array);
+    // const s1 = set("game_state", temp_game_state);
+    //const s2 = set("rings", temp_rings_array);
 
-    await Promise.allSettled([s1, s2]).then(() => console.log('LOG - Rings initialized'));
+    //await Promise.allSettled([s1, s2]).then(() => console.log('LOG - Rings initialized'));
     
+    await set("game_state", temp_game_state)
+    globalThis.rings = structuredClone(temp_rings_array);
+
+    console.log('LOG - Rings initialized (global var)');
+
 };
+
 
 export async function init_new_game_data(){
 
@@ -357,7 +375,6 @@ export async function init_new_game_data(){
 
     // init rings
     await init_rings();
-
 
 };
 

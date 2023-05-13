@@ -1,4 +1,4 @@
-import { get } from "idb-keyval";
+import { set, get } from "idb-keyval";
 
 // DRAWING FUNCTIONS
 
@@ -14,17 +14,18 @@ export async function refresh_draw_state(){
     await draw_board();
 
     // keep drop zones up
-    draw_drop_zones();
+    await draw_drop_zones();
 
-    // draw highlight zones
-    draw_highlight_zones();
+    // draw highlight zones (for legal moves)
+    // TODO -> update function to update highlight zones
+    //draw_highlight_zones();
 
-    // Re-draw all markers and rings
-    draw_markers();
-    draw_rings();
-
+    // Re-draw all rings and markers
+    await draw_rings();
+    await draw_markers();
+    
     // Draw markers halos
-    draw_mk_halos();
+    await draw_markers_halos();
 
     // logging time -> repaint topping at 1ms 
     const delta_time = Date.now() - drawing_start_time;
@@ -34,7 +35,7 @@ export async function refresh_draw_state(){
 
 
 // NOTE:
-// pre-draw board and store it for later  ??
+// pre-draw board and store it ??
 
 
 /* SAVE FOR LATER
@@ -59,7 +60,7 @@ canvas.style.height = `${rect.height}px`;
 async function draw_board(){
 
     // this whole function should be simplified at some point -> re-using premade paths?
-    // use getMany!
+    // also, use getMany for grabbing the values!
 
     // pull out drawing constants from DB
     const mm_points = await get("mm_points");
@@ -67,7 +68,7 @@ async function draw_board(){
     const mm_points_cols = await get("mm_points_cols");
 
     // hardcoding triangles to be drawn for each column (fn call results in silent error)
-    const triangles_toDraw_byCol = {0:3, 1:6, 2:7, 3:8, 4:9, 5:8, 6:9, 7:8, 8:7, 9:6, 10:3 };
+    const triangles_toPaint_byCol = {0:3, 1:6, 2:7, 3:8, 4:9, 5:8, 6:9, 7:8, 8:7, 9:6, 10:3 };
  
     // recovering S & H constants for drawing
     const H = await get("H");
@@ -99,36 +100,31 @@ async function draw_board(){
 
     for (let k = 1; k <= mm_points_cols-1; k++) {
 
-        console.log(`LOG - column ${k}`);
-
         // number of triangles we're expected to draw for each column
-        //let t_toDraw = triangles_toDraw_byCol(mm_points, k-1);
-        let t_toDraw = triangles_toDraw_byCol[k-1];   
-        let t_Drew = 0;
+        //let t_toPaint = triangles_toDraw_byCol(mm_points, k-1);
+        let t_toPaint = triangles_toPaint_byCol[k-1]; 
+        let t_Painted = 0;
 
         // move right for each new column (-H/3 reduces left canvas border)
         ctx.translate(H*k - H/3, H);
 
         // going down the individual columns
         for (let j = 1; j <= mm_points_rows; j++) {
-
-            console.log(`LOG - column ${k}, row ${j}`);
-            // error after col 1 row 7
             
             let point = mm_points[j-1][k-1];
 
-            // manual handling of last column 
+            // manually adjusting values to handle last column 
             if (k == mm_points_cols-1 && (j == 4 || j > 13) ){
                 point = 0;
             }
 
-            // if point is not active just translate down
+            // if point is not active just translate the drawing point down
             if (point == 0) {
                 ctx.translate(0,S/2);
             
             // DRAWING LOOP!
-            // draw triangle but only if we're not done drawing them all
-            } else if (point == 1 && t_Drew < t_toDraw) {
+            // draw triangle, but only if we got some to paint
+            } else if (point == 1 && t_Painted < t_toPaint) {
                 
                 ctx.beginPath();
                 ctx.moveTo(0,0); // starting point for drawing
@@ -136,41 +132,39 @@ async function draw_board(){
                 ctx.lineTo(H,S/2); // mid-point to the right
                 ctx.closePath(); // close shape
                 ctx.stroke();
-                triangle_Drew ++;
-                
-                // check if the next column has more triangles
-                let mustDraw_stick = (t_toDraw < triangles_toDraw_byCol[k]);
-                
-                    // we do this for all columns except last
-                    if (mustDraw_stick && k < mm_points_cols) {
+                t_Painted ++; // increment counter of triangles drew
+
+                // check if the following column (k) has more triangles to be painted
+                // if yes, we need to draw an extra edge as a bridge
+                let paint_edge_flag = (t_toPaint < triangles_toPaint_byCol[k]);
+
+                    // we draw the extra edge for all columns except the last one 
+                    if (paint_edge_flag && k < mm_points_cols) {
 
                         // first triangle bridging up
-                        if (triangle_Drew == 1){
+                        if (t_Painted == 1){
                             ctx.beginPath();
                             ctx.moveTo(0,0); 
                             ctx.lineTo(H,-S/2); 
                             //ctx.strokeStyle = "#FA5537";
                             ctx.stroke();
-                            
                             //ctx.strokeStyle = colT;
                         }
 
                         // last triangle bridging down
-                        if (t_Drew == t_toDraw){
+                        if (t_Painted == t_toPaint){
                             ctx.beginPath();
                             ctx.moveTo(0,S);
                             ctx.lineTo(H,S+S/2);
                             //ctx.strokeStyle = "#32CBFF";
                             ctx.stroke();
-                            
                             //ctx.strokeStyle = colT; // reset color
                         }
-
                     }
 
                 // draw vertical strokes 
                 // last column, last triangle done (+2 hack as we disqualify points above)
-                if (k == mm_points_cols-1 && t_toDraw == t_Drew + 2) {
+                if (k == mm_points_cols-1 && t_toPaint == t_Painted + 2) {
                     // stroke down
                     ctx.beginPath();
                     ctx.moveTo(0,S); 
@@ -200,7 +194,7 @@ async function draw_board(){
 
         
             } // stop going down the column and drawing if you're done 
-            else if ( t_Drew == t_toDraw ) {
+            else if ( t_Painted == t_toPaint ) {
                 break;
             }
         }
@@ -209,61 +203,77 @@ async function draw_board(){
     }
         
     ctx.restore();
-    console.log("LOG - Board drawn on canvas");
+    console.log("LOG - Board painted on canvas");
 
 };
 
 // drop zones
-function draw_drop_zones(){
-    ctx.save();
+async function draw_drop_zones(){
+    
+    // retrieve drop_zones data
+    const drop_zones = await get("drop_zones");
+    
 
+    // drawing
+    ctx.save();
     ctx.globalAlpha = 0; 
     //ctx.strokeStyle = "#666";
     ctx.fillStyle = "#666";
     //ctx.lineWidth = 0.5;
 
     for(let i=0; i<drop_zones.length; i++){
-    
         ctx.fill(drop_zones[i].path); 
         //ctx.stroke(drop_zones[i].path); 
-    
     };   
     
     ctx.restore();
+    console.log("LOG - Drop zones painted on canvas");
 };
 
 // rings
-function draw_rings(){
+async function draw_rings(){
+    
+    // retrieve rings data + other constants
+    // let temp_rings_array = []
+    // let rings = await get("rings");
+
+    const player_black_id = await get("player_black_id");
+    const player_white_id = await get("player_white_id");
+
+    const S = await get("S");
+
+    // drawing
+    
     ctx.save();
 
-    // reads the global rings object
-    for (const s of rings.values()) {
+    // reading from global variable
+    for (let ring of rings.values()) {
 
         let inner = S*0.38;
         let ring_lineWidth = inner/3;
 
         // draw black ring
-        if (s.player == player_black_id){ 
+        if (ring.player == player_black_id){ 
             
             ctx.strokeStyle = "#1A1A1A";
             ctx.lineWidth = ring_lineWidth;            
             
             let ring_path = new Path2D()
-            ring_path.arc(s.loc.x, s.loc.y, inner, 0, 2*Math.PI);
+            ring_path.arc(ring.loc.x, ring.loc.y, inner, 0, 2*Math.PI);
             ctx.stroke(ring_path);
 
             // update path shape definition -> needed for rings (click within shape)
-            s.path = ring_path;
+            ring.path = ring_path;
     
         // draw white ring
-        } else if (s.player == player_white_id){
+        } else if (ring.player == player_white_id){
 
             //inner white ~ light gray
             ctx.strokeStyle = "#F6F7F6";
             ctx.lineWidth = ring_lineWidth*0.9;            
             
             let ring_path = new Path2D()
-            ring_path.arc(s.loc.x, s.loc.y, inner, 0, 2*Math.PI);
+            ring_path.arc(ring.loc.x, ring.loc.y, inner, 0, 2*Math.PI);
             ctx.stroke(ring_path);
 
             // outer border
@@ -271,7 +281,7 @@ function draw_rings(){
             ctx.lineWidth = ring_lineWidth/12; 
             
             let outerB_path = new Path2D()
-            outerB_path.arc(s.loc.x, s.loc.y, inner*1.15, 0, 2*Math.PI);
+            outerB_path.arc(ring.loc.x, ring.loc.y, inner*1.15, 0, 2*Math.PI);
             ctx.stroke(outerB_path);
             
             ring_path.addPath(outerB_path);
@@ -281,22 +291,37 @@ function draw_rings(){
             ctx.lineWidth = ring_lineWidth/12;  
 
             let innerB_path = new Path2D()
-            innerB_path.arc(s.loc.x, s.loc.y, inner*0.85, 0, 2*Math.PI);
+            innerB_path.arc(ring.loc.x, ring.loc.y, inner*0.85, 0, 2*Math.PI);
             ctx.stroke(innerB_path);
 
             ring_path.addPath(outerB_path);
 
             // update path shape definition
-            s.path = ring_path;
+            ring.path = ring_path;
 
         };
     };
 
+    // save updated rings definitions (with paths)
+    // await set("rings", rings)
+
     ctx.restore();
+
+    if (rings.length > 0) {
+        console.log("LOG - Rings painted on canvas");
+    }
+    
 };
 
 // markers
-function draw_markers(){
+async function draw_markers(){
+
+    // retrieve constants
+    const player_black_id = await get("player_black_id");
+    const player_white_id = await get("player_white_id");
+    const S = await get("S");
+
+    // drawing
     ctx.save();
 
     // reads the global markers object
@@ -337,10 +362,48 @@ function draw_markers(){
     };
 
     ctx.restore();
+
+    if (markers.length > 0) {
+        console.log("LOG - Markers painted on canvas");
+    }
+
 };
+
+
+// highlight markers in scoring row
+async function draw_markers_halos(){
+    
+    // retrieve constants
+    const S = await get("S");
+    
+    ctx.save();
+
+    // to be checked only if any markers halos have been created
+    // the whole function is called anyway at each refresh
+    let hot = false;
+    if (markers_halos.length > 0) {hot = markers_halos[0].hot_flag;}; // I forgot why I built it this way :(
+
+    ctx.globalAlpha = 0.8; 
+    ctx.strokeStyle = hot ? "#96ce96" : "#98C1D6";
+    ctx.lineWidth = S/10; 
+
+    for(const mk_halo of markers_halos){
+        ctx.stroke(mk_halo.path); 
+    };        
+    
+    ctx.restore();
+
+    if (markers_halos.length > 0) {
+        console.log("LOG - Markers halos painted on canvas");
+    }
+    
+};
+
 
 // highlight legal moves
 function draw_highlight_zones(){
+    
+    
     ctx.save();
 
     ctx.globalAlpha = 1; 
@@ -358,26 +421,7 @@ function draw_highlight_zones(){
     ctx.restore();
 };
 
-// highlight markers in scoring row
-function draw_mk_halos(){
-    ctx.save();
 
-    // to be checked only if markers halos have been created
-    // this function is called anyway at each refresh
-    hot = false;
-    if (mk_halos.length > 0) {hot = mk_halos[0].hot_flag;};
-
-    ctx.globalAlpha = 0.8; 
-    ctx.strokeStyle = hot ? "#96ce96" : "#98C1D6";
-    ctx.lineWidth = S/10; // refer to global sizing var
-
-    for(let i=0; i<mk_halos.length; i++){
-    
-        ctx.stroke(mk_halos[i].path); 
-    };        
-    
-    ctx.restore();
-};
 
 
 // HELPER FUNCTIONS 
@@ -402,7 +446,7 @@ function numTriangles(array) {
 // helper function to know how many triangles we should draw
 function triangles_toDraw_byCol(ref_matrix, col_number) {
 
-    col_array = ref_matrix.map(s => s[col_number]).flat();
+    col_array = ref_matrix.map(val => val[col_number]).flat();
 
     let counter = 0;
     for (const i of col_array) {
