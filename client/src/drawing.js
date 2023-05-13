@@ -3,9 +3,9 @@ import { set, get } from "idb-keyval";
 // DRAWING FUNCTIONS
 
 // glue function called by orchestrator after data manipulation
-export async function refresh_draw_state(){
+export async function refresh_canvas_state(){
 
-    const drawing_start_time = Date.now()
+    const painting_start_time = Date.now()
 
     // clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -27,15 +27,14 @@ export async function refresh_draw_state(){
     // Draw markers halos
     await draw_markers_halos();
 
-    // logging time -> repaint topping at 1ms 
-    const delta_time = Date.now() - drawing_start_time;
-    console.log(`LOG - Drawing time: ${delta_time}ms`);
+    // logging time 
+    console.log(`LOG - Total painting time: ${Date.now() - painting_start_time}ms`);
 
 }; 
 
 
 // NOTE:
-// pre-draw board and store it ??
+// pre-draw board and store it?
 
 
 /* SAVE FOR LATER
@@ -56,8 +55,10 @@ canvas.style.width = `${rect.width}px`;
 canvas.style.height = `${rect.height}px`;
 */
 
-// drawing main board
+// game board
 async function draw_board(){
+
+    const painting_start_time = Date.now()
 
     // this whole function should be simplified at some point -> re-using premade paths?
     // also, use getMany for grabbing the values!
@@ -203,12 +204,16 @@ async function draw_board(){
     }
         
     ctx.restore();
-    console.log("LOG - Board painted on canvas");
+    
+    // logging time 
+    console.log(`LOG - Board painted on canvas: ${Date.now() - painting_start_time}ms`);
 
 };
 
 // drop zones
 async function draw_drop_zones(){
+
+    const painting_start_time = Date.now()
     
     // retrieve drop_zones data
     const drop_zones = await get("drop_zones");
@@ -227,11 +232,13 @@ async function draw_drop_zones(){
     };   
     
     ctx.restore();
-    console.log("LOG - Drop zones painted on canvas");
+    console.log(`LOG - Drop zones painted on canvas: ${Date.now() - painting_start_time}ms`);
 };
 
 // rings
 async function draw_rings(){
+
+    const painting_start_time = Date.now()
     
     // retrieve rings data + other constants
     // let temp_rings_array = []
@@ -308,13 +315,15 @@ async function draw_rings(){
     ctx.restore();
 
     if (rings.length > 0) {
-        console.log("LOG - Rings painted on canvas");
+        console.log(`LOG - Rings painted on canvas: ${Date.now() - painting_start_time}ms`);
     }
     
 };
 
 // markers
 async function draw_markers(){
+
+    const painting_start_time = Date.now()
 
     // retrieve constants
     const player_black_id = await get("player_black_id");
@@ -364,14 +373,15 @@ async function draw_markers(){
     ctx.restore();
 
     if (markers.length > 0) {
-        console.log("LOG - Markers painted on canvas");
+        console.log(`LOG - Markers painted on canvas: ${Date.now() - painting_start_time}ms`);
     }
 
 };
 
-
 // highlight markers in scoring row
 async function draw_markers_halos(){
+
+    const painting_start_time = Date.now()
     
     // retrieve constants
     const S = await get("S");
@@ -394,10 +404,15 @@ async function draw_markers_halos(){
     ctx.restore();
 
     if (markers_halos.length > 0) {
-        console.log("LOG - Markers halos painted on canvas");
+        console.log(`LOG - Markers halos painted on canvas: ${Date.now() - painting_start_time}ms`);
     }
     
 };
+
+
+////////////////////////////////////////
+//////// TO BE REFACTORED BELOW ////////
+////////////////////////////////////////
 
 
 // highlight legal moves
