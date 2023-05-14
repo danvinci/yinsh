@@ -1,7 +1,5 @@
-import { set, get } from "idb-keyval";
-
 // DATA
-// global data objects and functions operating on them + utils like reshape_index
+// data objects and functions operating on them + data utils like reshape_index
 
 // matrix of active points on the grid
 const mm_points = [
@@ -91,139 +89,184 @@ function update_sizing(win_height, win_width) {
 
 };
 
-////////////////////////////////////////// 
-//////////////// DATA FUNCTIONS (REWRITE)
-//////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+///// DATA FUNCTIONS (REWRITE) ////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
 
 // from col-major julia matrix to linear index in js
 const reshape_index = (row, col) => ( (col-1)*19 + row - 1); // js arrays start at 0, hence the -1 offset
 
-// sets IDs and values used by other functions
-export async function init_game_constants(){
 
-    // I should use setMany and getMany !
+// init global object / wipe all data
+export function init_global_obj_y_params(){
+
+    // init/wipe global object
+    globalThis.yinsh = {};
+
+    // write constants in -> yinsh.data.params
+    init_const_parameters();
+    
+};
+
+// sets IDs and values used by other functions ->  yinsh.data.params
+function init_const_parameters(){
 
     // constant used across the game for:
     // defining rings/markers, log status, and check conditions within functions
+
+    // init temporary object
+    const _params = {};
+
+    // note: these should come from the server as well (ids etc, so I can change them from one-side only)
+    _params.ring_id =  "R";
+    _params.marker_id =  "M";
+    _params.player_black_id = "B";
+    _params.player_white_id = "W";
+
+
+        // matrix of active points on the grid
+    _params.mm_points = [
+            [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0], 
+            [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0], 
+            [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+            [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+            [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+            [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+            [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+            [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+            [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+            [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+            [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+            [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+            [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
+            [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+            [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+            [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
+            [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
+            [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0], 
+            [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0] 
+            ];
+
+    _params.mm_points_rows = 19;
+    _params.mm_points_cols = 11;
+
+
+    // save to global obj and log
+    yinsh.constant_params = structuredClone(_params);
+    console.log('LOG - Constant params set');
+
+};
+
+export function init_new_game_data(){
+
+    const game_objs_start_time = Date.now()
+
+    // init drawing constants -> ideally should be adjusted automatically or take parameter
+    init_drawing_constants();
     
-    const s1 = set("ring_id", "R")
-    const s2 = set("marker_id", "M")
-    const s3 = set("player_black_id", "B")
-    const s4 = set("player_white_id", "W")
+    // initialize new game with data in the server response (saved at previous step)
+    init_empty_game_objects();
 
-    // matrix of active points on the grid
-    const mm_points = [
-        [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0], 
-        [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0], 
-        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
-        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
-        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
-        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
-        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
-        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-        [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
-        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
-        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-        [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
-        [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0], 
-        [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0] 
-        ];
+    // setups drop zones
+    init_drop_zones();
 
-    const s5 = set("mm_points", mm_points) // matrix used for drawing game board
-    const s6 = set("mm_points_rows", 19)
-    const s7 = set("mm_points_cols", 11)
+    // init rings
+    init_rings();
 
-    await Promise.allSettled([s1, s2, s3, s4, s5, s6, s7]).then(()=> console.log('LOG - Game constants initialized'));
+    // logging time 
+    console.log(`LOG - All game objects initialized: ${Date.now() - game_objs_start_time}ms`);
 
 };
 
-// sets S and H for drawing the board and game objects
-async function init_drawing_constants(){
+// sets S and H for drawing the board and game objects -> yinsh.drawing.params
+// these would be updated when a window is resied
+function init_drawing_constants(){
 
-    // constants for drawing on canvas
-    const s1 = set("S", 47);
-    const s2 = set("H", Math.round(47 * Math.sqrt(3)/2)); 
+    // init temporary object
+    const _params = {};
 
-    await Promise.allSettled([s1, s2]).then(()=> console.log('LOG - Drawing constants set'));
+    _params.S = 47 // defaul values, ideally should be set depending on window size
+    _params.H = Math.round(47 * Math.sqrt(3)/2);
+
+
+    // save to global obj and log
+    yinsh.drawing_params = structuredClone(_params);
+    console.log('LOG - Drawing constants set');
 
 };
 
-// inits/resets game objects (rings, markers, visual cues)
-async function init_empty_game_objects(){
+// inits/resets game objects (rings, markers, visual cues) ->  yinsh.objs.rings/markers/drop_zones/etc
+function init_empty_game_objects(){
+
+    // init temporary object
+    const _game_objects = {};
 
     // game state
-    const s1 = set("game_state", Array(19*11).fill(""))
+    _game_objects.game_state = Array(19*11).fill("");
 
-    // objects
-    const s2 = set("rings", [])  // -> array for rings
-    const s3 = set("markers", []) // -> array for markers
-    const s4 = set("drop_zones", []) // -> array for drop zones (markers and rings are placed at their coordinates only)
-    const s5 = set("highlight_zones", []) // -> array for highlight_zones (drawn on/off based on legal moves)
+    // objects on canvas
+    _game_objects.rings = []; // -> array for rings
+    _game_objects.markers = []; // -> array for markers
+    _game_objects.drop_zones = []; // -> array for drop zones (markers and rings are placed at their coordinates only)
 
     // moves
-    const s6 = set("current_legal_moves", []) // -> location IDs for legal moves
-    const s7 = set("current_move", {on: false, start_index: null}) // -> details for move currently in progress 
+    _game_objects.legal_moves_ids = []; // -> location IDs for legal moves
+    _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal moves)
+    _game_objects.current_move = {on: false, start_index: 0}; // -> details for move currently in progress 
 
-    // scoring 
-    const s8 = set("mk_halos", []) // -> halos around markers when scoring
-    const s9 = set("mk_sel_scoring", {ids:[], hot:false}) // -> tracking IDs of markers/halos that can be selected for finalizing the score
-    const s10 = set("score_handling_var", {on: false, mk_sel_array: [], num_rows: {}, details: []}) // // -> object with all scoring information, used for handling scoring scenarios
+    // score handling
+    _game_objects.markers_halos = []; // -> halos around markers when scoring
+        
+        // NOTE: rename the keys below, I don't like them
+    _game_objects.mk_sel_scoring = {ids:[], hot:false}; // -> tracking IDs of markers/halos that can be selected for finalizing the score
+    _game_objects.score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []}; // // -> object with all scoring information, used for handling scoring scenarios
 
 
-    await Promise.allSettled([s1, s2, s3, s4, s5, s6, s7, s8, s9, s10]).then(() => console.log('LOG - Empty game objects initialized'));
-
-    // we're defining some globals, as indexedDB seems not to be able to handle Path2D objects
-
-    globalThis.drop_zones = [];
-    globalThis.rings = [];
-    globalThis.markers = [];
-    globalThis.legal_moves_cues = [];
-    globalThis.markers_halos = [];
-
+    // save to global obj and log
+    yinsh.objs = structuredClone(_game_objects);
+    console.log('LOG - Empty game objects initialized');
 
 };
 
-// dedicated function for saving server response data when asking for new game
-export async function save_srv_response_NewGame(srv_resp_NewGame){
+// saving server response data when asking for new game -> server_data.game_id/client_player_id/etc
+export function save_srv_response_NewGame(srv_resp_NewGame){
     
-    // SAVE data to indexedDB via idb-keyval library
-    const s1 = set("game_id", srv_resp_NewGame.game_id) // game ID
+    // init temporary object
+    const _server_response = {};
+
+    _server_response.game_id = srv_resp_NewGame.game_id; // game ID
 
     // assign color to local player (this client is the caller)
-    const s2 = set("client_player_id", srv_resp_NewGame.caller_color); // player ID (B ~ Black, W ~ White)
+    _server_response.client_player_id = srv_resp_NewGame.caller_color; // player ID (B ~ Black, W ~ White)
 
-    // save initial rings locations
-    const s3 = set("whiteRings_locs", srv_resp_NewGame.whiteRings_ids); 
-    const s4 = set("blackRings_locs", srv_resp_NewGame.blackRings_ids);
+    // initial rings locations
+    _server_response.whiteRings_ids = srv_resp_NewGame.whiteRings_ids; 
+    _server_response.blackRings_ids = srv_resp_NewGame.blackRings_ids;
 
-    // save pre-computed possible legal moves / now just for WHITE player, later expose as a setting?
-    const s5 = set("next_legal_moves", srv_resp_NewGame.next_legalMoves);
+    // pre-computed possible legal moves / now just for WHITE player, later expose as a setting?
+    _server_response.next_legal_moves = srv_resp_NewGame.next_legalMoves;
     
-    await Promise.allSettled([s1, s2, s3, s4, s5]).then(() => console.log('LOG - SRV response saved'));
+     // save to global obj and log
+     yinsh.server_data = structuredClone(_server_response);
+     console.log('LOG - Server response saved');
 
 };
 
 // initialize drop zones -> used to propagate location data to rings, markers, and visual cues
-// depends on canvas size !
-async function init_drop_zones(){
-    
-    // empty array
-    // let drop_zones = await get("drop_zones"); // -> idb-keyval might not handle path objects: Uncaught (in promise) DOMException: Path2D object could not be cloned.
-    // using a global variable for drop zones
+// NOTE: sensitive to canvas size
+function init_drop_zones(){
 
-    // recovering constants -> maybe they can be retrieved in parallel and all awaited later?
-    const mm_points = await get("mm_points");
-    const mm_points_rows = await get("mm_points_rows");
-    const mm_points_cols = await get("mm_points_cols");
+    // recovering constants
+    const mm_points = yinsh.constant_params.mm_points;
+    const mm_points_rows = yinsh.constant_params.mm_points_rows;
+    const mm_points_cols = yinsh.constant_params.mm_points_cols;
 
     // recovering S & H constants for drawing
-    const H = await get("H");
-    const S = await get("S");
+    const S = yinsh.drawing_params.S;
+    const H = yinsh.drawing_params.H;
+
+    // init temp empty array for drop zones
+    let _drop_zones = [];
 
     // create paths for listening to click events on all intersections
     for (let j = 1; j <= mm_points_rows; j++) {
@@ -239,15 +282,15 @@ async function init_drop_zones(){
                 // we move by x = (H * k) & y = H for each new column
                 // we also move by y = S/2 in between each row (active and non-active points)
                 
-                let apoint_x = H * k - H/3; // H/3 adj factor to slim margin left to canvas
-                let apoint_y = H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
+                const apoint_x = H * k - H/3; // H/3 adj factor to slim margin left to canvas
+                const apoint_y = H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
                 
                 // create paths and add them to the global array
-                let drop_path = new Path2D()
-                drop_path.arc(apoint_x, apoint_y, S*0.35, 0, 2*Math.PI);
+                let d_zone_path = new Path2D();
+                    d_zone_path.arc(apoint_x, apoint_y, S*0.35, 0, 2*Math.PI);
 
                 // create temporary object, loc/index data is in a nested object
-                const d_zone = {path: drop_path, 
+                const d_zone = {path: d_zone_path, 
                                 loc: {
                                     x: apoint_x, 
                                     y: apoint_y, 
@@ -255,46 +298,42 @@ async function init_drop_zones(){
                                     m_col: k, 
                                     index: reshape_index(j,k)
                                     }
-                                }
+                                };
 
-                // push object to array
-                drop_zones.push(d_zone);
+                // push object to temp array
+                _drop_zones.push(d_zone);
 
             };
         };
     };
 
-    //const s1 = set("drop_zones", drop_zones);
 
-    //await Promise.allSettled([s1]).then(() => console.log('LOG - Drop zones initialized'));
-    console.log('LOG - Drop zones initialized (global var)')
+    // save to global obj and log (for some reason structuredClone fails)
+    yinsh.objs.drop_zones = _drop_zones;
+    console.log('LOG - Drop zones initialized')
     
 };
 
 // initializes rings and updates game state -> reads from rings data in DB
-async function init_rings(){
-
-    // retrieve rings data from DB
+function init_rings(){
 
     // initial locations of rings from server
-    const whiteRings_locs = await get("whiteRings_locs"); 
-    const blackRings_locs = await get("blackRings_locs");
-
-    // console.log(`-- LOG - retrieved W rings ids: ${whiteRings_locs}`)
-    // console.log(`-- LOG - retrieved B rings ids: ${blackRings_locs}`)
+    const whiteRings_ids = yinsh.server_data.whiteRings_ids; 
+    const blackRings_ids = yinsh.server_data.blackRings_ids;
 
     // constants used in logic
-    const ring_id = await get("ring_id");
-    const player_black_id = await get("player_black_id");
-    const player_white_id = await get("player_white_id");
+    const ring_id = yinsh.constant_params.ring_id;
+    const player_black_id = yinsh.constant_params.player_black_id;
+    const player_white_id = yinsh.constant_params.player_white_id;
 
-    // drop zones (already initialized) // NOTE: we're using a global variable now :(
-    // const drop_zones = await get("drop_zones");
+    // init temporary rings array
+    let _rings_array = [];
+    // retrieve game state
+    let _game_state = yinsh.objs.game_state;
 
-    // let temp_rings_array = await get("rings"); // note -> could/should be empty at first init
-    let temp_rings_array = [];
-    let temp_game_state = await get("game_state"); // note -> could/should be empty at first init
-
+    // retrieve drop_zones
+    const drop_zones = yinsh.objs.drop_zones;
+    
     // INITIALIZE RINGS
     // loop over drop zones and init rings in matching their loc indexes
     // note: we could get a single array from the server? there shouldn't be code repetition
@@ -304,7 +343,7 @@ async function init_rings(){
         let player_to_write = "" // keep track of which player/color we're writing
         
         // loop and match over WHITE rings ids first 
-        for (const index of whiteRings_locs) {
+        for (const index of whiteRings_ids) {
             if (index == d_zone.loc.index){
 
                 index_match_flag = true; // at this drop zone we'll place a white ring
@@ -315,7 +354,7 @@ async function init_rings(){
         // loop and match over BLACK rings
         // skip check on this drop_zone if we already found a white ring
         if (!index_match_flag) {
-            for (const index of blackRings_locs) {
+            for (const index of blackRings_ids) {
                 if (index == d_zone.loc.index){
 
                     index_match_flag = true; // at this drop zone we'll place a white ring
@@ -335,51 +374,31 @@ async function init_rings(){
                         };            
     
             // add to temporary array
-            temp_rings_array.push(ring); 
+            _rings_array.push(ring); 
+
                 
             // update game state
-            temp_game_state[ring.loc.index] = ring.type.concat(ring.player); // -> RB, RW at index
-
-            // log to console
-            // console.log(`-- LOG - ${ring.type.concat(ring.player)} init at row ${ring.loc.m_row} / col ${ring.loc.m_col} -> ${ring.loc.index}`);
+            _game_state[ring.loc.index] = ring.type.concat(ring.player); // -> RB, RW at index
             
         };
+        
         // continue iteration
 
     };
 
-    // save temp ring and game_state arrays
-    // const s1 = set("game_state", temp_game_state);
-    //const s2 = set("rings", temp_rings_array);
-
-    //await Promise.allSettled([s1, s2]).then(() => console.log('LOG - Rings initialized'));
+    // save rings, updated game state, and log
+    yinsh.objs.game_state = structuredClone(_game_state);
+    yinsh.objs.rings = structuredClone(_rings_array);
     
-    await set("game_state", temp_game_state)
-    globalThis.rings = structuredClone(temp_rings_array);
-
-    console.log('LOG - Rings initialized (global var)');
+    console.log('LOG - Rings initialized & game state updated');
 
 };
 
 
-export async function init_new_game_data(){
 
-    // init drawing constants -> ideally should be adjusted automatically or take parameter
-    await init_drawing_constants();
-    
-    // initialize new game with data in the server response (saved at previous step)
-    await init_empty_game_objects();
 
-    // setups drop zones
-    await init_drop_zones();
-
-    // init rings
-    await init_rings();
-
-};
-
-////////////////////////////////////
-////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // (OLD) DATA functions below
 ////////////////////////////////////
 
