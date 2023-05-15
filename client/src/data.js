@@ -98,7 +98,7 @@ const reshape_index = (row, col) => ( (col-1)*19 + row - 1); // js arrays start 
 
 
 // init global object / wipe all data
-export function init_global_obj_y_params(){
+export function init_global_obj_params(){
 
     // init/wipe global object
     globalThis.yinsh = {};
@@ -163,14 +163,11 @@ export function init_new_game_data(){
 
     // init drawing constants -> ideally should be adjusted automatically or take parameter
     init_drawing_constants();
-    
-    // initialize new game with data in the server response (saved at previous step)
-    init_empty_game_objects();
 
     // setups drop zones
     init_drop_zones();
 
-    // init rings
+    // init rings (uses data from server)
     init_rings();
 
     // logging time 
@@ -196,30 +193,30 @@ function init_drawing_constants(){
 };
 
 // inits/resets game objects (rings, markers, visual cues) ->  yinsh.objs.rings/markers/drop_zones/etc
-function init_empty_game_objects(){
+export function init_empty_game_objects(){
 
     // init temporary object
     const _game_objects = {};
 
-    // game state
-    _game_objects.game_state = Array(19*11).fill("");
+        // game state
+        _game_objects.game_state = Array(19*11).fill("");
 
-    // objects on canvas
-    _game_objects.rings = []; // -> array for rings
-    _game_objects.markers = []; // -> array for markers
-    _game_objects.drop_zones = []; // -> array for drop zones (markers and rings are placed at their coordinates only)
+        // objects on canvas
+        _game_objects.rings = []; // -> array for rings
+        _game_objects.markers = []; // -> array for markers
+        _game_objects.drop_zones = []; // -> array for drop zones (markers and rings are placed at their coordinates only)
 
-    // moves
-    _game_objects.legal_moves_ids = []; // -> location IDs for legal moves
-    _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal moves)
-    _game_objects.current_move = {on: false, start_index: 0}; // -> details for move currently in progress 
+        // moves
+        _game_objects.legal_moves_ids = []; // -> location IDs for legal moves
+        _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal moves)
+        _game_objects.current_move = {on: false, start_index: 0}; // -> details for move currently in progress 
 
-    // score handling
-    _game_objects.markers_halos = []; // -> halos around markers when scoring
-        
-        // NOTE: rename the keys below, I don't like them
-    _game_objects.mk_sel_scoring = {ids:[], hot:false}; // -> tracking IDs of markers/halos that can be selected for finalizing the score
-    _game_objects.score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []}; // // -> object with all scoring information, used for handling scoring scenarios
+        // score handling
+        _game_objects.markers_halos = []; // -> halos around markers when scoring
+            
+            // NOTE: rename the keys below, I don't like them
+        _game_objects.mk_sel_scoring = {ids:[], hot:false}; // -> tracking IDs of markers/halos that can be selected for finalizing the score
+        _game_objects.score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []}; // // -> object with all scoring information, used for handling scoring scenarios
 
 
     // save to global obj and log
@@ -234,17 +231,17 @@ export function save_srv_response_NewGame(srv_resp_NewGame){
     // init temporary object
     const _server_response = {};
 
-    _server_response.game_id = srv_resp_NewGame.game_id; // game ID
+        _server_response.game_id = srv_resp_NewGame.game_id; // game ID
 
-    // assign color to local player (this client is the caller)
-    _server_response.client_player_id = srv_resp_NewGame.caller_color; // player ID (B ~ Black, W ~ White)
+        // assign color to local player (this client is the caller)
+        _server_response.client_player_id = srv_resp_NewGame.caller_color; // player ID (B ~ Black, W ~ White), one of player_black_id / player_white_id 
 
-    // initial rings locations
-    _server_response.whiteRings_ids = srv_resp_NewGame.whiteRings_ids; 
-    _server_response.blackRings_ids = srv_resp_NewGame.blackRings_ids;
+        // initial rings locations
+        _server_response.whiteRings_ids = srv_resp_NewGame.whiteRings_ids; 
+        _server_response.blackRings_ids = srv_resp_NewGame.blackRings_ids;
 
-    // pre-computed possible legal moves / now just for WHITE player, later expose as a setting?
-    _server_response.next_legal_moves = srv_resp_NewGame.next_legalMoves;
+        // pre-computed possible legal moves / now just for WHITE player, later expose as a setting?
+        _server_response.next_legal_moves = srv_resp_NewGame.next_legalMoves;
     
      // save to global obj and log
      yinsh.server_data = structuredClone(_server_response);
@@ -332,12 +329,12 @@ function init_rings(){
     let _game_state = yinsh.objs.game_state;
 
     // retrieve drop_zones
-    const drop_zones = yinsh.objs.drop_zones;
+    const _drop_zones = yinsh.objs.drop_zones;
     
     // INITIALIZE RINGS
     // loop over drop zones and init rings in matching their loc indexes
     // note: we could get a single array from the server? there shouldn't be code repetition
-    for (const d_zone of drop_zones){
+    for (const d_zone of _drop_zones){
 
         let index_match_flag = false; // use this to minimze loops
         let player_to_write = "" // keep track of which player/color we're writing
@@ -395,6 +392,157 @@ function init_rings(){
 };
 
 
+// function to update the game state array at specific arrays
+// to minimize copies when doing lots of updates, some functions replicate the same functionality
+function update_game_state(index, value){
+
+    // retrieves current game state
+    let _game_state = structuredClone(yinsh.objs.game_state);
+
+    // edits it
+    _game_state[index] = value;
+
+    // writes it back in
+    yinsh.objs.game_state = _game_state
+
+};
+
+// keeps up to date the array of cues for legal moves, to match the array of legal_moves_ids
+function update_legal_moves_cues(){
+   
+    // retrieves ids of legal moves
+    const _legal_moves_ids = structuredClone(yinsh.objs.legal_moves_ids);
+
+    // init empty cues array
+    let _legal_cues = [];
+    
+        if (_legal_moves_ids.length > 0) {
+
+            // retrieve drop_zones & S parameter
+            const _drop_zones = structuredClone(yinsh.objs.drop_zones);
+            const S = yinsh.drawing_params.S;
+
+            // for each linear id of the legal moves
+            for (const id of _legal_moves_ids) {
+
+                // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
+                for(const d_zone of _drop_zones){
+                    
+                    if (d_zone.loc.index == id){
+
+                        // create shape + coordinates and push to array
+                        let cue_path = new Path2D()
+                            cue_path.arc(d_zone.loc.x, d_zone.loc.y, S*0.1, 0, 2*Math.PI);
+                        
+                        _legal_cues.push({path: cue_path});
+                
+                    };
+                };        
+            };
+        };
+
+    // save updated cues and log
+    yinsh.objs.legal_moves_cues = _legal_cues;
+    
+    console.log('LOG - Cues for legal moves updated');
+        
+};
+
+
+// adds marker -> called when ring is picked, can only add one marker per time
+function add_marker(ref_loc){ // input should be copy of loc from drop zone (?)
+
+    // retrieve current player and id for markers
+    const _player_id = structuredClone(yinsh.server_response.client_player_id);
+    const _marker_id = structuredClone(yinsh.constant_params.marker_id);
+
+    // retrieve array of markers 
+    let _markers = structuredClone(yinsh.objs.markers);
+    
+    // instate new marker object 
+    const m = { path: {}, // <- to be filled in at drawing time
+                loc: structuredClone(ref_loc),
+                type: _marker_id, 
+                player: _player_id 
+            }; 
+          
+    // add to temp array and to global object
+    _markers.push(m);  
+    yinsh.objs.markers = _markers;
+    
+    // update game state and log change
+    update_game_state(m.loc.index, m.type.concat(m.player)); // -> MB, MW at index
+    console.log(`LOG - Marker ${m.player} added at index ${m.loc.index}`);
+        
+};
+
+
+// removes markers -> called when ring dropped in same location or scoring row is selected
+function remove_markers(mk_indexes_array){ // input is array of loc indexes
+
+    // retrieve array of markers and latest game_state
+    const _markers = structuredClone(yinsh.objs.markers);
+    let _game_state = structuredClone(yinsh.objs.game_state);
+
+    // filters and updates global object
+    yinsh.objs.markers = _markers.filter(m => !mk_indexes_array.includes(m.loc.index));
+
+    // cleans game_state copy at selected indexes and updates global object
+    mk_indexes_array.forEach(index => _game_state[index]='');
+    yinsh.objs.game_state = _game_state
+    
+    console.log(`LOG - Marker(s) removed from indexes: ${mk_indexes_array}`);
+
+};
+    
+
+
+
+// flips markers (swaps player for objects & updates game state)
+function flip_markers(mk_indexes_array){
+
+    // retrieve consts for player ids and marker type
+    const _player_black_id = structuredClone(yinsh.constant_params.player_black_id);
+    const _player_white_id = structuredClone(yinsh.constant_params.player_white_id);
+
+    // retrieve array of markers and latest game_state
+    let _markers = structuredClone(yinsh.objs.markers);
+    let _game_state = structuredClone(yinsh.objs.game_state);
+
+        // flips markers and logs change to game state
+        for (let m of _markers) {
+            if (mk_indexes_array.includes(m.loc.index)) {
+                
+                // flips
+                m.player = (m.player == _player_black_id ? _player_white_id : _player_black_id);   
+                _game_state[m.loc.index] = ( _game_state[m.loc.index] == m.type.concat(_player_black_id) ? m.type.concat(_player_white_id) : m.type.concat(_player_black_id) );
+
+            };
+        };
+
+    // updates global markers object and game state
+    yinsh.objs.markers = _markers;
+    yinsh.objs.game_state = _game_state;
+
+    console.log(`LOG - Marker(s) flipped at indexes: ${mk_indexes_array}`);
+    
+};
+    
+
+// DONE
+    // add_marker + remove_marker (move)
+    // update_current_move (move)
+    // flip_markers + update game state (next move)
+
+
+// TODO
+    // update_score_handling (next move)
+    // update mk scoring (next move)
+    // update mk halos (score handling)
+    // refresh_objects (window resize)
+    // when data model consolidated, serve objects operations through specialized functions (e.g. retrieve drop_zones, single/bulk update game state)
+
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -402,13 +550,9 @@ function init_rings(){
 // (OLD) DATA functions below
 ////////////////////////////////////
 
-// function to write to the game state array
-function update_game_state(index, value){
-    // there should be some input arguments check
 
-    game_state[index] = value;
 
-};
+
 
 // glue function to setup new game
 function init_objects(){
@@ -422,39 +566,7 @@ function init_objects(){
 
 };
 
-// creates and destroys highlights on intersection zones for legal moves
-function update_highlight_zones(){
-// manipulates global variable of legal moves for current ring
 
-    if (current_legal_moves.length > 0) {
-    
-        // empty array (to handle refreshes)
-        highlight_zones = [];
-
-        // for each linear id of the legal moves (reads from global variable)
-        for (const id of current_legal_moves.values()) {
-
-            // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
-            for(let i=0; i<drop_zones.length; i++){
-                if (drop_zones[i].loc.index == id){
-
-                    // create shape + coordinates and store in the global array
-                    let h_path = new Path2D()
-                    h_path.arc(drop_zones[i].loc.x, drop_zones[i].loc.y, S*0.1, 0, 2*Math.PI);
-                    highlight_zones.push({path: h_path});
-            
-                };
-            };        
-        };
-
-    // case of empty array of legal moves
-    } else {
-
-        highlight_zones = [];
-
-    };
-    
-};
 
 function update_mk_sel_scoring(input_ids = [], hot_flag = false){
     
@@ -529,30 +641,6 @@ function refresh_objects(){
 };
 
 
-// initializes markers
-function init_markers(){
-
-    // pick N drop zones at random (note: it should be random)
-    random_picks_ids = [18, 35, 54, 58, 77, 7, 11, 16, 19, 38, 43, 59]; // max = 85
-
-    for (const id of random_picks_ids.values()) {
-        const ref_drop_zone = drop_zones[id];   
-        
-        let M = {   path: {},
-                    loc: structuredClone(ref_drop_zone.loc),
-                    type: marker_id, 
-                    player: (id % 2 == 0) ? player_black_id : player_white_id 
-                };            
-        
-        // add to array
-        markers.push(M);  
-
-        // update game state and log change
-        update_game_state(M.loc.index, M.type.concat(M.player)); // -> MB, MW at index
-        console.log(`${M.type.concat(M.player)} init at ${M.loc.m_row}:${M.loc.m_col} -> ${M.loc.index}`);
-
-    };
-};
 
 // destroys objects (both global variables and array of objects to draw)
 function destroy_objects(){
@@ -578,82 +666,6 @@ function destroy_objects(){
 };
 
 
-
-// flips markers (changes player of game objects)
-function flip_markers(markers_to_flip){
-// works with linear index 
-
-    for (const marker of markers.values()) {
-        if (markers_to_flip.includes(marker.loc.index)) {
-
-            marker.player = (marker.player == player_black_id ? player_white_id : player_black_id);   
-            
-        };
-    
-    };
-};
-
-// flips markers in game state
-function flip_markers_game_state(markers_to_flip){
-    // works with linear index 
-    
-        for (const marker_id of markers_to_flip.values()) {
-            
-            if (game_state[marker_id] == "MW"){ 
-                
-                game_state[marker_id] = "MB"
-            
-            } else if (game_state[marker_id] == "MB") {
-                
-                game_state[marker_id] = "MW"
-            };
-        
-        };
-    };
-
-// adds marker -> called when ring is picked
-function add_marker(loc = {}, player = ""){
-// this is just for adding a new marker when a ring is picked             
-
-    let M = { loc: loc, 
-                type: marker_id, 
-                player: player 
-            };            
-    
-    // add to array
-    markers.push(M);  
-
-    // update game state and log change
-    update_game_state(M.loc.index, M.type.concat(M.player)); // -> MB, MW at index
-    console.log(`${M.type.concat(M.player)} init at ${M.loc.m_row}:${M.loc.m_col} -> ${M.loc.index}`);
-        
-};
-
-// removes markers -> called when ring dropped in same location or scoring row selected
-function remove_markers(mk_index_input){
-// handling input as single integer end array -> if array it calls itself N times
-
-    if (Number.isInteger(mk_index_input)){
-        
-        // we have to find the marker with the matching index and remove it
-        for (let i=0; i<markers.length; i++){
-            if (markers[i].loc.index == mk_index_input){
-                
-                markers.splice(i, 1);
-
-                break; // we're supposed to only find one marker
-            };
-        };
-            
-    } else if (Array.isArray(mk_index_input)) {
-
-        for (let i=0; i<mk_index_input.length; i++){
-        
-            remove_markers(mk_index_input[i]); // it calls iself!
-        };
-
-    };
-};
 
 
 // manipulates global variable of current move data

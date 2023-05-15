@@ -1,5 +1,5 @@
 import { createSignal, Show, Switch, Match, createResource } from "solid-js";
-import { init_newGame_dispatcher } from "./game_dispatch";
+import { init_newGame_dispatcher } from "./dispatch.js";
 
 function Play() {
   

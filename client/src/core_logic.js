@@ -1,19 +1,40 @@
-// MAIN 
-// game logic and orchestration
+// CORE LOGIC
+// init games, game logic, and responding to interaction
+
+import { server_newGame_gen } from './server.js'
+import { init_global_obj_params, init_empty_game_objects, init_new_game_data } from './data.js'
+import { refresh_canvas_state } from './drawing.js'
 
 
-// instatiate event target for game state (orchestrator)
-let game_state_target = new EventTarget()
+// init function to be called from ui/dispatcher -> creates global object and logic event target 
+export function init_core_logic(){
 
+    // inits global object (globalThis.yinsh) + non-changing parameters
+    init_global_obj_params();
 
+    // inits event target
+    yinsh.core_logic_et = new EventTarget()
 
-// start
-console.log('<< FIRST LOADING >>');
+    // bind the canvas to a global variable -> also move canvas binding inside yinsh global object?
+    globalThis.ctx = document.getElementById('canvas').getContext('2d', { alpha: true });
+    
+};
 
-// init drop zones + markers y rings -> setup and first draw
-init_objects()
-refresh_draw_state(); 
+// tiggered once we have game data from server
+export function init_newGame_wServerData(){
 
+    // initialize empty game objects
+    init_empty_game_objects();
+
+    // maps data from server to game objects + sets up drop zones and rings (sensitive to window size)
+    init_new_game_data();
+
+    // draw everything
+    refresh_canvas_state();
+
+};
+
+/*
 
 // listens to ring picks and updates game state
 game_state_target.addEventListener("ring_picked", 
@@ -377,3 +398,6 @@ function sizing_handler() {
     refresh_draw_state();
 
 };
+
+
+*/

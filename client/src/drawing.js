@@ -33,24 +33,23 @@ export function refresh_canvas_state(){
 // NOTE:
 // pre-draw board and store it?
 
+    /* SAVE FOR LATER
+    // TAKEN FROM https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Optimizing_canvas
+    // Get the DPR and size of the canvas
+    const dpr = window.devicePixelRatio;
+    const rect = canvas.getBoundingClientRect();
 
-/* SAVE FOR LATER
-// TAKEN FROM https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Optimizing_canvas
-// Get the DPR and size of the canvas
-const dpr = window.devicePixelRatio;
-const rect = canvas.getBoundingClientRect();
+    // Set the "actual" size of the canvas
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
 
-// Set the "actual" size of the canvas
-canvas.width = rect.width * dpr;
-canvas.height = rect.height * dpr;
+    // Scale the context to ensure correct drawing operations
+    ctx.scale(dpr, dpr);
 
-// Scale the context to ensure correct drawing operations
-ctx.scale(dpr, dpr);
-
-// Set the "drawn" size of the canvas
-canvas.style.width = `${rect.width}px`;
-canvas.style.height = `${rect.height}px`;
-*/
+    // Set the "drawn" size of the canvas
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
+    */
 
 // game board
 function draw_board(){
@@ -214,7 +213,7 @@ function draw_drop_zones(){
     const painting_start_time = Date.now()
     
     // retrieve drop_zones data
-    const drop_zones = yinsh.objs.drop_zones
+    const _drop_zones = yinsh.objs.drop_zones
 
     // drawing
     ctx.save();
@@ -224,9 +223,9 @@ function draw_drop_zones(){
         ctx.fillStyle = "#666";
         //ctx.lineWidth = 0.5;
 
-        for(let i=0; i<drop_zones.length; i++){
-            ctx.fill(drop_zones[i].path); 
-            //ctx.stroke(drop_zones[i].path); 
+        for(const d_zone of _drop_zones){
+            ctx.fill(d_zone.path); 
+            //ctx.stroke(d_zone[i].path); 
         };   
     
     ctx.restore();
@@ -239,7 +238,7 @@ function draw_rings(){
     const painting_start_time = Date.now()
     
     // retrieve rings data (local copy) + other constants
-    let rings = structuredClone(yinsh.objs.rings);
+    let _rings = structuredClone(yinsh.objs.rings);
 
     const player_black_id = yinsh.constant_params.player_black_id;
     const player_white_id = yinsh.constant_params.player_white_id;
@@ -250,7 +249,7 @@ function draw_rings(){
     ctx.save();
 
         // reading from local copy
-        for (let ring of rings) {
+        for (let ring of _rings) {
 
             let inner = S*0.38;
             let ring_lineWidth = inner/3;
@@ -307,11 +306,11 @@ function draw_rings(){
 
     // save updated rings definitions (with new paths) 
     // note: structured clone doesn't work for writing into nested objects -> as long as I have a deep copy barrier at the entrance, I should be good
-    yinsh.objs.rings = rings;
+    yinsh.objs.rings = _rings;
 
     ctx.restore();
 
-    console.log(`LOG - ${rings.length} Rings painted on canvas: ${Date.now() - painting_start_time}ms`);
+    console.log(`LOG - ${_rings.length} Rings painted on canvas: ${Date.now() - painting_start_time}ms`);
     
 };
 
@@ -321,7 +320,7 @@ function draw_markers(){
     const painting_start_time = Date.now()
 
     // retrieve markers data (local copy) + other constants
-    let markers = structuredClone(yinsh.objs.markers);
+    let _markers = structuredClone(yinsh.objs.markers);
 
     const player_black_id = yinsh.constant_params.player_black_id;
     const player_white_id = yinsh.constant_params.player_white_id;
@@ -332,7 +331,7 @@ function draw_markers(){
     ctx.save();
 
         // iterate over markers
-        for (let m of markers) {
+        for (let m of _markers) {
 
             let inner = S*0.25;
             let marker_lineWidth = inner/5;
@@ -370,22 +369,24 @@ function draw_markers(){
 
     // save updated markers definitions (with new paths) 
     // note: structured clone doesn't work for writing into nested objects -> as long as I have a deep copy barrier at the entrance, I should be good
-    yinsh.objs.markers = markers;
+    yinsh.objs.markers = _markers;
 
     ctx.restore();
 
-    console.log(`LOG - ${markers.length} Markers painted on canvas: ${Date.now() - painting_start_time}ms`);
+    console.log(`LOG - ${_markers.length} Markers painted on canvas: ${Date.now() - painting_start_time}ms`);
 
 
 };
 
 // highlight markers in scoring row
+
+// to rewrite to check for array length first
 function draw_markers_halos(){
 
     const painting_start_time = Date.now()
     
     // retrieve mk halos data (local copy) + other constants
-    let markers_halos = structuredClone(yinsh.objs.markers_halos);
+    let _markers_halos = structuredClone(yinsh.objs.markers_halos);
 
     const S = yinsh.drawing_params.S;
     
@@ -394,19 +395,19 @@ function draw_markers_halos(){
         // to be checked only if any markers halos have been created
         // the whole function is called anyway at each refresh
         let hot = false;
-        if (markers_halos.length > 0) {hot = markers_halos[0].hot_flag;}; // I forgot why I built it this way :(
+        if (_markers_halos.length > 0) {hot = _markers_halos[0].hot_flag;}; // I forgot why I built it this way :(
 
         ctx.globalAlpha = 0.8; 
         ctx.strokeStyle = hot ? "#96ce96" : "#98C1D6";
         ctx.lineWidth = S/10; 
 
-        for(const mk_halo of markers_halos){
+        for(const mk_halo of _markers_halos){
             ctx.stroke(mk_halo.path); 
         };        
     
     ctx.restore();
 
-    console.log(`LOG - ${markers_halos.length} Markers halos painted on canvas: ${Date.now() - painting_start_time}ms`);
+    console.log(`LOG - ${_markers_halos.length} Markers halos painted on canvas: ${Date.now() - painting_start_time}ms`);
     
 };
 
@@ -416,7 +417,7 @@ function draw_legal_moves_cues(){
     const painting_start_time = Date.now()
 
     // retrieve mk halos data (local copy)
-    const legal_moves_cues = structuredClone(yinsh.objs.legal_moves_cues);
+    const _legal_moves_cues = structuredClone(yinsh.objs.legal_moves_cues);
     
     // drawing
     ctx.save();
@@ -426,7 +427,7 @@ function draw_legal_moves_cues(){
         ctx.fillStyle = "#aaccdd";
         ctx.lineWidth = 0.5;
 
-        for(const cue of legal_moves_cues){
+        for(const cue of _legal_moves_cues){
         
             ctx.fill(cue.path); 
             ctx.stroke(cue.path); 
@@ -435,7 +436,7 @@ function draw_legal_moves_cues(){
     
     ctx.restore();
 
-    console.log(`LOG - ${legal_moves_cues.length} Moves cues painted on canvas: ${Date.now() - painting_start_time}ms`);
+    console.log(`LOG - ${_legal_moves_cues.length} Moves cues painted on canvas: ${Date.now() - painting_start_time}ms`);
    
 };
 
