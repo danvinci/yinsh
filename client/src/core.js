@@ -2,36 +2,68 @@
 // init games, game logic, and responding to interaction
 
 import { server_newGame_gen } from './server.js'
-import { init_global_obj_params, init_empty_game_objects, init_new_game_data } from './data.js'
+import { init_global_obj_params, init_empty_game_objects, save_srv_response_NewGame, init_new_game_data } from './data.js'
 import { refresh_canvas_state } from './drawing.js'
 
 
-// init function to be called from ui/dispatcher -> creates global object and logic event target 
-export function init_core_logic(){
-
-    // inits global object (globalThis.yinsh) + non-changing parameters
-    init_global_obj_params();
-
-    // inits event target
-    yinsh.core_logic_et = new EventTarget()
-
-    // bind the canvas to a global variable -> also move canvas binding inside yinsh global object?
-    globalThis.ctx = document.getElementById('canvas').getContext('2d', { alpha: true });
-    
-};
 
 // tiggered once we have game data from server
-export function init_newGame_wServerData(){
+export async function init_newGame_fromServer(){
 
-    // initialize empty game objects
-    init_empty_game_objects();
+    console.log(' -- Requesting new game --');
+    const request_start_time = Date.now()
 
-    // maps data from server to game objects + sets up drop zones and rings (sensitive to window size)
-    init_new_game_data();
+    try{
 
-    // draw everything
-    refresh_canvas_state();
+        // creates global object, inits event target, binds canvas
+        init_core_logic()
 
+        // initialize empty game objects
+        init_empty_game_objects();
+
+        // asks new game to server and saves response in object init above
+        save_srv_response_NewGame(await server_newGame_gen());
+
+        // maps data from server to game objects + sets up drop zones and rings (sensitive to window size)
+        init_new_game_data();
+
+        // draw everything
+        refresh_canvas_state();
+
+        // log game ready (not really ready)
+        console.log(`LOG - Game ready, time-to-first-move: ${Date.now() - request_start_time}ms`);
+
+
+    } catch (err){
+
+        // log error
+        console.log(`LOG - Game setup ERROR. ${Date.now() - request_start_time}ms`);
+        console.log(err);
+        throw err;
+
+    };
+
+};
+
+// init function to be called from ui/dispatcher -> creates global object and logic event target 
+function init_core_logic(){
+
+    // inits global object (globalThis.yinsh) + constants used throughout the game
+    init_global_obj_params();
+
+    // inits event target, on global object
+    yinsh.core_logic_et = new EventTarget()
+
+    try {
+
+        // bind the canvas to a global variable
+        // IDs different than 'canvas' seem not to work :|
+        globalThis.ctx = document.getElementById('canvas').getContext('2d', { alpha: true });
+
+    } catch (err){
+        throw err;
+    };
+    
 };
 
 /*
@@ -384,6 +416,10 @@ game_state_target.addEventListener("join_game",
 
 // handling case of window resizing and first load -> impacts canvas, board, and objects 
 ["load", "resize"].forEach(event => window.addEventListener(event, sizing_handler));
+
+// add to window onMount
+// https://docs.solidjs.com/references/api-reference/lifecycles/onMount
+
 
 function sizing_handler() {
 

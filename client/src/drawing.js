@@ -3,30 +3,39 @@
 // glue function called by orchestrator after data manipulation
 export function refresh_canvas_state(){
 
+    // https://docs.solidjs.com/references/api-reference/lifecycles/onMount
+
     const painting_start_time = Date.now()
 
-    // clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    try {
+        // clear canvas (assumes canvas already binded)
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw board
-    draw_board();
+        // Draw board
+        draw_board();
 
-    // keep drop zones up
-    draw_drop_zones();
+        // keep drop zones up
+        draw_drop_zones();
 
-    // draw cues for legal moves
-    draw_legal_moves_cues();
+        // draw cues for legal moves
+        draw_legal_moves_cues();
 
-    // Re-draw all rings and markers
-    draw_markers();
-    draw_rings();
-    
-    // Draw markers halos (score handling)
-    draw_markers_halos();
+        // Re-draw all rings and markers
+        draw_markers();
+        draw_rings();
+        
+        // Draw markers halos (score handling)
+        draw_markers_halos();
 
-    // logging time 
-    console.log(`LOG - Total painting time: ${Date.now() - painting_start_time}ms`);
+        // logging time 
+        console.log(`LOG - Total painting time: ${Date.now() - painting_start_time}ms`);
 
+    } catch(err) {
+
+        console.log(`LOG - Canvas refresh ERROR: ${Date.now() - painting_start_time}ms`);
+        throw err;
+
+    };
 }; 
 
 

@@ -1,5 +1,5 @@
-import { createSignal, Show, Switch, Match, createResource } from "solid-js";
-import { init_newGame_dispatcher } from "./dispatch.js";
+import { createSignal, Show, Switch, Match, createResource, createEffect, on } from "solid-js";
+import { init_newGame_fromServer } from "./core.js";
 
 function Play() {
   
@@ -104,7 +104,7 @@ function C_playLocal() {
   return (
     <Show
     when = {startLocal()}
-    fallback = {<button type="button" onClick={toggle_StartLocal}>Start local game</button>}
+    fallback = {<button type="button" onClick={toggle_StartLocal}>Start local game (show canvas)</button>}
     >
       <GameHandler></GameHandler>
       <GameCanvas></GameCanvas>
@@ -118,7 +118,7 @@ function GameCanvas(){
 
   return (
     <>
-    <canvas width="500" height="500" id="canvas"></canvas>
+    <canvas width="500" height="500" id='canvas'></canvas>
     </>
   );
   
@@ -128,29 +128,41 @@ function GameCanvas(){
 function GameHandler(){
 
   // function wrapper for requesting new game
-  const fn_newGame = async () => (await init_newGame_dispatcher());
+  const req_newGame = async () => (await init_newGame_fromServer());
 
   // signal for triggering fetching of game details
-  const [reqCount, set_reqCount] = createSignal(0);
-  const fn_increment_reqCount = () => set_reqCount(reqCount()+1);  
-
-  // solid-wrapping the function call to the new game setup
-  const [req_outcome] = createResource(reqCount, fn_newGame);
-
+  const [reqCount, set_reqCount] = createSignal(false); 
+  
+  // createResource would otherwise be triggered for anything other than: false, null, undefined
+  // the signal is initialized as false, and then treated as an incrementing number 
+  const buttonClick = () => {
+    if (reqCount !== false) {
+      // increments value if was already incremented
+      set_reqCount(reqCount()+1)
+    } else {
+      // otherwise set count at 1 at the first click
+      set_reqCount(1);
+    }
+    //console.log(reqCount());
+  };
+  
+  // createEffect(on(reqCount, () => console.log(`Value for count (defer): ${reqCount()}`), { defer: true }));
+  
+  const [request_handler] = createResource(reqCount, req_newGame);
 
   return (
     <>
-    <button type="button" onClick={fn_increment_reqCount}>Request new game code</button>
+    <button type="button" onClick={buttonClick}>Request game</button>
 
     <Switch
-      fallback={<p>{"Have fun!"}</p>}
+      fallback={<p>{""}</p>}
     >
       
-      <Match when = {req_outcome.loading}>
+      <Match when = {request_handler.loading}>
         <p>{"Loading..."}</p>
       </Match>
 
-      <Match when = {req_outcome.error}>
+      <Match when = {request_handler.error}>
         <p>{"ERROR !"}</p>
       </Match>
 
