@@ -1,13 +1,28 @@
-// CORE LOGIC
-// init games, game logic, and responding to interaction
+//////////////////////////////
+//////////// CORE LOGIC
 
+
+//////////// IMPORTS
 import { server_newGame_gen } from './server.js'
 import { init_global_obj_params, init_empty_game_objects, save_srv_response_NewGame, init_new_game_data } from './data.js'
 import { refresh_canvas_state } from './drawing.js'
+import { init_interaction } from './interaction.js'
+
+//////////// GLOBAL DEFINITIONS
+
+    // inits global object (globalThis.yinsh) + constants used throughout the game
+    init_global_obj_params();
+
+    // initialize empty game objects
+    init_empty_game_objects();
+
+    // inits global event target for core logic
+    globalThis.core_et = new EventTarget()
 
 
+//////////// FUNCTIONS FOR INIT GAMES (NEW or JOIN)
 
-// tiggered once we have game data from server
+// ask for new game to server
 export async function init_newGame_fromServer(){
 
     console.log(' -- Requesting new game --');
@@ -15,20 +30,23 @@ export async function init_newGame_fromServer(){
 
     try{
 
-        // creates global object, inits event target, binds canvas
-        init_core_logic()
-
-        // initialize empty game objects
-        init_empty_game_objects();
-
         // asks new game to server and saves response in object init above
         save_srv_response_NewGame(await server_newGame_gen());
 
-        // maps data from server to game objects + sets up drop zones and rings (sensitive to window size)
+        // maps data from server to game objects
+        // sets up drop zones and rings
         init_new_game_data();
 
-        // draw everything
-        refresh_canvas_state();
+        // Bind canvas
+        // IDs different than 'canvas' seem not to work :|
+        globalThis.canvas = document.getElementById('canvas');
+        globalThis.ctx = canvas.getContext('2d', { alpha: true });        
+        
+            // draw everything
+            refresh_canvas_state();
+
+            // initialize event listeners for canvas interaction
+            init_interaction();
 
         // log game ready (not really ready)
         console.log(`LOG - Game ready, time-to-first-move: ${Date.now() - request_start_time}ms`);
@@ -45,26 +63,61 @@ export async function init_newGame_fromServer(){
 
 };
 
-// init function to be called from ui/dispatcher -> creates global object and logic event target 
-function init_core_logic(){
 
-    // inits global object (globalThis.yinsh) + constants used throughout the game
-    init_global_obj_params();
+//////////// EVENT LISTENERS FOR GAME MECHANICS
 
-    // inits event target, on global object
-    yinsh.core_logic_et = new EventTarget()
+// listens to ring picks and updates game state
+core_et.addEventListener("ring_picked", 
+    async function (event) {
 
-    try {
+    console.log(`ring picked!`)
 
-        // bind the canvas to a global variable
-        // IDs different than 'canvas' seem not to work :|
-        globalThis.ctx = document.getElementById('canvas').getContext('2d', { alpha: true });
+    // detail contains index of picked ring in the rings array (array was already looped over once)
+    id_ring_evt = event.detail;
 
-    } catch (err){
-        throw err;
-    };
+    // remove the element and put it back at the end of the array, so it's always drawn last => on top
+    // note: splice returns the array of removed elements
+    rings.push(rings.splice(id_ring_evt,1)[0]); 
     
-};
+    id_last_ring = rings.length-1; // could be computed once and stored in current_move variable
+    p_ring = rings[id_last_ring];
+    
+    // clean game state for location
+    update_game_state(p_ring.loc.index, "");
+
+    value = p_ring.type.concat(p_ring.player); // -> RB, RW
+
+    console.log(`${value} picked from ${p_ring.loc.m_row}:${p_ring.loc.m_col} at -> ${p_ring.loc.index}`);
+
+    // write start of the currently active move to a global variable
+    update_current_move(on = true, index = structuredClone(p_ring.loc.index))
+
+    // place marker in same location & draw changes
+    add_marker(loc = structuredClone(p_ring.loc), player = p_ring.player);
+    refresh_draw_state();
+
+    // get legal moves from the server
+    // game_state and current move are read from global variables
+    // NOTE : legal moves are requested considering no ring nor marker at their current location due to game_state updates
+    const srv_legal_moves = await server_legal_moves();
+
+    if (srv_legal_moves.length > 0){
+
+        // writes legal moves to a global variable
+        current_legal_moves = srv_legal_moves;
+
+        // init highlight zones
+        update_highlight_zones()
+
+        console.log(`Legal moves: ${current_legal_moves}`); 
+        
+    };
+
+    // draw changes
+    refresh_draw_state();
+
+});
+
 
 /*
 

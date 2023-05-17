@@ -118,7 +118,7 @@ function GameCanvas(){
 
   return (
     <>
-    <canvas width="500" height="500" id='canvas'></canvas>
+    <canvas id="canvas" width="500" height="500"></canvas>
     </>
   );
   
