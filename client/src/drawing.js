@@ -63,7 +63,7 @@ export function refresh_canvas_state(){
 // game board
 function draw_board(){
 
-    const painting_start_time = Date.now()
+    // const painting_start_time = Date.now()
 
     // this whole function should be simplified at some point -> re-using premade paths?
 
@@ -212,14 +212,14 @@ function draw_board(){
     ctx.restore();
     
     // logging time 
-    console.log(`LOG - Board painted on canvas: ${Date.now() - painting_start_time}ms`);
+    // console.log(`LOG - Board painted on canvas: ${Date.now() - painting_start_time}ms`);
 
 };
 
 // drop zones
 function draw_drop_zones(){
 
-    const painting_start_time = Date.now()
+    // const painting_start_time = Date.now()
     
     // retrieve drop_zones data
     const _drop_zones = yinsh.objs.drop_zones
@@ -238,16 +238,16 @@ function draw_drop_zones(){
         };   
     
     ctx.restore();
-    console.log(`LOG - Drop zones painted on canvas: ${Date.now() - painting_start_time}ms`);
+    // console.log(`LOG - Drop zones painted on canvas: ${Date.now() - painting_start_time}ms`);
 };
 
 // rings
 function draw_rings(){
 
-    const painting_start_time = Date.now()
+    // const painting_start_time = Date.now()
     
-    // retrieve rings data (local copy) + other constants
-    let _rings = structuredClone(yinsh.objs.rings);
+    // retrieve rings data (local copy) and other constants
+    let _rings = yinsh.objs.rings;
 
     const player_black_id = yinsh.constant_params.player_black_id;
     const player_white_id = yinsh.constant_params.player_white_id;
@@ -319,17 +319,17 @@ function draw_rings(){
 
     ctx.restore();
 
-    console.log(`LOG - ${_rings.length} Rings painted on canvas: ${Date.now() - painting_start_time}ms`);
+    // console.log(`LOG - ${_rings.length} Rings painted on canvas: ${Date.now() - painting_start_time}ms`);
     
 };
 
 // markers
 function draw_markers(){
 
-    const painting_start_time = Date.now()
+    // const painting_start_time = Date.now()
 
     // retrieve markers data (local copy) + other constants
-    let _markers = structuredClone(yinsh.objs.markers);
+    let _markers = yinsh.objs.markers;
 
     const player_black_id = yinsh.constant_params.player_black_id;
     const player_white_id = yinsh.constant_params.player_white_id;
@@ -382,7 +382,7 @@ function draw_markers(){
 
     ctx.restore();
 
-    console.log(`LOG - ${_markers.length} Markers painted on canvas: ${Date.now() - painting_start_time}ms`);
+    // console.log(`LOG - ${_markers.length} Markers painted on canvas: ${Date.now() - painting_start_time}ms`);
 
 
 };
@@ -392,10 +392,10 @@ function draw_markers(){
 // to rewrite to check for array length first
 function draw_markers_halos(){
 
-    const painting_start_time = Date.now()
+    // const painting_start_time = Date.now()
     
     // retrieve mk halos data (local copy) + other constants
-    let _markers_halos = structuredClone(yinsh.objs.markers_halos);
+    let _markers_halos = yinsh.objs.markers_halos;
 
     const S = yinsh.drawing_params.S;
     
@@ -416,17 +416,17 @@ function draw_markers_halos(){
     
     ctx.restore();
 
-    console.log(`LOG - ${_markers_halos.length} Markers halos painted on canvas: ${Date.now() - painting_start_time}ms`);
+    // console.log(`LOG - ${_markers_halos.length} Markers halos painted on canvas: ${Date.now() - painting_start_time}ms`);
     
 };
 
 // highlight legal moves
 function draw_legal_moves_cues(){
 
-    const painting_start_time = Date.now()
+    // const painting_start_time = Date.now()
 
     // retrieve mk halos data (local copy)
-    const _legal_moves_cues = structuredClone(yinsh.objs.legal_moves_cues);
+    const _legal_moves_cues = yinsh.objs.legal_moves_cues;
     
     // drawing
     ctx.save();
@@ -445,7 +445,7 @@ function draw_legal_moves_cues(){
     
     ctx.restore();
 
-    console.log(`LOG - ${_legal_moves_cues.length} Moves cues painted on canvas: ${Date.now() - painting_start_time}ms`);
+    // console.log(`LOG - ${_legal_moves_cues.length} Moves cues painted on canvas: ${Date.now() - painting_start_time}ms`);
    
 };
 

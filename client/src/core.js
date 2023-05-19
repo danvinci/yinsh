@@ -5,22 +5,20 @@
 //////////// IMPORTS
 import { server_newGame_gen } from './server.js'
 import { init_global_obj_params, init_empty_game_objects, save_srv_response_NewGame, init_new_game_data } from './data.js'
+import { rings_reordering, update_game_state, update_current_move, add_marker, init_legal_moves_cues } from './data.js'
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction } from './interaction.js'
 
 //////////// GLOBAL DEFINITIONS
 
-    // inits global object (globalThis.yinsh) + constants used throughout the game
-    init_global_obj_params();
-
-    // initialize empty game objects
-    init_empty_game_objects();
-
     // inits global event target for core logic
-    globalThis.core_et = new EventTarget()
+    globalThis.core_et = new EventTarget(); // <- this semicolon is very important
+
+    ['ring_picked'].forEach(event => core_et.addEventListener(event, ringPicked_handler, false));
+    ['ring_moved'].forEach(event => core_et.addEventListener(event, ringMoved_handler, false));
 
 
-//////////// FUNCTIONS FOR INIT GAMES (NEW or JOIN)
+//////////// FUNCTIONS FOR INITIALIZING GAMES (NEW or JOIN)
 
 // ask for new game to server
 export async function init_newGame_fromServer(){
@@ -29,6 +27,12 @@ export async function init_newGame_fromServer(){
     const request_start_time = Date.now()
 
     try{
+
+        // inits global object (globalThis.yinsh) + constants used throughout the game
+        init_global_obj_params();
+
+        // initialize empty game objects
+        init_empty_game_objects();
 
         // asks new game to server and saves response in object init above
         save_srv_response_NewGame(await server_newGame_gen());
@@ -64,128 +68,67 @@ export async function init_newGame_fromServer(){
 };
 
 
-//////////// EVENT LISTENERS FOR GAME MECHANICS
+//////////// EVENT HANDLERS FOR GAME MECHANICS
 
 // listens to ring picks and updates game state
-core_et.addEventListener("ring_picked", 
-    async function (event) {
+function ringPicked_handler(event) {
 
-    console.log(`ring picked!`)
-
-    // detail contains index of picked ring in the rings array (array was already looped over once)
-    id_ring_evt = event.detail;
-
-    // remove the element and put it back at the end of the array, so it's always drawn last => on top
-    // note: splice returns the array of removed elements
-    rings.push(rings.splice(id_ring_evt,1)[0]); 
+    // detail contains index in rings array of picked ring
+    const index_picked_ring_in_array = event.detail;
     
-    id_last_ring = rings.length-1; // could be computed once and stored in current_move variable
-    p_ring = rings[id_last_ring];
+    // retrieve ring and its loc details
+    const picked_ring = yinsh.objs.rings[index_picked_ring_in_array];
+    const picked_ring_loc = structuredClone(picked_ring.loc)
+    const picked_ring_loc_index = picked_ring_loc.index;
+
+        // logging
+        console.log(`LOG - Ring ${picked_ring.player} picked from index ${picked_ring_loc_index}`);
+
+    // remove the element and put it back at the end of the array, so it's always drawn last => appear on top
+    // we could also move ring to dedicated structure that is drawn last and then put back in, but roughly same copying work
+    rings_reordering(index_picked_ring_in_array);
     
-    // clean game state for location
-    update_game_state(p_ring.loc.index, "");
-
-    value = p_ring.type.concat(p_ring.player); // -> RB, RW
-
-    console.log(`${value} picked from ${p_ring.loc.m_row}:${p_ring.loc.m_col} at -> ${p_ring.loc.index}`);
+    // wipe game state for location
+    update_game_state(picked_ring_loc_index, "");
 
     // write start of the currently active move to a global variable
-    update_current_move(on = true, index = structuredClone(p_ring.loc.index))
+    update_current_move(true, picked_ring_loc_index);
 
-    // place marker in same location & draw changes
-    add_marker(loc = structuredClone(p_ring.loc), player = p_ring.player);
-    refresh_draw_state();
+    // place marker in same location (it's assumed client player)
+    add_marker(picked_ring_loc);
 
-    // get legal moves from the server
-    // game_state and current move are read from global variables
-    // NOTE : legal moves are requested considering no ring nor marker at their current location due to game_state updates
-    const srv_legal_moves = await server_legal_moves();
-
-    if (srv_legal_moves.length > 0){
-
-        // writes legal moves to a global variable
-        current_legal_moves = srv_legal_moves;
-
-        // init highlight zones
-        update_highlight_zones()
-
-        console.log(`Legal moves: ${current_legal_moves}`); 
-        
-    };
+    // initializes array of visual cues for starting index
+    init_legal_moves_cues(picked_ring_loc_index);
 
     // draw changes
-    refresh_draw_state();
+    refresh_canvas_state();
 
-});
-
-
-/*
-
-// listens to ring picks and updates game state
-game_state_target.addEventListener("ring_picked", 
-    async function (event) {
-
-    // detail contains index of picked ring in the rings array (array was already looped over once)
-    id_ring_evt = event.detail;
-
-    // remove the element and put it back at the end of the array, so it's always drawn last => on top
-    // note: splice returns the array of removed elements
-    rings.push(rings.splice(id_ring_evt,1)[0]); 
-    
-    id_last_ring = rings.length-1; // could be computed once and stored in current_move variable
-    p_ring = rings[id_last_ring];
-    
-    // clean game state for location
-    update_game_state(p_ring.loc.index, "");
-
-    value = p_ring.type.concat(p_ring.player); // -> RB, RW
-
-    console.log(`${value} picked from ${p_ring.loc.m_row}:${p_ring.loc.m_col} at -> ${p_ring.loc.index}`);
-
-    // write start of the currently active move to a global variable
-    update_current_move(on = true, index = structuredClone(p_ring.loc.index))
-
-    // place marker in same location & draw changes
-    add_marker(loc = structuredClone(p_ring.loc), player = p_ring.player);
-    refresh_draw_state();
-
-    // get legal moves from the server
-    // game_state and current move are read from global variables
-    // NOTE : legal moves are requested considering no ring nor marker at their current location due to game_state updates
-    const srv_legal_moves = await server_legal_moves();
-
-    if (srv_legal_moves.length > 0){
-
-        // writes legal moves to a global variable
-        current_legal_moves = srv_legal_moves;
-
-        // init highlight zones
-        update_highlight_zones()
-
-        console.log(`Legal moves: ${current_legal_moves}`); 
-        
-    };
-
-    // draw changes
-    refresh_draw_state();
-
-});
+};
 
 
-// listens to a ring being moved -> updates ring state & redraws
-game_state_target.addEventListener("ring_moved", 
-    function (event) {
+
+// listens to a ring being moved -> updates ring location & triggers re-draw
+function ringMoved_handler (event) {
 
     // event.detail -> mousePos
 
-    id_last_ring = rings.length-1;
+    // the last ring in the array is the one being moved
+    const id_last_ring = yinsh.objs.rings.length-1;
 
-    rings[id_last_ring].loc.x = event.detail.x;
-    rings[id_last_ring].loc.y = event.detail.y;
+        // updates x and y ring location
+        yinsh.objs.rings[id_last_ring].loc.x = event.detail.x;
+        yinsh.objs.rings[id_last_ring].loc.y = event.detail.y;
 
-    refresh_draw_state();
+    // redraw everything
+    refresh_canvas_state();
 
-});
+};
+
+
+//////////////////////////////////////////////////////////////////////////////// <-- refactoring progress
+/*
+
+
 
 
 // listens to ring drops, makes checks, and updates game state + redraw

@@ -209,14 +209,14 @@ export function init_empty_game_objects(){
         // moves
         _game_objects.legal_moves_ids = []; // -> location IDs for legal moves
         _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal moves)
-        _game_objects.current_move = {on: false, start_index: 0}; // -> details for move currently in progress 
+        _game_objects.current_move = {in_progress: false, start_index: 0}; // -> details for move currently in progress 
 
         // score handling
         _game_objects.markers_halos = []; // -> halos around markers when scoring
             
             // NOTE: rename the keys below, I don't like them
         _game_objects.mk_sel_scoring = {ids:[], hot:false}; // -> tracking IDs of markers/halos that can be selected for finalizing the score
-        _game_objects.score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []}; // // -> object with all scoring information, used for handling scoring scenarios
+        _game_objects.score_handling_var = {in_progress: false, mk_sel_array: [], num_rows: {}, details: []}; // // -> object with all scoring information, used for handling scoring scenarios
 
 
     // save to global obj and log
@@ -243,9 +243,11 @@ export function save_srv_response_NewGame(srv_resp_NewGame){
         // pre-computed possible legal moves / now just for WHITE player, later expose as a setting?
         _server_response.next_legal_moves = srv_resp_NewGame.next_legalMoves;
     
-     // save to global obj and log
-     yinsh.server_data = structuredClone(_server_response);
-     console.log('LOG - Server response saved');
+    // save to global obj and log
+    yinsh.server_data = structuredClone(_server_response);
+    console.log('LOG - Server response saved');
+    
+    console.log(`LOG - You're player ${_server_response.client_player_id}`);
 
 };
 
@@ -394,7 +396,7 @@ function init_rings(){
 
 // function to update the game state array at specific arrays
 // to minimize copies when doing lots of updates, some functions replicate the same functionality
-function update_game_state(index, value){
+export function update_game_state(index, value){
 
     // retrieves current game state
     let _game_state = structuredClone(yinsh.objs.game_state);
@@ -407,19 +409,23 @@ function update_game_state(index, value){
 
 };
 
-// keeps up to date the array of cues for legal moves, to match the array of legal_moves_ids
-function update_legal_moves_cues(){
+// keeps up to date the array of visual cues for legal moves
+// retrieves legal moves from server data (possible legal moves are pre-computed before each turn)
+export function init_legal_moves_cues(start_index){
+
+    // assumes valid start_index -> no input checks done
    
     // retrieves ids of legal moves
-    const _legal_moves_ids = structuredClone(yinsh.objs.legal_moves_ids);
+    // possible legal moves look like this {start_id_1 -> [lm 1, lm2, lm3], start_id_2 -> [lm 1, lm2, lm3], etc}
+    const _legal_moves_ids = structuredClone(yinsh.server_data.next_legal_moves[start_index]);
 
-    // init empty cues array
+    // inits empty cues array
     let _legal_cues = [];
     
         if (_legal_moves_ids.length > 0) {
 
             // retrieve drop_zones & S parameter
-            const _drop_zones = structuredClone(yinsh.objs.drop_zones);
+            const _drop_zones = yinsh.objs.drop_zones;
             const S = yinsh.drawing_params.S;
 
             // for each linear id of the legal moves
@@ -441,7 +447,7 @@ function update_legal_moves_cues(){
             };
         };
 
-    // save updated cues and log
+    // saves/overwrites updated array of visual cues and logs operation
     yinsh.objs.legal_moves_cues = _legal_cues;
     
     console.log('LOG - Cues for legal moves updated');
@@ -450,10 +456,10 @@ function update_legal_moves_cues(){
 
 
 // adds marker -> called when ring is picked, can only add one marker per time
-function add_marker(ref_loc){ // input should be copy of loc from drop zone (?)
+export function add_marker(ref_loc_object){ // input should be copy of loc from drop zone (?)
 
     // retrieve current player and id for markers
-    const _player_id = structuredClone(yinsh.server_response.client_player_id);
+    const _player_id = structuredClone(yinsh.server_data.client_player_id);
     const _marker_id = structuredClone(yinsh.constant_params.marker_id);
 
     // retrieve array of markers 
@@ -461,7 +467,7 @@ function add_marker(ref_loc){ // input should be copy of loc from drop zone (?)
     
     // instate new marker object 
     const m = { path: {}, // <- to be filled in at drawing time
-                loc: structuredClone(ref_loc),
+                loc: structuredClone(ref_loc_object),
                 type: _marker_id, 
                 player: _player_id 
             }; 
@@ -528,11 +534,51 @@ function flip_markers(mk_indexes_array){
     
 };
     
+// re-order rings array so picked ring is on top
+export function rings_reordering(picked_ring_index){
+
+    // retrieve rings data (local copy)
+    let _rings = yinsh.objs.rings; // should be done with structuredClone, but it doesn't work on Path2D objects
+    
+    // re-order array
+    _rings.push(_rings.splice(picked_ring_index,1)[0]);
+
+    // write modified array back in
+    yinsh.objs.rings = _rings;
+
+
+};
+
+    
+// manipulates global variable ontaining data on current move underway
+export function update_current_move(in_progress = false, start_index = 0){
+    
+    // editable copy
+    let _current_move = structuredClone(yinsh.objs.current_move)
+
+        // reset global variable in case of defaults
+        if(in_progress == false){
+            _current_move.in_progress = false;
+            _current_move.start_index = 0;
+
+        // save data if different arguments are passed
+        } else if (in_progress == true){
+            _current_move.in_progress = true;
+            _current_move.start_index = start_index;
+
+        };
+
+    // save to global object
+    yinsh.objs.current_move = structuredClone(_current_move);
+
+};
 
 // DONE
     // add_marker + remove_marker (move)
     // update_current_move (move)
     // flip_markers + update game state (next move)
+    // rings re-ordering
+    // update current move
 
 
 // TODO
@@ -541,7 +587,7 @@ function flip_markers(mk_indexes_array){
     // update mk halos (score handling)
     // refresh_objects (window resize)
     // when data model consolidated, serve objects operations through specialized functions (e.g. retrieve drop_zones, single/bulk update game state)
-
+    // DEFINE GETTERS FOR USED OBJECTS -> REDUCE COUPLING (could use structuredClone for returning specific values)
 
 
 
@@ -668,22 +714,7 @@ function destroy_objects(){
 
 
 
-// manipulates global variable of current move data
-function update_current_move(on = false, index = null){
-    
-    if(on == false){
-        // reset global variable for the current move
-        current_move.on = false;
-        current_move.start_index = null;
 
-    } else if (on == true){
-         // write data to global variable for the current move
-         current_move.on = true;
-         current_move.start_index = index;
-
-    };
-
-};
 
 
 function update_score_handling(on = false, mk_sel_array = [], num_rows = {}, details = []){
