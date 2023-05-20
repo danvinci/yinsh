@@ -1,13 +1,14 @@
 // INTERACTION
 // handle mouse events and relays events to core logic
-
 // https://bencentra.com/code/2014/12/05/html5-canvas-touch-events.html
+
+import { get_player_id } from './data.js'
 
 
 //////////////////////////////////////// ADD EVENT LISTENERS TO CANVAS
 // assumes canvas bound to 'canvas' and context to 'ctx' -> done in core
 
-// globalThis.interaction_allowed = true; // global property for trying to prevent side effects
+globalThis.canvas_interaction_flag = false; // global property for trying to prevent side effects
 
 export function init_interaction(){
 
@@ -19,125 +20,133 @@ export function init_interaction(){
 
 function mouseDown_handler (event) {
 
-    // get relative mouse position
-    const mousePos = getMousePos(canvas, event);
-    //console.log("down");
+    if (canvas_interaction_flag) { // works only if interaction is allowed
 
-    // retrieve variable used to asses if move or score handling is underway
-    const move_in_progress = yinsh.objs.current_move.in_progress;
-    const score_handling_in_progress = yinsh.objs.score_handling_var.in_progress;
+        // get relative mouse position
+        const mousePos = getMousePos(canvas, event);
+        //console.log("down");
 
-    // check if move currently underway
-    // If not, check which ring is being picked and send event to core_et
-    if (move_in_progress == false){
+        const player_id = get_player_id();
 
-        // check all the rings and dispatch event to core logic if found
-        for (const [ring_index, ring] of yinsh.objs.rings.entries()) {
-            if (ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)){
+        // retrieve variable used to asses if move or score handling is underway
+        const move_in_progress = yinsh.objs.current_move.in_progress;
+        const score_handling_in_progress = yinsh.objs.score_handling_var.in_progress;
 
-                core_et.dispatchEvent(new CustomEvent('ring_picked', { detail: ring_index }));
-                break; // breaks looping
+        // check if move currently underway
+        // If not, check which ring is being picked and send event to core_et
+        if (move_in_progress == false){
+
+            // check all the rings and dispatch event to core logic if found for current player
+            for (const [ring_index, ring] of yinsh.objs.rings.entries()) {
+                if (ring.player == player_id && ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)){
+
+                    core_et.dispatchEvent(new CustomEvent('ring_picked', { detail: ring_index }));
+                    break; // breaks looping
+                };
+            };
+
+        // move in progress -> ring is being dropped -> checking is there's a nearby drop zone
+        } else if (move_in_progress == true){
+            
+            try {
+                // get loc of closest snap
+                const closest_snap_loc = drop_snap(mousePos.x, mousePos.y);
+                
+                // create and dispatch event for dropping action started (core logic will complete the drop)
+                core_et.dispatchEvent(new CustomEvent('ring_drop', { detail: closest_snap_loc }));
+
+            } catch (err) {
+                console.log(err.message);
             };
         };
 
-    // move in progress -> ring is being dropped -> checking is there's a nearby drop zone
-    } else if (move_in_progress == true){
-        
-        try {
-            // get loc of closest snap
-            const closest_snap_loc = drop_snap(mousePos.x, mousePos.y);
-            
-            // create and dispatch event for dropping action started (core logic will complete the drop)
-            core_et.dispatchEvent(new CustomEvent('ring_drop', { detail: closest_snap_loc }));
+        //////////////////////////////////////////////////////////////////////////////// <-- refactoring progress
+        /*
+        // scoring action is in progress 
+        if (score_handling_var.on == true){
 
-        } catch (err) {
-            console.log(err.message);
-        };
-    };
+            // check which marker the mouse is clicking on
+            for(let i=0; i<markers.length; i++){
+                if (ctx.isPointInPath(markers[i].path, mousePos.x, mousePos.y)){
 
-     //////////////////////////////////////////////////////////////////////////////// <-- refactoring progress
-    /*
-    // scoring action is in progress 
-    if (score_handling_var.on == true){
+                    // check that index of marker is among ones in mk_sel_array (selectable markers)
+                    if (score_handling_var.mk_sel_array.includes(markers[i].loc.index) == true){
 
-        // check which marker the mouse is clicking on
-        for(let i=0; i<markers.length; i++){
-            if (ctx.isPointInPath(markers[i].path, mousePos.x, mousePos.y)){
+                        // create and dispatch event, send location index for matching marker
+                        const mk_sel_click_event = new CustomEvent("mk_sel_clicked", { detail: markers[i].loc.index});
+                        game_state_target.dispatchEvent(mk_sel_click_event);
+                        
+                        break; // no need to keep cycling
 
-                // check that index of marker is among ones in mk_sel_array (selectable markers)
-                if (score_handling_var.mk_sel_array.includes(markers[i].loc.index) == true){
-
-                    // create and dispatch event, send location index for matching marker
-                    const mk_sel_click_event = new CustomEvent("mk_sel_clicked", { detail: markers[i].loc.index});
-                    game_state_target.dispatchEvent(mk_sel_click_event);
-                    
-                    break; // no need to keep cycling
-
+                    };
                 };
             };
         };
+        */
     };
-    */
 };
 
 
  
 function mouseMove_handler (event) {
 
-    // get relative mouse position
-    const mousePos = getMousePos(canvas, event);
-    //console.log("move");
+    if (canvas_interaction_flag) { // works only if interaction is allowed
 
-    // retrieve variable used to asses if move or score handling is underway
-    const move_in_progress = yinsh.objs.current_move.in_progress;
-    const score_handling_in_progress = yinsh.objs.score_handling_var.in_progress;
+        // get relative mouse position
+        const mousePos = getMousePos(canvas, event);
+        //console.log("move");
 
-        
-    // if a move is underway, dispatch event for moving ring
-    if (move_in_progress == true){
+        // retrieve variable used to asses if move or score handling is underway
+        const move_in_progress = yinsh.objs.current_move.in_progress;
+        const score_handling_in_progress = yinsh.objs.score_handling_var.in_progress;
 
-        // create and dispatch event for mouse moving while move is active
-        core_et.dispatchEvent(new CustomEvent('ring_moved', {detail: mousePos}));
-        
-    };
+            
+        // if a move is underway, dispatch event for moving ring
+        if (move_in_progress == true){
 
-    //////////////////////////////////////////////////////////////////////////////// <-- refactoring progress
-    /*
-    // if a scoring action is in progress, check on markers and dispatch events to turn on/off highlighting if hovering on the right one(s)
-    if (score_handling_var.on == true){
+            // create and dispatch event for mouse moving while move is active
+            core_et.dispatchEvent(new CustomEvent('ring_moved', {detail: mousePos}));
+            
+        };
 
-        let on_sel_marker = false;
+        //////////////////////////////////////////////////////////////////////////////// <-- refactoring progress
+        /*
+        // if a scoring action is in progress, check on markers and dispatch events to turn on/off highlighting if hovering on the right one(s)
+        if (score_handling_var.on == true){
 
-        // check which markers the mouse is passing on
-        for(let i=0; i<markers.length; i++){
-            if (ctx.isPointInPath(markers[i].path, mousePos.x, mousePos.y)){
+            let on_sel_marker = false;
 
-                // check that index of marker is among ones in mk_sel_array (selectable markers)
-                if (score_handling_var.mk_sel_array.includes(markers[i].loc.index) == true){
+            // check which markers the mouse is passing on
+            for(let i=0; i<markers.length; i++){
+                if (ctx.isPointInPath(markers[i].path, mousePos.x, mousePos.y)){
 
-                    // create and dispatch event, send location index for matching marker
-                    const mk_sel_hover_event_ON = new CustomEvent("mk_sel_hover_ON", { detail: markers[i].loc.index});
-                    game_state_target.dispatchEvent(mk_sel_hover_event_ON);
+                    // check that index of marker is among ones in mk_sel_array (selectable markers)
+                    if (score_handling_var.mk_sel_array.includes(markers[i].loc.index) == true){
 
-                    on_sel_marker = true; // -> to inform default behavior
-                    
-                    break; // as you get the one
+                        // create and dispatch event, send location index for matching marker
+                        const mk_sel_hover_event_ON = new CustomEvent("mk_sel_hover_ON", { detail: markers[i].loc.index});
+                        game_state_target.dispatchEvent(mk_sel_hover_event_ON);
 
+                        on_sel_marker = true; // -> to inform default behavior
+                        
+                        break; // as you get the one
+
+                    };
                 };
             };
+
+            if (on_sel_marker == false){
+
+                // score handling underway but not on mk_sel_array, only original mk_sel should stay highlighted until handling is over
+                const mk_sel_hover_event_OFF = new CustomEvent("mk_sel_hover_OFF");
+                game_state_target.dispatchEvent(mk_sel_hover_event_OFF);
+
+            };
+            
         };
 
-        if (on_sel_marker == false){
-
-            // score handling underway but not on mk_sel_array, only original mk_sel should stay highlighted until handling is over
-            const mk_sel_hover_event_OFF = new CustomEvent("mk_sel_hover_OFF");
-            game_state_target.dispatchEvent(mk_sel_hover_event_OFF);
-
-        };
-        
+        */
     };
-
-    */
 };
 
 

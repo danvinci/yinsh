@@ -118,15 +118,17 @@ export function init_empty_game_objects(){
         _game_objects.markers = []; // -> array for markers
         _game_objects.drop_zones = []; // -> array for drop zones (markers and rings are placed at their coordinates only)
 
-        // moves
+        // turns, moves, score handling
+        _game_objects.current_turn = {in_progress: false}; // to track if this is the client's turn 
+       
         _game_objects.current_move = {in_progress: false, start_index: 0, legal_drops: []}; // -> details for move currently in progress 
         _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal drops ids)
+        
+        _game_objects.current_score_handling = {in_progress: false};; // tracking if score handling is in progress
+        _game_objects.markers_halos = []; // -> halos around markers when scoring
 
             // NOTE: revisit if these are necessary, or if temp values within functions are enough
             // score handling
-            _game_objects.markers_halos = []; // -> halos around markers when scoring
-            
-            // NOTE: rename the keys below, I don't like them
             _game_objects.mk_sel_scoring = {ids:[], hot:false}; // -> tracking IDs of markers/halos that can be selected for finalizing the score
             _game_objects.score_handling_var = {in_progress: false, mk_sel_array: [], num_rows: {}, details: []}; // // -> object with all scoring information, used for handling scoring scenarios
 
@@ -152,8 +154,9 @@ export function save_srv_response_NewGame(srv_resp_NewGame){
         _server_response.whiteRings_ids = srv_resp_NewGame.whiteRings_ids; 
         _server_response.blackRings_ids = srv_resp_NewGame.blackRings_ids;
 
-        // pre-computed possible legal moves / now just for WHITE player, later expose as a setting?
+        // pre-computed possible legal moves (for next moving player)
         _server_response.next_legal_moves = srv_resp_NewGame.next_legalMoves;
+        _server_response.next_movingPlayer = srv_resp_NewGame.next_movingPlayer;
 
         // pre-computed scenario tree for each possible move (except pick/drop in same location)
         _server_response.scenarioTree = srv_resp_NewGame.scenarioTree;
@@ -165,6 +168,33 @@ export function save_srv_response_NewGame(srv_resp_NewGame){
     console.log(`LOG - You're player ${_server_response.client_player_id}`);
 
 };
+
+export function get_player_id () {
+
+    return yinsh.server_data.client_player_id;
+};
+
+// starts local turn if the server says so, returns true/false
+export function try_start_local_turn(){
+
+    // if current player is the next moving one -> then is its turn
+    if (yinsh.server_data.next_movingPlayer == yinsh.server_data.client_player_id) {
+        
+        // log in dedicated object
+        yinsh.objs.current_turn.in_progress = true;
+        return true;
+    } else {
+        return false;
+    };
+};
+ 
+// marks local turn as completed 
+export function complete_local_turn(){
+
+    yinsh.objs.current_turn.in_progress = false;
+
+};
+
 
 // initialize drop zones -> used to propagate location data to rings, markers, and visual cues
 // NOTE: sensitive to canvas size
