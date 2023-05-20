@@ -171,47 +171,49 @@ async function ringDrop_handler (event) {
 
 
         ////// handle markers removal, flipping, and trigger score handling
-        
-        /////////////////////////////////// -> refactoring progress
-
         // CASE: same location drop, nothing to flip, remove added marker
         if (dropping_ring_loc_index == start_move_index){
              
             remove_markers([dropping_ring_loc_index]); // removes markers from their array and game state
         
-            // player's turn should continue ()
+            // player's turn should continue // NOTE -> turns not handled yet
 
-        // ring moved -> asks the server about markers and scoring options // -> could be pre-computed maybe?
+        // CASE: ring moved -> looking into scenarioTree to see what happens
         } else {
 
-            const srv_mk_resp = await server_markers_check(drop_index);
+            // retrieve scenario as scenarioTree.index_start_move.index_end_move
+            const move_scenario = yinsh.server_data.scenarioTree[start_move_index][dropping_ring_loc_index];
+            console.log(move_scenario);
 
-            // CASE: something to flip
-            if (srv_mk_resp.flip_flag == true){
+            /////////////////////////////////// -> refactoring progress
+            // CASE: some markers must be flipped
+            if (move_scenario.flip_flag == true){
                 // update drawing objects
-                flip_markers(srv_mk_resp.markers_toFlip);
+                console.log("UNHANDLED - MARKERS FLIP");
+                //flip_markers(srv_mk_resp.markers_toFlip);
 
                 // update game state
-                flip_markers_game_state(srv_mk_resp.markers_toFlip)
+                //flip_markers_game_state(srv_mk_resp.markers_toFlip)
             };
 
-            // CASE: scoring was made -> create and dispatch event for other handler
+            // CASE: scoring was made -> score handling is triggered
+            if (move_scenario.score_flag == true){
 
-            if (srv_mk_resp.num_scoring_rows.tot > 0){
+                console.log("UNHANDLED - SCORE HANDLING");
 
-                const score_handling_start = new CustomEvent("score_handling_start", {detail: {num_scoring_rows: srv_mk_resp.num_scoring_rows, scoring_details: srv_mk_resp.scoring_details}});
-                game_state_target.dispatchEvent(score_handling_start);
+                //const score_handling_start = new CustomEvent("score_handling_start", {detail: {num_scoring_rows: srv_mk_resp.num_scoring_rows, scoring_details: srv_mk_resp.scoring_details}});
+                //game_state_target.dispatchEvent(score_handling_start);
 
             };
         };
 
-        // MOVE COMPLETED (but turn not over yet)
+        // MOVE COMPLETED (but turn might not be over yet)
         // redraw changes
         refresh_canvas_state(); 
     
     } else{
 
-        console.log("Invalid drop location");
+        console.log("LOG - Invalid drop location");
         // NOTE: we could play specific sound 
     };
 };

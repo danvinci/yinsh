@@ -4,7 +4,7 @@
 // https://www.pubnub.com/blog/http-long-polling/
 // trying with long polling before digging into websockets
 
-const port_number = "1096"
+const port_number = "1097"
 
 // server call for generating new game
 // NOTE: should handle errors directly (e.g. server unavailable)

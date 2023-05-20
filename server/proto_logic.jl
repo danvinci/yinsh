@@ -1340,45 +1340,73 @@ function gen_scenarioTree(game_id)
 
 	scenario_tree = Dict()
 
-	# retrieves game details
+	# retrieves game details, assumes valid game_id
 	current_game_details = games_log_dict[game_id]
 
 		# assumes game state has been updated with move that was actually done
 		next_legalMoves = current_game_details[:next_legalMoves]
-		next_moving_player = current_game_details[:next_movingPlayer]
 		ex_game_state = current_game_details[:server_gameState]
 
 	# for each move start
-	for move_start in keys(next_legalMoves)
-
-		single_scenario = Dict()
+	for move_start in collect(keys(next_legalMoves))
 
 		# for each move end
 		for move_end in next_legalMoves[move_start]
 
-			#get move_start/end in cartindex
-			move_start_ci = reshape_in(move_start)
-			move_end_ci = reshape_in(move_end)
+			if move_end == move_start # nothing happens
+				continue
+			else # something happens
 
-			# generate new game state for start/end combination
-			# new state will have ring in new location and markers flipped
-			# return also if markers need to flip, and which IDs
-			new_game_state, flip_flag, markers_toFlip = gen_New_gameState(ex_game_state, move_start_ci, move_end_ci)
+				#get move_start/end in cartindex
+				move_start_ci = reshape_in(move_start)
+				move_end_ci = reshape_in(move_end)
+	
+				# generate new game state for start/end combination
+				# new state will have ring in new location and markers flipped
+				# saves if markers need to flip and which IDs
+				new_game_state, flip_flag, markers_toFlip = gen_New_gameState(ex_game_state, move_start_ci, move_end_ci)
+	
+				# checks scoring opportunities
+				scoring_rows, scores_toHandle = static_score_lookup(new_game_state)
+				score_flag = (scoring_rows[:tot] >= 1) ? true : false	
+				
+				# save all in a single scenario
+				s_first_key = move_start # linear indexes
+				s_second_key = move_end 
+				s_value = Dict()
 
-			# checks scoring opportunities
-			scoring_var = static_score_lookup(new_game_state)
-		
-			# save single scenario
-			scenario_key = (move_start_ci, move_end_ci)
-			scenario_value = Dict(  :new_game_state => new_game_state,
-									:flip_flag => flip_flag,
-									:markers_toFlip => markers_toFlip,
-									:scoring_var => scoring_var )
-			
+				## make scenario data lighter -> only write extra data if flags true
+				# scoring details
+				setindex!(s_value, score_flag, :score_flag)
+				if score_flag
 
-			# save scenario in tree
-			setindex!(scenario_tree, scenario_value, scenario_key)
-		
+				# reshape for client consumption
+				for (row_id, row) in enumerate(scores_toHandle)
+					scores_toHandle[row_id][:mk_locs] = reshape_out(row[:mk_locs])
+					scores_toHandle[row_id][:mk_sel] = reshape_out(row[:mk_sel])
+				end
+					
+					setindex!(s_value, scores_toHandle, :scores_toHandle)
+				end
+				
+				# markers details
+				setindex!(s_value, flip_flag, :flip_flag)
+				if flip_flag
+					# saving reshaped indexes
+					setindex!(s_value, reshape_out(markers_toFlip), :markers_toFlip)
+				end
+				
+				## save scenario in tree (first_key -> second_key -> scenario)
+				# test if root branch already created
+				if haskey(scenario_tree, s_first_key)
+
+					setindex!(scenario_tree[s_first_key], s_value, s_second_key)
+				
+				else #create root branch first
+					setindex!(scenario_tree, Dict(s_second_key => s_value), s_first_key)
+				end
+				
+			end
 		end
 	end
 
@@ -1386,18 +1414,14 @@ function gen_scenarioTree(game_id)
 
 end
 
-# ╔═╡ 087d01ac-30de-44ec-9230-f072d2868271
-# pass markers about to flip for checking score
-#num_sc_rows, sc_details = score_lookup(ref_state, markers_toFlip)
-
 # ╔═╡ ebe12b2b-558b-4eba-830b-f034d2e44d37
-test_game = games_log_dict["dnNKQ"]
+test_game = games_log_dict["kIXEk"];
+
+# ╔═╡ 9d357da1-5aa6-4334-968f-ff320493b112
+test_game_moves = test_game[:next_legalMoves]
 
 # ╔═╡ 048ba8c9-47e8-46f1-8717-564c6469636d
-gen_scenarioTree("dnNKQ")
-
-# ╔═╡ abf31ce1-cb7c-42f0-bab8-cdb977e4be7f
-new_gs, _, _ = gen_New_gameState(test_game[:server_gameState], reshape_in(136), reshape_in(154));
+gen_scenarioTree("kIXEk")
 
 # ╔═╡ f86b195e-06a9-493d-8536-16bdcaadd60e
 function print_gameState(server_game_state)
@@ -1431,12 +1455,6 @@ end
 
 # ╔═╡ 7bc0fc4b-4a2a-429d-a3ae-0dbefccf3129
 print_gameState(test_game[:server_gameState])
-
-# ╔═╡ f078346f-8d6c-4d69-82ba-723ab92ccfc0
-print_gameState(new_gs)
-
-# ╔═╡ c8f9b929-0ca5-4065-9060-4651b67e3710
-static_score_lookup(new_gs)
 
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
@@ -1511,6 +1529,9 @@ function newGame()
 							)
 
 	save_newGame!(games_log_dict, new_game_details)
+
+	# generate and add scenario tree to response
+	setindex!(new_game_details, gen_scenarioTree(game_id), :scenarioTree)
 	
 	
 	return new_game_details
@@ -1540,7 +1561,7 @@ end
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1096
+port_test = 1097
 
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 begin
@@ -2933,7 +2954,7 @@ version = "1.4.1+0"
 # ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
 # ╠═c67154cb-c8cc-406c-90a8-0ea8241d8571
 # ╠═c2797a4c-81d3-4409-9038-117fe50540a8
-# ╠═53dec9b0-dac1-47a6-b242-9696ff45b91b
+# ╟─53dec9b0-dac1-47a6-b242-9696ff45b91b
 # ╟─148d1418-76a3-462d-9049-d30e85a45f06
 # ╟─fc68fa36-e2ea-40fa-9d0e-722167a2506e
 # ╟─7fe89538-b2fe-47db-a961-fdbdd4278963
@@ -2947,15 +2968,12 @@ version = "1.4.1+0"
 # ╠═1f021cc5-edb0-4515-b8c9-6a2395bc9547
 # ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
-# ╠═087d01ac-30de-44ec-9230-f072d2868271
 # ╠═8eab6d11-6d28-411d-bd82-7bec59b3f496
 # ╠═ebe12b2b-558b-4eba-830b-f034d2e44d37
+# ╠═9d357da1-5aa6-4334-968f-ff320493b112
 # ╠═048ba8c9-47e8-46f1-8717-564c6469636d
-# ╠═abf31ce1-cb7c-42f0-bab8-cdb977e4be7f
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╠═7bc0fc4b-4a2a-429d-a3ae-0dbefccf3129
-# ╠═f078346f-8d6c-4d69-82ba-723ab92ccfc0
-# ╠═c8f9b929-0ca5-4065-9060-4651b67e3710
 # ╠═466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╠═22845433-0722-4406-af31-2b9afcb72652

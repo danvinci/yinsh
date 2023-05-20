@@ -122,12 +122,13 @@ export function init_empty_game_objects(){
         _game_objects.current_move = {in_progress: false, start_index: 0, legal_drops: []}; // -> details for move currently in progress 
         _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal drops ids)
 
-        // score handling
-        _game_objects.markers_halos = []; // -> halos around markers when scoring
+            // NOTE: revisit if these are necessary, or if temp values within functions are enough
+            // score handling
+            _game_objects.markers_halos = []; // -> halos around markers when scoring
             
             // NOTE: rename the keys below, I don't like them
-        _game_objects.mk_sel_scoring = {ids:[], hot:false}; // -> tracking IDs of markers/halos that can be selected for finalizing the score
-        _game_objects.score_handling_var = {in_progress: false, mk_sel_array: [], num_rows: {}, details: []}; // // -> object with all scoring information, used for handling scoring scenarios
+            _game_objects.mk_sel_scoring = {ids:[], hot:false}; // -> tracking IDs of markers/halos that can be selected for finalizing the score
+            _game_objects.score_handling_var = {in_progress: false, mk_sel_array: [], num_rows: {}, details: []}; // // -> object with all scoring information, used for handling scoring scenarios
 
 
     // save to global obj and log
@@ -145,7 +146,7 @@ export function save_srv_response_NewGame(srv_resp_NewGame){
         _server_response.game_id = srv_resp_NewGame.game_id; // game ID
 
         // assign color to local player (this client is the caller)
-        _server_response.client_player_id = srv_resp_NewGame.caller_color; // player ID (B ~ Black, W ~ White), one of player_black_id / player_white_id 
+        _server_response.client_player_id = srv_resp_NewGame.originating_player; // player ID (B ~ Black, W ~ White), one of player_black_id / player_white_id 
 
         // initial rings locations
         _server_response.whiteRings_ids = srv_resp_NewGame.whiteRings_ids; 
@@ -153,6 +154,9 @@ export function save_srv_response_NewGame(srv_resp_NewGame){
 
         // pre-computed possible legal moves / now just for WHITE player, later expose as a setting?
         _server_response.next_legal_moves = srv_resp_NewGame.next_legalMoves;
+
+        // pre-computed scenario tree for each possible move (except pick/drop in same location)
+        _server_response.scenarioTree = srv_resp_NewGame.scenarioTree;
     
     // save to global obj and log
     yinsh.server_data = structuredClone(_server_response);
