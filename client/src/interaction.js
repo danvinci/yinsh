@@ -51,7 +51,7 @@ function mouseDown_handler (event) {
             core_et.dispatchEvent(new CustomEvent('ring_drop', { detail: closest_snap_loc }));
 
         } catch (err) {
-            console.log(err);
+            console.log(err.message);
         };
     };
 
