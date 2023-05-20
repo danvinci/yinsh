@@ -418,21 +418,32 @@ export function add_marker(ref_loc_object){ // input should be copy of loc from 
 
 
 // removes markers -> called when ring dropped in same location or scoring row is selected
-function remove_markers(mk_indexes_array){ // input is array of loc indexes
+export function remove_markers(mk_indexes_array){ // input is array of loc indexes
 
     // retrieve array of markers and latest game_state
-    const _markers = structuredClone(yinsh.objs.markers);
+    const _markers = yinsh.objs.markers;
+    const _marker_id = yinsh.constant_params.marker_id;
+
     let _game_state = structuredClone(yinsh.objs.game_state);
 
-    // filters and updates global object
+    // updates global object
     yinsh.objs.markers = _markers.filter(m => !mk_indexes_array.includes(m.loc.index));
 
-    // cleans game_state copy at selected indexes and updates global object
-    mk_indexes_array.forEach(index => _game_state[index]='');
+    // cleans game_state copy at selected indexes
+    mk_indexes_array.forEach( (index) => {
+
+        if (_game_state[index].includes(_marker_id)) {
+            
+            _game_state[index]= ''; // cleans state only if a marker is there 
+        };
+        
+    });
+    
+    // updates global object
     yinsh.objs.game_state = _game_state
     
     console.log(`LOG - Marker(s) removed from indexes: ${mk_indexes_array}`);
-
+    
 };
     
 

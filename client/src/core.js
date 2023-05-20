@@ -5,7 +5,7 @@
 //////////// IMPORTS
 import { server_newGame_gen } from './server.js'
 import { init_global_obj_params, init_empty_game_objects, save_srv_response_NewGame, init_new_game_data } from './data.js'
-import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring } from './data.js'
+import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction } from './interaction.js'
 import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
@@ -143,20 +143,21 @@ async function ringDrop_handler (event) {
         // the active ring is always last in the array
         const index_dropping_ring_in_array = getIndex_last_ring();
 
-        // update ring loc information 
-        updateLoc_last_ring(snap_drop_loc);
+            // update ring loc information 
+            updateLoc_last_ring(snap_drop_loc);
 
             // retrieve ring and its index details
             const dropping_ring = yinsh.objs.rings[index_dropping_ring_in_array];
             const dropping_ring_loc_index = dropping_ring.loc.index;
         
-        // update game state
-        // if ring is dropped in same location, this automatically overrides the existing marker (MB/MW)
-        const gs_value = dropping_ring.type.concat(dropping_ring.player); // -> RB, RW
-        update_game_state(dropping_ring_loc_index, gs_value);
+            // update game state
+            // if ring is dropped in same location, this automatically overrides the existing marker (MB/MW)
+            const gs_value = dropping_ring.type.concat(dropping_ring.player); // -> RB, RW
+            update_game_state(dropping_ring_loc_index, gs_value);
 
-        // resets data for current move (move is complete/off)
-        update_current_move();
+        // resets data for current move (move is complete/off), but let's save starting index first
+        const start_move_index = yinsh.objs.current_move.start_index;
+        update_current_move(); // -> important to close the move to prevent side effects
         
         // updates legal cues (all will be turned off as move is no longer in progress)
         update_legal_cues();
@@ -169,17 +170,18 @@ async function ringDrop_handler (event) {
         console.log(`LOG - Ring ${dropping_ring.player} dropped at index ${dropping_ring_loc_index}`);
 
 
-        /////////////////////////////////// -> refactoring progress
+        ////// handle markers removal, flipping, and trigger score handling
         
-        if (drop_index == current_move.start_index){
-             // CASE: same location drop, nothing to flip (no server call needed for this)
+        /////////////////////////////////// -> refactoring progress
 
-            remove_markers(drop_index);
-            // ring dropped in same location, overrides MB/MW -> no need to handle it explicitly
+        // CASE: same location drop, nothing to flip, remove added marker
+        if (dropping_ring_loc_index == start_move_index){
+             
+            remove_markers([dropping_ring_loc_index]); // removes markers from their array and game state
+        
+            // player's turn should continue ()
 
-            console.log(`Marker removed from index: ${drop_index}`);
-            
-        // ring moved -> asks the server about markers and scoring options
+        // ring moved -> asks the server about markers and scoring options // -> could be pre-computed maybe?
         } else {
 
             const srv_mk_resp = await server_markers_check(drop_index);
@@ -203,10 +205,9 @@ async function ringDrop_handler (event) {
             };
         };
 
-        // MOVE COMPLETED
-        // mark move as completed and redraw changes
-        update_current_move(on = false);
-        refresh_draw_state(); 
+        // MOVE COMPLETED (but turn not over yet)
+        // redraw changes
+        refresh_canvas_state(); 
     
     } else{
 

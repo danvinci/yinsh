@@ -46,7 +46,7 @@ async function server_joinGame(game_code){
 };
 
 
-// server call for checking allowable moves 
+// server call for checking allowable moves  // OBSOLETE -> PRE-COMPUTED IN ADVANCE
 async function server_legal_moves(){
 
     let call_start = Date.now();

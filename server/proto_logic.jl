@@ -1151,6 +1151,293 @@ function markers_actions(client_state, client_start_index, client_end_index)
 
 end
 
+# ╔═╡ bc19e42a-fc82-4191-bca5-09622198d102
+# global variable with log of games -> should be a database with a trail of moves
+global games_log_dict = Dict()
+
+# ╔═╡ aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
+function gen_New_gameState(ex_game_state, start_move, end_move)
+# generates new game state, starting from an existing one + start/end moves
+# assumes start/end are valid moves AND in cartesian indexes
+# works with game state in server-side format (matrix)
+
+	new_gs = deepcopy(ex_game_state)
+	
+	if start_move == end_move # ring dropped where picked
+
+		return ex_game_state
+
+	else # ring moved elsewhere -> game state changed
+
+		# get ring details
+		picked_ring = ex_game_state[start_move]
+		picked_ring_color = picked_ring[end] # RW, RB -> should work with identifiers
+
+		# marker placed in start_move (same color as picked ring)
+		new_gs[start_move] = "M"*picked_ring_color # should work with identifiers
+		
+		# ring placed in end_move # -> assumes valid move
+		new_gs[end_move] = picked_ring
+
+		# markers flipped (if any)
+
+			# retrieve search space for the starting point
+			search_space = locs_searchSpace[start_move]
+		
+			direction = 0
+		
+			# spot direction/array that contains the ring 
+			for (i, range) in enumerate(search_space)
+		
+				# check if search_temp contains end_index
+				if (end_move in range)
+					 direction = i
+					break
+				end
+			end
+		
+			# return flag + ids of markers to flip in direction of movement
+			flip_flag, markers_toFlip = markers_toFlip_search(new_gs, search_space[direction])
+
+			if flip_flag
+				# actually flip markers -> assumes 
+				for m_id in markers_toFlip
+					if contains(new_gs[m_id], 'M')
+	
+						new_gs[m_id] = (new_gs[m_id] == "MW") ? "MB" : "MW" 
+					end
+				end
+			end
+
+	end
+
+	return new_gs, flip_flag, markers_toFlip
+
+end
+
+# ╔═╡ 5da79176-7005-4afe-91b7-accaac0bd7b5
+function static_score_lookup(state)
+	# look at the game state to check if there are scoring opportunities
+	# ASSUMES MOVE IS DONE AND AFFECTED MARKERS HAVE BEEN FLIPPED
+
+	# all markers locations
+	gs_markers_locs = findall(i -> contains(i, "M"), state)
+
+	# values to be returned
+	num_scoring_rows = Dict(:tot => 0, :B => 0, :W => 0)
+	scoring_details = []
+
+	# helper array to store found locations for scoring markers
+	found_ss_locs = []
+
+	for mk_index in gs_markers_locs
+
+		# for each marker retrieve search space for scoring
+		ss_locs_arrays = locs_searchSpace_scoring[mk_index]
+
+		for ss_locs in ss_locs_arrays
+				
+			# reading states for all indexes in loc search array
+
+			states_array = []
+			for index in ss_locs
+				push!(states_array, state[index])
+			end
+					
+	
+			# search if a score was made in loc
+			MB_count = count(s -> isequal(s, "MB"), states_array)
+				black_scoring = MB_count == 5 ? true : false
+			
+			MW_count = count(s -> isequal(s, "MW"), states_array)
+				white_scoring = MW_count == 5 ? true : false
+
+			# if a score was made
+			if black_scoring || white_scoring
+				# log who's the player
+				scoring_player = black_scoring ? "B" : "W"
+
+				# save the row but check that scoring row wasn't saved already
+				# scoring locs are the same for each marker in it due to sorting
+				# if not found already, save it
+				if !(ss_locs in found_ss_locs)
+
+					# save score_row details
+					score_row = Dict(:mk_locs => ss_locs, :player => scoring_player)
+			
+					push!(scoring_details, score_row)
+					
+					# keep count of scoring rows (total and per player)
+					num_scoring_rows[:tot] += 1	
+					
+						if black_scoring
+							num_scoring_rows[:B] += 1
+						elseif white_scoring
+							num_scoring_rows[:W] += 1
+						end
+
+					# save array of locations to simplify future checks
+					push!(found_ss_locs, ss_locs)
+				
+				end		
+				
+			end	
+		end
+	end
+
+	## handling case of multiple scoring rows in the same move + row selection
+	if num_scoring_rows[:tot] >= 1
+
+		# scoring rows: find markers outside intersection and use them for selection
+		# guaranteed to find at least 1 for each series (found_locs helps)
+
+		all_scoring_mk_ids = []
+		for row in scoring_details
+			append!(all_scoring_mk_ids, row[:mk_locs])
+		end
+
+		# frequency count of each marker location ID
+		mk_ids_fCount = countmap(all_scoring_mk_ids)
+
+		# keep track of sel markers already taken (by CartIndex)
+		mk_sel_taken = []
+		
+		for (row_id, row) in enumerate(scoring_details)
+
+			# temp copy of locations, to avoid modifying the original array
+			temp_locs = copy(row[:mk_locs])
+
+			# build search array of locations in row by exluding taken locations
+			if !isempty(mk_sel_taken)
+
+				indexes_toRemove = findall(m -> m in mk_sel_taken, temp_locs)
+				if !isempty(indexes_toRemove)
+
+					deleteat!(temp_locs, indexes_toRemove)
+				end
+			end
+				
+
+			# find marker with min frequency that hasn't been already taken
+			min_fr, min_fr_index = findmin(i -> mk_ids_fCount[i], temp_locs)
+			mk_sel = temp_locs[min_fr_index]
+				
+			# save mk_sel in row collection to be returned
+			setindex!(scoring_details[row_id], mk_sel, :mk_sel)
+
+			# store mk_sel in array (useful for solving conflicts later)
+			push!(mk_sel_taken, mk_sel)
+		end
+	end
+
+	return num_scoring_rows, scoring_details
+
+end
+
+# ╔═╡ 1f021cc5-edb0-4515-b8c9-6a2395bc9547
+function gen_scenarioTree(game_id)
+# given a game IDs, computes results for all possible moves of next moving player
+
+	scenario_tree = Dict()
+
+	# retrieves game details
+	current_game_details = games_log_dict[game_id]
+
+		# assumes game state has been updated with move that was actually done
+		next_legalMoves = current_game_details[:next_legalMoves]
+		next_moving_player = current_game_details[:next_movingPlayer]
+		ex_game_state = current_game_details[:server_gameState]
+
+	# for each move start
+	for move_start in keys(next_legalMoves)
+
+		single_scenario = Dict()
+
+		# for each move end
+		for move_end in next_legalMoves[move_start]
+
+			#get move_start/end in cartindex
+			move_start_ci = reshape_in(move_start)
+			move_end_ci = reshape_in(move_end)
+
+			# generate new game state for start/end combination
+			# new state will have ring in new location and markers flipped
+			# return also if markers need to flip, and which IDs
+			new_game_state, flip_flag, markers_toFlip = gen_New_gameState(ex_game_state, move_start_ci, move_end_ci)
+
+			# checks scoring opportunities
+			scoring_var = static_score_lookup(new_game_state)
+		
+			# save single scenario
+			scenario_key = (move_start_ci, move_end_ci)
+			scenario_value = Dict(  :new_game_state => new_game_state,
+									:flip_flag => flip_flag,
+									:markers_toFlip => markers_toFlip,
+									:scoring_var => scoring_var )
+			
+
+			# save scenario in tree
+			setindex!(scenario_tree, scenario_value, scenario_key)
+		
+		end
+	end
+
+	return scenario_tree
+
+end
+
+# ╔═╡ 087d01ac-30de-44ec-9230-f072d2868271
+# pass markers about to flip for checking score
+#num_sc_rows, sc_details = score_lookup(ref_state, markers_toFlip)
+
+# ╔═╡ ebe12b2b-558b-4eba-830b-f034d2e44d37
+test_game = games_log_dict["dnNKQ"]
+
+# ╔═╡ 048ba8c9-47e8-46f1-8717-564c6469636d
+gen_scenarioTree("dnNKQ")
+
+# ╔═╡ abf31ce1-cb7c-42f0-bab8-cdb977e4be7f
+new_gs, _, _ = gen_New_gameState(test_game[:server_gameState], reshape_in(136), reshape_in(154));
+
+# ╔═╡ f86b195e-06a9-493d-8536-16bdcaadd60e
+function print_gameState(server_game_state)
+	# print matrix easy copying in js code
+	mm_to_print = ""
+	
+	for i in 1:row_m
+		for j in 1:col_m
+
+			if server_game_state[i,j] == ""
+				print_val = "  "
+			else
+				print_val = server_game_state[i,j]
+			end
+			
+			if j == 1 
+				mm_to_print *= "[" * string(print_val) * ", "
+			
+			elseif j == col_m 
+				mm_to_print *= string(print_val) * "] \n"
+				
+			else
+				mm_to_print *= string(print_val) * ", "
+			end
+		end
+	end
+
+print(mm_to_print)
+
+end
+
+# ╔═╡ 7bc0fc4b-4a2a-429d-a3ae-0dbefccf3129
+print_gameState(test_game[:server_gameState])
+
+# ╔═╡ f078346f-8d6c-4d69-82ba-723ab92ccfc0
+print_gameState(new_gs)
+
+# ╔═╡ c8f9b929-0ca5-4065-9060-4651b67e3710
+static_score_lookup(new_gs)
+
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
 # returns random locations for 5 + 5 rings
@@ -1167,18 +1454,14 @@ function initRand_ringsLoc()
 end
 
 # ╔═╡ 57153574-e5ca-4167-814e-2d176baa0de9
-function save_newGame!(new_game_details, games_log)
+function save_newGame!(games_log_ref, new_game_details)
 # handles writing to dict (redis in the future?)
 
 	# saves starting state of new game
-	setindex!(games_log, new_game_details, new_game_details[:game_id])
+	setindex!(games_log_ref, new_game_details, new_game_details[:game_id])
 
 
 end
-
-# ╔═╡ bc19e42a-fc82-4191-bca5-09622198d102
-# global variable with log of games -> should be a database with a trail of moves
-global games_log_dict = Dict()
 
 # ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
 function newGame()
@@ -1189,7 +1472,8 @@ function newGame()
 
 	game_id = randstring(5)
 	
-	caller_color = rand(["B", "W"])
+	originating_player = rand(["B", "W"]) # -> should be a client-side setting
+	next_movingPlayer = "W" # -> white always starts first
 	
 	whiteRings_locs, blackRings_locs = initRand_ringsLoc()
 
@@ -1217,19 +1501,24 @@ function newGame()
 
 	# package response for client
 	new_game_details = Dict(:game_id => game_id,
-							:caller_color => caller_color,
+							:server_gameState => game_state,
+							:originating_player => originating_player,
 							:whiteRings_ids => reshape_out(whiteRings_locs),
 							:blackRings_ids => reshape_out(blackRings_locs),
+							:next_movingPlayer => next_movingPlayer,
 							:next_legalMoves => next_legalMoves,
 							:init_dateTime => now()
 							)
 
-	save_newGame!(new_game_details, games_log_dict)
+	save_newGame!(games_log_dict, new_game_details)
 	
 	
 	return new_game_details
 	
 end
+
+# ╔═╡ 8eab6d11-6d28-411d-bd82-7bec59b3f496
+newGame();
 
 # ╔═╡ 22845433-0722-4406-af31-2b9afcb72652
 games_log_dict
@@ -2654,9 +2943,21 @@ version = "1.4.1+0"
 # ╠═6f0ad323-1776-4efd-bf1e-667e8a834f41
 # ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 # ╠═f1949d12-86eb-4236-b887-b750916d3493
+# ╠═bc19e42a-fc82-4191-bca5-09622198d102
+# ╠═1f021cc5-edb0-4515-b8c9-6a2395bc9547
+# ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
+# ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
+# ╠═087d01ac-30de-44ec-9230-f072d2868271
+# ╠═8eab6d11-6d28-411d-bd82-7bec59b3f496
+# ╠═ebe12b2b-558b-4eba-830b-f034d2e44d37
+# ╠═048ba8c9-47e8-46f1-8717-564c6469636d
+# ╠═abf31ce1-cb7c-42f0-bab8-cdb977e4be7f
+# ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
+# ╠═7bc0fc4b-4a2a-429d-a3ae-0dbefccf3129
+# ╠═f078346f-8d6c-4d69-82ba-723ab92ccfc0
+# ╠═c8f9b929-0ca5-4065-9060-4651b67e3710
 # ╠═466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
-# ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╠═22845433-0722-4406-af31-2b9afcb72652
 # ╠═b58b0aa9-817d-4f04-842e-7ee834b5759e
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
