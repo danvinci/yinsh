@@ -1,23 +1,28 @@
 import { createSignal, Show, Switch, Match, createResource, createEffect, on } from "solid-js";
-import { init_newGame_fromServer } from "./core.js";
+import { init_game_fromServer } from "./core.js";
 
-function Play() {
+export function Play() {
   
   // manage initial 'play' call to action 
   const [play, set_play] = createSignal(false);
   const toggle_Play = () => set_play(!play());
 
-    // manage 'enter game code' option
-    const [playInput, set_playInput] = createSignal(false);
-    const toggle_PlayInput = () => set_playInput(!playInput());
+      // manage 'play with a friend' option
+      const [playFriend, set_playFriend] = createSignal(false);
+      const toggle_PlayFriend = () => set_playFriend(!playFriend());
 
-    // manage 'generate game code' option
-    const [playAsk, set_playAsk] = createSignal(false);
-    const toggle_PlayAsk = () => set_playAsk(!playAsk());
+          // manage 'play w/ friend > generate new game' option
+          const [op_newGame, set_op_newGame] = createSignal(false);
+          const toggle_op_newGame = () => set_op_newGame(!op_newGame());
 
-     // manage 'play local' option
-     const [playLocal, set_playLocal] = createSignal(false);
-     const toggle_PlayLocal = () => set_playLocal(!playLocal());
+          // manage 'play w/ friend > join existing game with code' option
+          const [op_join_wCode, set_op_join_wCode] = createSignal(false);
+          const toggle_op_join_wCode = () => set_op_join_wCode(!op_join_wCode());
+
+      // manage 'play with AI' option
+      const [playAI, set_playAI] = createSignal(false);
+      const toggle_PlayAI = () => set_playAI(!playAI());
+
 
   return (
     <div>
@@ -33,126 +38,119 @@ function Play() {
           fallback={
             <div>
               <button type="button" onClick={toggle_Play}>Go back</button>
-              <button type="button" onClick={toggle_PlayLocal}>Local game</button>
-              <button type="button" onClick={toggle_PlayAsk}>Generate game code</button>
-              <button type="button" onClick={toggle_PlayInput}>Enter game code</button>
+              <button type="button" onClick={toggle_PlayFriend}>Play with a friend</button>
+              <button type="button" disabled="true" onClick={toggle_PlayAI}>Play with AI</button>
             </div>
           }
         >
-          <Match when={playInput()}>
-            <div>
-              <button type="button" onClick={toggle_PlayInput}>Go back</button>
-              <C_input_gameCode></C_input_gameCode>
-            </div>
+          <Match when={playFriend()}> 
+            <>
+              <Switch
+                fallback={
+                  <>
+                    <button type="button" onClick={toggle_PlayFriend}>Go back</button>
+                    <button type="button" onClick={toggle_op_newGame}>New game</button>
+                    <button type="button" onClick={toggle_op_join_wCode}>Join with code</button>
+                  </>
+                }
+              >
+                <Match when={op_newGame()}>
+                  <button type="button" onClick={toggle_op_newGame}>Go back</button> 
+                  <Option_new_game></Option_new_game>
+                </Match>
+
+                <Match when={op_join_wCode()}>
+                  <>
+                    <button type="button" onClick={toggle_op_join_wCode}>Go back</button>
+                    <Option_join_with_code></Option_join_with_code>
+                  </>
+                </Match>
+              </Switch>
+            </>
           </Match>
 
-          <Match when={playAsk()}>
+          <Match when={playAI()}>
             <div>
-              <button type="button" onClick={toggle_PlayAsk}>Go back</button>
-              <C_ask_gameCode></C_ask_gameCode>
+              <button type="button" onClick={toggle_PlayAI}>Go back</button>
             </div>
           </Match>
-
-          <Match when={playLocal()}>
-            <div>
-              <button type="button" onClick={toggle_PlayLocal}>Go back</button>
-              <C_playLocal></C_playLocal>
-            </div>
-          </Match>
-          
         </Switch>
-       
       </Show>
-          
     </div>
   );
 }
 
 
-function C_ask_gameCode() {
-
-  const fn_askNewGame = () => {
-
-    // dispatch event to ask server for new game code
-    const new_game_event = new CustomEvent("new_game");
-    game_state_target.dispatchEvent(new_game_event);
-
-  };
-
-  return (<button type="button" onClick={fn_askNewGame}>Generate game code!</button>);
-
-}
 
 
-function C_input_gameCode() {
+function Option_new_game() {
 
-  return (
-    <>
-      <input type="text" placeholder="Input game code"></input>
-      <button type="button">Go!</button>
-    </>
-  );
-
-}
-
-function C_playLocal() {
-
-  // manage 'start play' option
-  const [startLocal, set_startLocal] = createSignal(false);
-  const toggle_StartLocal = () => set_startLocal(!startLocal());  
+  // handle option confirmation -> shows handler and canvas
+  const [confirm, set_confirm] = createSignal(false);
+  const toggle_confirm = () => set_confirm(!confirm());  
 
   return (
     <Show
-    when = {startLocal()}
-    fallback = {<button type="button" onClick={toggle_StartLocal}>Start local game (show canvas)</button>}
+    when = {confirm()}
+    fallback = {<button type="button" onClick={toggle_confirm}>Confirm new game</button>}
     >
-      <GameHandler></GameHandler>
+      <Handler_newGame></Handler_newGame>
       <GameCanvas></GameCanvas>
-
     </Show>
   );
 
 }
 
-function GameCanvas(){
+
+function Option_join_with_code() {
+
+  // handle option confirmation -> shows handler and canvas
+  const [confirm, set_confirm] = createSignal(false);
+  const toggle_confirm = () => set_confirm(!confirm());  
 
   return (
-    <>
-    <canvas id="canvas" width="500" height="500"></canvas>
-    </>
+    <Show
+    when = {confirm()}
+    fallback = {<button type="button" onClick={toggle_confirm}>Confirm join with code</button>}
+    >
+      <Handler_joinWithCode></Handler_joinWithCode>
+      <GameCanvas></GameCanvas>
+    </Show>
   );
-  
+
 }
 
 
-function GameHandler(){
+
+function Handler_newGame(){
+
+  // signal for button interaction
+  const [reqTriggered, set_reqTriggered] = createSignal(false); 
 
   // function wrapper for requesting new game
-  const req_newGame = async () => (await init_newGame_fromServer());
-
-  // signal for triggering fetching of game details
-  const [reqCount, set_reqCount] = createSignal(false); 
+  const req_newGame = async () => (await init_game_fromServer());
   
-  // createResource would otherwise be triggered for anything other than: false, null, undefined
-  // the signal is initialized as false, and then treated as an incrementing number 
-  const buttonClick = () => {
-    if (reqCount !== false) {
-      // increments value if was already incremented
-      set_reqCount(reqCount()+1)
+  // resource handler for new games
+  const [request_handler] = createResource(reqTriggered, req_newGame);
+  
+  // handling interaction and resource fetching
+  // createResource is triggered for anything other than: false, null, undefined onMount
+  // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
+  const triggerRequest = () => {
+    if (reqTriggered() == false) {
+      // if NOT triggered 
+      set_reqTriggered(!reqTriggered()); // -> set to true -> triggers refetch
     } else {
-      // otherwise set count at 1 at the first click
-      set_reqCount(1);
+      // if already triggered
+      set_reqTriggered(!reqTriggered()); // -> set to false 
+      set_reqTriggered(!reqTriggered()); // -> and then to true again -> triggers refetch
     }
-    //console.log(reqCount());
   };
   
-  // createEffect(on(reqCount, () => console.log(`Value for count (defer): ${reqCount()}`), { defer: true }));
-  
-  const [request_handler] = createResource(reqCount, req_newGame);
 
   return (
     <>
-    <button type="button" onClick={buttonClick}>Request game</button>
+    <button type="button" onClick={triggerRequest}>New game!</button>
 
     <Switch
       fallback={<p>{""}</p>}
@@ -171,5 +169,69 @@ function GameHandler(){
   );
   
 }
+
+
+function Handler_joinWithCode(){
+
+  // signal for button interaction
+  const [reqTriggered, set_reqTriggered] = createSignal(false); 
+
+  // function wrapper for requesting new game
+  let code_input_field; // -> this is later attached to the input field
+  const req_newGame = async () => (await init_game_fromServer(code_input_field.value, true));
+  
+  // resource handler for new games
+  const [request_handler] = createResource(reqTriggered, req_newGame);
+  
+  // handling interaction and resource fetching
+  // createResource is triggered for anything other than: false, null, undefined onMount
+  // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
+  const triggerRequest = () => {
+    if (reqTriggered() == false) {
+      // if NOT triggered 
+      set_reqTriggered(!reqTriggered()); // -> set to true -> triggers refetch
+    } else {
+      // if already triggered
+      set_reqTriggered(!reqTriggered()); // -> set to false 
+      set_reqTriggered(!reqTriggered()); // -> and then to true again -> triggers refetch
+    }
+  };
+  
+
+  return (
+    <>
+    <input type="text" ref={code_input_field} placeholder="Input game code"></input>
+    <button type="button" onClick={triggerRequest}>Join!</button>
+
+    <Switch
+      fallback={<p>{""}</p>}
+    >
+      
+      <Match when = {request_handler.loading}>
+        <p>{"Loading..."}</p>
+      </Match>
+
+      <Match when = {request_handler.error}>
+        <p>{"ERROR !"}</p>
+      </Match>
+
+    </Switch>
+    </>
+  );
+  
+}
+
+
+
+function GameCanvas(){
+
+  return (
+    <>
+    <canvas id="canvas" width="500" height="500"></canvas>
+    </>
+  );
+}
+
+
 
 export default Play;

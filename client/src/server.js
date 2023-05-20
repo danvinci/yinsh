@@ -4,11 +4,11 @@
 // https://www.pubnub.com/blog/http-long-polling/
 // trying with long polling before digging into websockets
 
-const port_number = "1097"
+const port_number = "1099"
 
 // server call for generating new game
 // NOTE: should handle errors directly (e.g. server unavailable)
-export async function server_newGame_gen(){
+export async function server_genNewGame(){
 
     // start timing
     let call_start = Date.now();
@@ -16,36 +16,34 @@ export async function server_newGame_gen(){
     const srv_new_game_resp = (await fetch(`http://localhost:${port_number}/v1/new_game`, {method: 'GET'})).json();
 
     // end timing
-    console.log(`LOG - RTT for server request: ${Date.now() - call_start}ms`);
+    console.log(`LOG - RTT for new game request: ${Date.now() - call_start}ms`);
 
-    // return response to game status handler
     return srv_new_game_resp;
 
 };
 
 // server call for generating new game
-async function server_joinGame(game_code){
+export async function server_joinWithCode(game_code){
 
     let call_start = Date.now();
 
-    response = await fetch(`http://localhost:${port_number}/v1/join_game`, {
+    const resp_promise = await fetch(`http://localhost:${port_number}/v1/join_game`, {
         method: 'POST',
         body: JSON.stringify({"game_code": game_code})
 
     });
     
-    const srv_join_game_resp = await response.json(); 
+    const srv_join_game_resp = await resp_promise.json(); 
 
     // logging time
     let delta_time = Date.now() - call_start;
-    console.log(`RTT new game: ${delta_time}ms`);
+    console.log(`LOG - RTT for join with code request: ${delta_time}ms`);
 
-    // return response to game status handler
     return srv_join_game_resp;
 
 };
 
-
+/*
 // server call for checking allowable moves  // OBSOLETE -> PRE-COMPUTED IN ADVANCE
 async function server_legal_moves(){
 
@@ -109,3 +107,4 @@ async function server_markers_check(end_move_index){
 
 };
 
+*/

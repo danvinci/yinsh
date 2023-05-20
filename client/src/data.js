@@ -140,26 +140,31 @@ export function init_empty_game_objects(){
 };
 
 // saving server response data when asking for new game -> server_data.game_id/client_player_id/etc
-export function save_srv_response_NewGame(srv_resp_NewGame){
+export function save_first_server_response(srv_response_input, joiner=false){
     
     // init temporary object
     const _server_response = {};
 
-        _server_response.game_id = srv_resp_NewGame.game_id; // game ID
+        _server_response.game_id = srv_response_input.game_id; // game ID
 
-        // assign color to local player (this client is the caller)
-        _server_response.client_player_id = srv_resp_NewGame.originating_player; // player ID (B ~ Black, W ~ White), one of player_black_id / player_white_id 
-
+        // assign color to client (player_black_id / player_white_id)
+        // if this client is joining the game, it will be the joiner
+        if (joiner) {
+            _server_response.client_player_id = srv_response_input.joining_player; 
+        } else {
+            _server_response.client_player_id = srv_response_input.originating_player; 
+        };
+        
         // initial rings locations
-        _server_response.whiteRings_ids = srv_resp_NewGame.whiteRings_ids; 
-        _server_response.blackRings_ids = srv_resp_NewGame.blackRings_ids;
+        _server_response.whiteRings_ids = srv_response_input.whiteRings_ids; 
+        _server_response.blackRings_ids = srv_response_input.blackRings_ids;
 
         // pre-computed possible legal moves (for next moving player)
-        _server_response.next_legal_moves = srv_resp_NewGame.next_legalMoves;
-        _server_response.next_movingPlayer = srv_resp_NewGame.next_movingPlayer;
+        _server_response.next_legal_moves = srv_response_input.next_legalMoves;
+        _server_response.next_movingPlayer = srv_response_input.next_movingPlayer;
 
         // pre-computed scenario tree for each possible move (except pick/drop in same location)
-        _server_response.scenarioTree = srv_resp_NewGame.scenarioTree;
+        _server_response.scenarioTree = srv_response_input.scenarioTree;
     
     // save to global obj and log
     yinsh.server_data = structuredClone(_server_response);
@@ -431,7 +436,7 @@ export function add_marker(ref_loc_object){ // input should be copy of loc from 
     const _marker_id = structuredClone(yinsh.constant_params.marker_id);
 
     // retrieve array of markers 
-    let _markers = structuredClone(yinsh.objs.markers);
+    let _markers = yinsh.objs.markers;
     
     // instate new marker object 
     const m = { path: {}, // <- to be filled in at drawing time

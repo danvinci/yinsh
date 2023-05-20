@@ -1482,7 +1482,7 @@ function save_newGame!(games_log_ref, new_game_details)
 end
 
 # ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
-function newGame()
+function gen_newGame()
 ## instatiate new game
 # generate unique game ID
 # randomly assign black/white to invoking player
@@ -1491,6 +1491,8 @@ function newGame()
 	game_id = randstring(5)
 	
 	originating_player = rand(["B", "W"]) # -> should be a client-side setting
+	joining_player = (originating_player == "B") ? "W" : "B"
+	
 	next_movingPlayer = "W" # -> white always starts first
 	
 	whiteRings_locs, blackRings_locs = initRand_ringsLoc()
@@ -1518,9 +1520,10 @@ function newGame()
 	end
 
 	# package response for client
-	new_game_details = Dict(:game_id => game_id,
+	new_game_data = Dict(:game_id => game_id,
 							:server_gameState => game_state,
 							:originating_player => originating_player,
+							:joining_player => joining_player,
 							:whiteRings_ids => reshape_out(whiteRings_locs),
 							:blackRings_ids => reshape_out(blackRings_locs),
 							:next_movingPlayer => next_movingPlayer,
@@ -1528,40 +1531,44 @@ function newGame()
 							:init_dateTime => now()
 							)
 
-	save_newGame!(games_log_dict, new_game_details)
+	save_newGame!(games_log_dict, new_game_data)
 
 	# generate and add scenario tree to response
-	setindex!(new_game_details, gen_scenarioTree(game_id), :scenarioTree)
+	setindex!(new_game_data, gen_scenarioTree(game_id), :scenarioTree)
 	
 	
-	return new_game_details
+	return new_game_data
 	
 end
 
 # ╔═╡ 8eab6d11-6d28-411d-bd82-7bec59b3f496
-newGame();
+gen_newGame();
 
 # ╔═╡ 22845433-0722-4406-af31-2b9afcb72652
 games_log_dict
 
 # ╔═╡ b58b0aa9-817d-4f04-842e-7ee834b5759e
-function joinGame(game_code::String)
+function join_exGame(game_code::String)
 
 	try
+		# note : we should flag games that are confirmed as joined
 		return games_log_dict[game_code]
 
 	catch
-		error("ERROR retrieving game")
+		throw(error("ERROR retrieving game"))
 	end
 	
 
 end
 
+# ╔═╡ 7a1fa0a8-495a-4288-ba7b-3379bfcc5602
+join_exGame("INKwx")
+
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
 md"### Exposing functions as web endpoint"
 
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1097
+port_test = 1099
 
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 begin
@@ -1668,117 +1675,117 @@ global_states = []
 # server + router + service functions definition
 begin
 
-	using HTTP, JSON3, Sockets
+using HTTP, JSON3, Sockets
 
-	# CORS preflight headers: which requests are allowed 
-	# check this for more details ->
-	# https://github.com/JuliaWeb/HTTP.jl/blob/master/docs/examples/cors_server.jl
-	#= 
-	const CORS_OPT_HEADERS = [
-	    "Access-Control-Allow-Origin" => "*",
-	    "Access-Control-Allow-Headers" => "*",
-	    "Access-Control-Allow-Methods" => "POST, GET, OPTIONS"
-		]
-	=#
+# CORS preflight headers: which requests are allowed 
+# check this for more details ->
+# https://github.com/JuliaWeb/HTTP.jl/blob/master/docs/examples/cors_server.jl
+#= 
+const CORS_OPT_HEADERS = [
+	"Access-Control-Allow-Origin" => "*",
+	"Access-Control-Allow-Headers" => "*",
+	"Access-Control-Allow-Methods" => "POST, GET, OPTIONS"
+	]
+=#
 
-	# CORS response headers: set access right of the client
-	const CORS_RES_HEADERS = ["Access-Control-Allow-Origin" => "*"]
+# CORS response headers: set access right of the client
+const CORS_RES_HEADERS = ["Access-Control-Allow-Origin" => "*"]
+
+# FUNCTIONS
+
+function legalMoves_handler(req::HTTP.Request)
 	
-	# FUNCTIONS
+	# saves request to global states store
+	push!(global_states, req)
 
-	function legalMoves_handler(req::HTTP.Request)
+	# parses request body to json
+	body_json = JSON3.read(req.body)
+
+	try 
+		# computes legal moves
+		legal_moves = search_loc(body_json[:state], body_json[:start_index])
 		
-		# saves request to global states store
-		push!(global_states, req)
-
-		# parses request body to json
-		body_json = JSON3.read(req.body)
-
-		try 
-			# computes legal moves
-			legal_moves = search_loc(body_json[:state], body_json[:start_index])
-			
-			return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(legal_moves))
-		catch
-			return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
-		end
-	
+		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(legal_moves))
+	catch
+		return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
 	end
 
-	function mkActions_handler(req::HTTP.Request)
-		
-		# saves request to global states store
-		push!(global_states, req)
+end
 
-		# parses request body to json
-		body_json = JSON3.read(req.body)
-
-		try 
-			# check markers that should be flipped
-			mk_actions = markers_actions(
-										body_json[:state],
-										body_json[:start_index], 
-										body_json[:end_index]
-										)
-			
-			return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(mk_actions))
-
-		catch
-			return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
-		end
+function mkActions_handler(req::HTTP.Request)
 	
+	# saves request to global states store
+	push!(global_states, req)
+
+	# parses request body to json
+	body_json = JSON3.read(req.body)
+
+	try 
+		# check markers that should be flipped
+		mk_actions = markers_actions(
+									body_json[:state],
+									body_json[:start_index], 
+									body_json[:end_index]
+									)
+		
+		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(mk_actions))
+
+	catch
+		return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
 	end
 
-
-	function newGame_handler(req::HTTP.Request)
-		
-		# saves request to global states store
-		push!(global_states, req)
-		
-		try
-
-			return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(newGame()))
-
-		catch
-			return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
-		end
+end
 
 
+function newGame_handler(req::HTTP.Request)
+	
+	# saves request to global states store
+	push!(global_states, req)
+	
+	try
+
+		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(gen_newGame()))
+
+	catch
+		return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("LOG - Server error"))
 	end
 
 
-	function joinGame_handler(req::HTTP.Request)
-		
-		# saves request to global states store
-		push!(global_states, req)
-
-		# parses request body to json
-		body_json = JSON3.read(req.body)
-		
-		try
-			game_details = joinGame(body_json[:game_code])
-			return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(game_details))
-
-		catch
-			return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
-		end
+end
 
 
+function joinGame_handler(req::HTTP.Request)
+	
+	# saves request to global states store
+	push!(global_states, req)
+
+	# parses request body to json
+	body_json = JSON3.read(req.body)
+	
+	try
+		game_data = join_exGame(body_json[:game_code])
+		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(game_data))
+
+	catch
+		return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("LOG - Server error"))
 	end
 
 
-	
-	
+end
 
 
-	# define REST endpoints to dispatch calls to functions
-	const ROUTER = HTTP.Router()
-	HTTP.register!(ROUTER, "POST", "/v1/legal_moves", legalMoves_handler)
-	HTTP.register!(ROUTER, "POST", "/v1/markers_check", mkActions_handler)
-	HTTP.register!(ROUTER, "GET", "/v1/new_game", newGame_handler)
-	HTTP.register!(ROUTER, "POST", "/v1/join_game", joinGame_handler)
-	
-	
+
+
+
+
+# define REST endpoints to dispatch calls to functions
+const ROUTER = HTTP.Router()
+HTTP.register!(ROUTER, "POST", "/v1/legal_moves", legalMoves_handler)
+HTTP.register!(ROUTER, "POST", "/v1/markers_check", mkActions_handler)
+HTTP.register!(ROUTER, "GET", "/v1/new_game", newGame_handler)
+HTTP.register!(ROUTER, "POST", "/v1/join_game", joinGame_handler)
+
+
 
 end
 
@@ -2978,6 +2985,7 @@ version = "1.4.1+0"
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╠═22845433-0722-4406-af31-2b9afcb72652
 # ╠═b58b0aa9-817d-4f04-842e-7ee834b5759e
+# ╠═7a1fa0a8-495a-4288-ba7b-3379bfcc5602
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83

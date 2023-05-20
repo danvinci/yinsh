@@ -24,8 +24,8 @@ function mouseDown_handler (event) {
 
         // get relative mouse position
         const mousePos = getMousePos(canvas, event);
-        //console.log("down");
 
+        // retrieve current player (we'll use this to only allow interacting with the player's rings)
         const player_id = get_player_id();
 
         // retrieve variable used to asses if move or score handling is underway

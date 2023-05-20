@@ -3,8 +3,8 @@
 
 
 //////////// IMPORTS
-import { server_newGame_gen } from './server.js'
-import { init_global_obj_params, init_empty_game_objects, save_srv_response_NewGame, init_new_game_data } from './data.js'
+import { server_genNewGame, server_joinWithCode} from './server.js'
+import { init_global_obj_params, init_empty_game_objects, save_first_server_response, init_new_game_data } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
 import { try_start_local_turn, complete_local_turn} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
@@ -22,8 +22,8 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
 
 //////////// FUNCTIONS FOR INITIALIZING GAMES (NEW or JOIN)
 
-// ask for new game to server
-export async function init_newGame_fromServer(){
+// retrieve data from server (as originator or joiner) and init new game
+export async function init_game_fromServer(input_game_code = '', joiner = false){
 
     console.log(' -- Requesting new game --');
     const request_start_time = Date.now()
@@ -36,8 +36,12 @@ export async function init_newGame_fromServer(){
         // initialize empty game objects
         init_empty_game_objects();
 
-        // asks new game to server and saves response in object init above
-        save_srv_response_NewGame(await server_newGame_gen());
+        // asks game data to server and saves response in object init above
+        if (joiner) { // joining an existing game with a code
+            save_first_server_response(await server_joinWithCode(input_game_code), true);
+        } else { // generating new game
+            save_first_server_response(await server_genNewGame());
+        };
 
         // maps data from server to game objects
         // sets up drop zones and rings
@@ -56,6 +60,9 @@ export async function init_newGame_fromServer(){
 
         // log game ready (not really ready)
         console.log(`LOG - Game ready, time-to-first-move: ${Date.now() - request_start_time}ms`);
+
+        // log game code (later should be in the UI)
+        console.log(`LOG - Your game code is: ${yinsh.server_data.game_id}`);
 
         // assess if it's the current player's turn or not
         if(try_start_local_turn()) {
@@ -78,7 +85,6 @@ export async function init_newGame_fromServer(){
         throw err;
 
     };
-
 };
 
 
