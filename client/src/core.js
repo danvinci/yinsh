@@ -5,9 +5,10 @@
 //////////// IMPORTS
 import { server_newGame_gen } from './server.js'
 import { init_global_obj_params, init_empty_game_objects, save_srv_response_NewGame, init_new_game_data } from './data.js'
-import { rings_reordering, update_game_state, update_current_move, add_marker, init_legal_moves_cues } from './data.js'
+import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring } from './data.js'
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction } from './interaction.js'
+import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
 
 //////////// GLOBAL DEFINITIONS
 
@@ -16,7 +17,7 @@ import { init_interaction } from './interaction.js'
 
     ['ring_picked'].forEach(event => core_et.addEventListener(event, ringPicked_handler, false));
     ['ring_moved'].forEach(event => core_et.addEventListener(event, ringMoved_handler, false));
-
+    ['ring_drop'].forEach(event => core_et.addEventListener(event, ringDrop_handler, false));
 
 //////////// FUNCTIONS FOR INITIALIZING GAMES (NEW or JOIN)
 
@@ -71,7 +72,7 @@ export async function init_newGame_fromServer(){
 //////////// EVENT HANDLERS FOR GAME MECHANICS
 
 // listens to ring picks and updates game state
-function ringPicked_handler(event) {
+function ringPicked_handler (event) {
 
     // detail contains index in rings array of picked ring
     const index_picked_ring_in_array = event.detail;
@@ -86,7 +87,7 @@ function ringPicked_handler(event) {
 
     // remove the element and put it back at the end of the array, so it's always drawn last => appear on top
     // we could also move ring to dedicated structure that is drawn last and then put back in, but roughly same copying work
-    rings_reordering(index_picked_ring_in_array);
+    reorder_rings(index_picked_ring_in_array);
     
     // wipe game state for location
     update_game_state(picked_ring_loc_index, "");
@@ -97,8 +98,9 @@ function ringPicked_handler(event) {
     // place marker in same location (it's assumed client player)
     add_marker(picked_ring_loc);
 
-    // initializes array of visual cues for starting index
-    init_legal_moves_cues(picked_ring_loc_index);
+    // initializes array of legal drop ids + visual cues for starting index
+    // will read from current move to see which moves to consider
+    update_legal_cues();
 
     // draw changes
     refresh_canvas_state();
@@ -113,11 +115,11 @@ function ringMoved_handler (event) {
     // event.detail -> mousePos
 
     // the last ring in the array is the one being moved
-    const id_last_ring = yinsh.objs.rings.length-1;
+    const id_picked_ring = getIndex_last_ring();
 
         // updates x and y ring location
-        yinsh.objs.rings[id_last_ring].loc.x = event.detail.x;
-        yinsh.objs.rings[id_last_ring].loc.y = event.detail.y;
+        yinsh.objs.rings[id_picked_ring].loc.x = event.detail.x;
+        yinsh.objs.rings[id_picked_ring].loc.y = event.detail.y;
 
     // redraw everything
     refresh_canvas_state();
@@ -125,43 +127,50 @@ function ringMoved_handler (event) {
 };
 
 
-//////////////////////////////////////////////////////////////////////////////// <-- refactoring progress
-/*
 
+// listens to ring snaps/drops -> flips markers -> triggers score handling -> refresh states
+async function ringDrop_handler (event) {
 
+    // retrieves loc object of snapping drop zone
+    const snap_drop_loc = event.detail;
 
+    // retrieves ids of legal drops for the ring that was picked up
+    const _current_legal_drops = yinsh.objs.current_move.legal_drops;
 
-// listens to ring drops, makes checks, and updates game state + redraw
-game_state_target.addEventListener("ring_drop_attempt", 
-    async function (event) {
-
-    drop_coord_loc = event.detail;
-
-    // check if drop coordinates are valid 
-    if (current_legal_moves.includes(drop_coord_loc.index) == true){
+    // check if drop coordinates are valid -> drop rings
+    if (_current_legal_drops.includes(snap_drop_loc.index)){
 
         // the active ring is always last in the array
-        id_last_ring = rings.length-1;
+        const index_dropping_ring_in_array = getIndex_last_ring();
 
-        // update ring loc information -> should go to dedicated function
-        rings[id_last_ring].loc = structuredClone(drop_coord_loc);
+        // update ring loc information 
+        updateLoc_last_ring(snap_drop_loc);
 
-        drop_index = drop_coord_loc.index;
-        value = rings[id_last_ring].type.concat(rings[id_last_ring].player); // -> RB, RW
-
+            // retrieve ring and its index details
+            const dropping_ring = yinsh.objs.rings[index_dropping_ring_in_array];
+            const dropping_ring_loc_index = dropping_ring.loc.index;
+        
         // update game state
-        // if ring dropped in same location, this automatically overrides MB/MW -> no need to handle it in funcion to remove marker(s)
-        update_game_state(drop_index, value);
-        console.log(`${value} dropped at ${event.detail.m_row}:${event.detail.m_col} -> ${drop_index}`);
+        // if ring is dropped in same location, this automatically overrides the existing marker (MB/MW)
+        const gs_value = dropping_ring.type.concat(dropping_ring.player); // -> RB, RW
+        update_game_state(dropping_ring_loc_index, gs_value);
 
-        // empty array of legal moves & matching drawing objects
-        current_legal_moves = [];
-        update_highlight_zones()
+        // resets data for current move (move is complete/off)
+        update_current_move();
+        
+        // updates legal cues (all will be turned off as move is no longer in progress)
+        update_legal_cues();
 
-        // re-draw everything and play sound (don't wait for server-dependent checks)
-        refresh_draw_state(); 
-        ring_drop_sound.play(); 
+        // re-draw everything and play sound
+        refresh_canvas_state(); 
+        ringDrop_play_sound(); 
 
+        // logging
+        console.log(`LOG - Ring ${dropping_ring.player} dropped at index ${dropping_ring_loc_index}`);
+
+
+        /////////////////////////////////// -> refactoring progress
+        
         if (drop_index == current_move.start_index){
              // CASE: same location drop, nothing to flip (no server call needed for this)
 
@@ -172,9 +181,6 @@ game_state_target.addEventListener("ring_drop_attempt",
             
         // ring moved -> asks the server about markers and scoring options
         } else {
-
-            // play sound (don't wait for server response)
-            ring_drop_sound.play(); 
 
             const srv_mk_resp = await server_markers_check(drop_index);
 
@@ -207,8 +213,11 @@ game_state_target.addEventListener("ring_drop_attempt",
         console.log("Invalid drop location");
         // NOTE: we could play specific sound 
     };
-});
+};
 
+
+
+/*
 
 
 

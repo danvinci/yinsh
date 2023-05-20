@@ -1,99 +1,8 @@
 // DATA
-// data objects and functions operating on them + data utils like reshape_index
-
-// matrix of active points on the grid
-const mm_points = [
-    [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0], 
-    [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0], 
-    [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
-    [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-    [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
-    [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
-    [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
-    [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
-    [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], 
-    [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-    [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
-    [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], 
-    [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0], 
-    [0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0], 
-    [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0] 
-    ];
-
-const mm_points_rows = 19 // mm_points.length;
-const mm_points_cols = 11 // mm_points[0].length;
-
-// bind canvas to variable
-//const canvas = document.getElementById('canvas'); 
-//const ctx = canvas.getContext('2d', { alpha: true }); 
-
-// initialize array for markers and rings + drop zones + highlight zones
-let rings = [];
-let markers = [];
-let drop_zones = [];
-let highlight_zones = [];
-
-let current_legal_moves = []; // used when server pinged at ring pick
-let next_legal_moves = {}; // used when receiving the lock, pre-computed by the server {ring_id => [id, id, id, ...]}
-
-let current_move = {on: false, start_index: null};
-
-let mk_halos = [];
-let mk_sel_scoring = {ids:[], hot:false} // -> used for drawing support, stores last request sent 
-let score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []}; // -> used for handling scoring scenarios
-
-// these values are used in defining rings/markers, log status, and check conditions within functions
-const ring_id = "R";
-const marker_id = "M";
-const player_black_id = "B";
-const player_white_id = "W";
-
-// storing details for current game => updated with response from server
-let game_id = "";
-let client_player_id = "";
-
-// Empty game state, string -> reshaped to a matrix on the server
-let game_state = Array(19*11).fill(""); 
-
-// specify dimensions for the triangles in the grid
-// for now outside, so they can be set depending on possible canvas size
-let S = 47;
-let H = Math.round(S * Math.sqrt(3)/2);
+// data objects + functions operating on them + data utils (like reshape_index)
 
 
-// function to edit S & H
-function update_sizing(win_height, win_width) {
-
-    // copy values -> these may change and ref should take into account UI elements
-    // note: canvas should be resized first, S & H from there
-    let ref_height = win_height
-    let ref_width = win_width
-   
-    // compute S_h and S_w (H) taking into account height and width respectively
-    // use the smaller one
-    let opt_S_Height = Math.round(ref_height/11.5);
-
-    let opt_H_Width = Math.round(ref_width/11.5);
-    let opt_S_Width = Math.round(opt_H_Width / (Math.sqrt(3)/2));
-    
-    S = Math.min(opt_S_Width, opt_S_Height);
-    H = Math.round(S * Math.sqrt(3)/2);
-
-    // update canvas sizing -> note: this should be aware of UI elements on screen
-    canvas.height = win_height;
-    canvas.width = win_width;
-
-};
-
-//////////////////////////////////////////////////////////////////////////////
-///// DATA FUNCTIONS (REWRITE) ////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////
-
-// from col-major julia matrix to linear index in js
+// utility function: from col-major julia matrix to linear index in js
 const reshape_index = (row, col) => ( (col-1)*19 + row - 1); // js arrays start at 0, hence the -1 offset
 
 
@@ -167,6 +76,9 @@ export function init_new_game_data(){
     // setups drop zones
     init_drop_zones();
 
+    // inits visual cues for legal moves (all off by default)
+    init_legal_moves_cues();
+
     // init rings (uses data from server)
     init_rings();
 
@@ -207,9 +119,8 @@ export function init_empty_game_objects(){
         _game_objects.drop_zones = []; // -> array for drop zones (markers and rings are placed at their coordinates only)
 
         // moves
-        _game_objects.legal_moves_ids = []; // -> location IDs for legal moves
-        _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal moves)
-        _game_objects.current_move = {in_progress: false, start_index: 0}; // -> details for move currently in progress 
+        _game_objects.current_move = {in_progress: false, start_index: 0, legal_drops: []}; // -> details for move currently in progress 
+        _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal drops ids)
 
         // score handling
         _game_objects.markers_halos = []; // -> halos around markers when scoring
@@ -313,6 +224,39 @@ function init_drop_zones(){
     
 };
 
+
+// initializes visual cues for legal moves (all off by default)
+function init_legal_moves_cues(){
+
+    // retrieve drop_zones & S parameter
+    const _drop_zones = yinsh.objs.drop_zones;
+    const S = yinsh.drawing_params.S;
+
+    // init empty array
+    let _legal_moves_cues = [];
+            
+        // init a cue for each drop zone
+        for(const d_zone of _drop_zones){
+
+            // create shape + coordinates and push to array
+            let cue_path = new Path2D()
+                cue_path.arc(d_zone.loc.x, d_zone.loc.y, S*0.1, 0, 2*Math.PI);
+            
+            _legal_moves_cues.push({path: cue_path, loc: structuredClone(d_zone.loc), on: false});
+        
+        };
+
+
+    // saves/overwrites updated array of visual cues and moves for picked ring
+    yinsh.objs.legal_moves_cues = _legal_moves_cues;
+    
+    // logs operation
+    console.log('LOG - Visual cues for legal moves initialized');
+
+}; 
+        
+
+
 // initializes rings and updates game state -> reads from rings data in DB
 function init_rings(){
 
@@ -409,48 +353,38 @@ export function update_game_state(index, value){
 
 };
 
-// keeps up to date the array of visual cues for legal moves
-// retrieves legal moves from server data (possible legal moves are pre-computed before each turn)
-export function init_legal_moves_cues(start_index){
+// keeps up to date the array of visual cues for legal moves, turning them on or off
+// if move is NOT in progress, this function will turn them off
+export function update_legal_cues(){
 
-    // assumes valid start_index -> no input checks done
-   
-    // retrieves ids of legal moves
-    // possible legal moves look like this {start_id_1 -> [lm 1, lm2, lm3], start_id_2 -> [lm 1, lm2, lm3], etc}
-    const _legal_moves_ids = structuredClone(yinsh.server_data.next_legal_moves[start_index]);
+    // retrieves info on active move
+    const move_in_progress = yinsh.objs.current_move.in_progress; // -> true/false
+    const _legal_moves_ids = yinsh.objs.current_move.legal_drops; // -> [1,2,3,4,etc]
 
-    // inits empty cues array
-    let _legal_cues = [];
-    
-        if (_legal_moves_ids.length > 0) {
+    // retrieves array of visual cues (to be modified)
+    let _legal_cues = yinsh.objs.legal_moves_cues
 
-            // retrieve drop_zones & S parameter
-            const _drop_zones = yinsh.objs.drop_zones;
-            const S = yinsh.drawing_params.S;
+    // turn matching cues on if a move was started
+    if (move_in_progress) {
 
-            // for each linear id of the legal moves
-            for (const id of _legal_moves_ids) {
-
-                // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
-                for(const d_zone of _drop_zones){
-                    
-                    if (d_zone.loc.index == id){
-
-                        // create shape + coordinates and push to array
-                        let cue_path = new Path2D()
-                            cue_path.arc(d_zone.loc.x, d_zone.loc.y, S*0.1, 0, 2*Math.PI);
-                        
-                        _legal_cues.push({path: cue_path});
+        for (let cue of _legal_cues) {
                 
-                    };
-                };        
-            };
+            if (_legal_moves_ids.includes(cue.loc.index)) { cue.on = true };
+                
         };
+        
+    // otherwise turn everything off
+    } else {
 
-    // saves/overwrites updated array of visual cues and logs operation
+        for (let cue of _legal_cues) { cue.on = false };
+
+    };
+   
+    // saves/overwrites updated array of visual cues
     yinsh.objs.legal_moves_cues = _legal_cues;
     
-    console.log('LOG - Cues for legal moves updated');
+    // logs operation
+    console.log('LOG - Visual cues updated');
         
 };
 
@@ -502,8 +436,6 @@ function remove_markers(mk_indexes_array){ // input is array of loc indexes
 };
     
 
-
-
 // flips markers (swaps player for objects & updates game state)
 function flip_markers(mk_indexes_array){
 
@@ -534,8 +466,8 @@ function flip_markers(mk_indexes_array){
     
 };
     
-// re-order rings array so picked ring is on top
-export function rings_reordering(picked_ring_index){
+// re-order rings array so picked ring is last in the array -> on top when drawing
+export function reorder_rings(picked_ring_index){
 
     // retrieve rings data (local copy)
     let _rings = yinsh.objs.rings; // should be done with structuredClone, but it doesn't work on Path2D objects
@@ -546,6 +478,22 @@ export function rings_reordering(picked_ring_index){
     // write modified array back in
     yinsh.objs.rings = _rings;
 
+};
+
+export function getIndex_last_ring(){
+
+    return yinsh.objs.rings.length-1;
+};
+
+
+// update loc information for last ring in the array (picked one)
+export function updateLoc_last_ring(new_loc){
+
+    // retrieve index of last ring in array (about to drop)
+    const id_dropping_ring = getIndex_last_ring();
+
+    // save new location for last ring
+    yinsh.objs.rings[id_dropping_ring].loc = structuredClone(new_loc);
 
 };
 
@@ -560,16 +508,26 @@ export function update_current_move(in_progress = false, start_index = 0){
         if(in_progress == false){
             _current_move.in_progress = false;
             _current_move.start_index = 0;
+            _current_move.legal_drops = [];
 
         // save data if different arguments are passed
         } else if (in_progress == true){
             _current_move.in_progress = true;
             _current_move.start_index = start_index;
+            _current_move.legal_drops = getIndexes_legal_moves(start_index);
 
         };
 
     // save to global object
     yinsh.objs.current_move = structuredClone(_current_move);
+
+};
+
+
+// retrieve indexes of legal moves/drops from saved server data
+function getIndexes_legal_moves(start_index){
+
+    return structuredClone(yinsh.server_data.next_legal_moves[start_index])
 
 };
 
@@ -579,6 +537,9 @@ export function update_current_move(in_progress = false, start_index = 0){
     // flip_markers + update game state (next move)
     // rings re-ordering
     // update current move
+    // getter for ids of legal drops
+    // getter for id (in array) of last ring
+    // setter for updating loc of dropping ring
 
 
 // TODO
@@ -597,7 +558,29 @@ export function update_current_move(in_progress = false, start_index = 0){
 ////////////////////////////////////
 
 
+// function to edit S & H
+function update_sizing(win_height, win_width) {
 
+    // copy values -> these may change and ref should take into account UI elements
+    // note: canvas should be resized first, S & H from there
+    let ref_height = win_height
+    let ref_width = win_width
+   
+    // compute S_h and S_w (H) taking into account height and width respectively
+    // use the smaller one
+    let opt_S_Height = Math.round(ref_height/11.5);
+
+    let opt_H_Width = Math.round(ref_width/11.5);
+    let opt_S_Width = Math.round(opt_H_Width / (Math.sqrt(3)/2));
+    
+    S = Math.min(opt_S_Width, opt_S_Height);
+    H = Math.round(S * Math.sqrt(3)/2);
+
+    // update canvas sizing -> note: this should be aware of UI elements on screen
+    canvas.height = win_height;
+    canvas.width = win_width;
+
+};
 
 
 // glue function to setup new game

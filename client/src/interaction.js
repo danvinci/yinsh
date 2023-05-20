@@ -7,6 +7,8 @@
 //////////////////////////////////////// ADD EVENT LISTENERS TO CANVAS
 // assumes canvas bound to 'canvas' and context to 'ctx' -> done in core
 
+// globalThis.interaction_allowed = true; // global property for trying to prevent side effects
+
 export function init_interaction(){
 
     ['mousedown'].forEach(event => canvas.addEventListener(event, mouseDown_handler, false));
@@ -34,7 +36,7 @@ function mouseDown_handler (event) {
             if (ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)){
 
                 core_et.dispatchEvent(new CustomEvent('ring_picked', { detail: ring_index }));
-                break; // break iteration
+                break; // breaks looping
             };
         };
 

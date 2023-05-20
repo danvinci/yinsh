@@ -431,16 +431,21 @@ function draw_legal_moves_cues(){
     // drawing
     ctx.save();
 
+
         ctx.globalAlpha = 1; 
         ctx.strokeStyle = "#668bd2";
         ctx.fillStyle = "#aaccdd";
         ctx.lineWidth = 0.5;
 
         for(const cue of _legal_moves_cues){
-        
-            ctx.fill(cue.path); 
-            ctx.stroke(cue.path); 
-            
+
+            // draw only cues turned on
+            if (cue.on == true) {
+
+                ctx.fill(cue.path); 
+                ctx.stroke(cue.path); 
+
+            };
         };        
     
     ctx.restore();
