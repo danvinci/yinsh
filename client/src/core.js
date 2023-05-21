@@ -3,7 +3,7 @@
 
 
 //////////// IMPORTS
-import { server_genNewGame, server_joinWithCode, init_socket, send_testMsg_socket, server_ws_genNewGame} from './server.js'
+import { server_genNewGame, server_joinWithCode, init_ws, send_testMsg_socket, server_ws_genNewGame} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, save_first_server_response, init_new_game_data } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
 import { try_start_local_turn, complete_local_turn} from './data.js' 
@@ -42,10 +42,8 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
         // initialize empty game objects
         init_empty_game_objects();
 
-        // initializes socket -> connection to game server
-        init_socket();
-
-        await sleep(1000)
+        // initializes websocket and connects to game server
+        await init_ws();
 
         // requests new game data
         server_ws_genNewGame();
@@ -77,7 +75,7 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
             init_interaction();
 
         // log game ready (not really ready)
-        console.log(`LOG - Game ready, time-to-first-move: ${Date.now() - request_start_time}ms`);
+        console.log(`LOG - Game setup in ${Date.now() - request_start_time}ms`);
 
         // log game code (later should be in the UI)
         console.log(`LOG - Your game code is: ${yinsh.server_data.game_id}`);

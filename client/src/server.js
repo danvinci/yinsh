@@ -45,7 +45,7 @@ export async function server_joinWithCode(game_code){
 ////////////////// WEBSOCKETS
 // https://javascript.info/websocket
 // https://stackoverflow.com/questions/1349404/generate-random-string-characters-in-javascript
-
+// https://javascript.info/promise-basics
 
 const ws_port = 8092;
 const ip_address = "127.0.0.1"
@@ -94,28 +94,55 @@ function get_time_msgSent(msg_id){
 
 
 // web socket initializers, called by core
-export async function init_socket () {
-
-    // tries opening a new websocket connection
-    globalThis.ws = new WebSocket(`ws://${ip_address}:${ws_port}`);
-
-    // adds event listeners 
-    ws.addEventListener('open', onOpen_handler, false);
-    ws.addEventListener('message', onMessage_handler, false);
-    ws.addEventListener('error', onError_handler, false);
-    ws.addEventListener('close', onClose_handler, false);
+export async function init_ws () {
+    return new Promise((resolve,reject) => {
 
 
+        // if ws is defined and connection is already open -> resolve directly
+        if (typeof ws != "undefined" && ws.readyState == 1) {
+
+            console.log(`LOG - WebSocket - connection already OPEN`);
+            resolve('ws_connection_already_open'); // -> resolve promise
+
+        } else { // tries opening a new websocket connection
+
+            try{
+                
+                // logging
+                let connection_start = Date.now();
+
+                globalThis.ws = new WebSocket(`ws://${ip_address}:${ws_port}`);
+
+                // adds event listeners 
+                // ws.addEventListener('open', onOpen_handler, false); // -> directly handled here
+                ws.addEventListener('message', onMessage_handler, false);
+                ws.addEventListener('error', onError_handler, false);
+                ws.addEventListener('close', onClose_handler, false);
+
+                // resolve on open
+                ws.onopen = (event) => {
+                    console.log(`LOG - WebSocket - connection OPEN in ${Date.now() - connection_start}ms`);
+                    resolve('ws_connection_open'); // -> resolve promise
+                };
+                
+            } catch (err) { // if connection doesn't work
+
+                reject(err); 
+
+            };
+        };
+    });
 };
 
-//////////////////////////// WS EVENTS HANDLERS
+//////////////////////////// WEBSOCKET EVENT HANDLERS
 
+/*
 // only invoked when connection is opened
 function onOpen_handler (event) {
     console.log(`LOG - WebSocket - connection OPEN`);
 };
 
-
+*/
 
 // dispatches incoming messages
 function onMessage_handler (event) {
