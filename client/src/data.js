@@ -83,7 +83,7 @@ export function init_new_game_data(){
     init_rings();
 
     // logging time 
-    console.log(`LOG - All game objects initialized: ${Date.now() - game_objs_start_time}ms`);
+    console.log(`LOG - Game objects initialized: ${Date.now() - game_objs_start_time}ms`);
 
 };
 

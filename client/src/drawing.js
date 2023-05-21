@@ -28,7 +28,7 @@ export function refresh_canvas_state(){
         draw_markers_halos();
 
         // logging time 
-        console.log(`LOG - Total painting time: ${Date.now() - painting_start_time}ms`);
+        console.log(`LOG - Drawing time: ${Date.now() - painting_start_time}ms`);
 
     } catch(err) {
 

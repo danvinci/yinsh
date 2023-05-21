@@ -50,21 +50,38 @@ export async function server_joinWithCode(game_code){
 const ws_port = 8092;
 const ip_address = "127.0.0.1"
 
-globalThis.log_sentMessages = {}; // initialize log of message payloads (for msgs sent to server)
+// custom class for managing the lifecycle of messages
+class MessagePromise {
+    constructor(payload, msg_id, msg_time) {
+        this.payload = payload;
+        this.msg_id = msg_id;
+        this.msg_time = msg_time;
+        this.server_response = {}; // -> we'll later use it for storing responses
+        this.promise = new Promise((resolve, reject)=> {
+            this.resolve = resolve
 
-// write to log
-function log_msgPayload(msg_payload){ 
+            // automatic rejection 100s after creation
+            setTimeout(()=> {reject(new Error("LOG - Request timed out - ID: msg_id"))}, 100000);
+        })
+    }
+    getTimeSent() {return this.msg_time;}
+};
+
+globalThis.messagePromises_log = {}; // initialize log for message promises
+
+// write to log on the way out
+function try_logOutbound(msg_prom){ 
     try {
         // retrieve id
-        const msg_id = msg_payload.msg_id
+        const msg_id = msg_prom.msg_id
     
         // tests if key is in log
-        if (msg_id in log_sentMessages) {
-            throw new Error("LOG - Error logging payload, already logged");
+        if (msg_id in messagePromises_log) {
+            throw new Error(`LOG - Error logging outbound - ID : ${msg_id}`);
 
         } else {
-            log_sentMessages[msg_id] = msg_payload;
-            console.log('LOG - Message payload logged');
+            messagePromises_log[msg_id] = msg_prom;
+            console.log(`LOG - Outbound message logged - ID: ${msg_id}`);
         };  
 
     } catch(err) {
@@ -72,31 +89,38 @@ function log_msgPayload(msg_payload){
     };
 };
 
-// retrieve when a message was sent 
-function get_time_msgSent(msg_id){ 
-    
+// saves server response for each message
+function try_logInbound(msg_id, server_response_data){ 
     try {
-
+        
         // tests if key is in log
-        if (msg_id in log_sentMessages) {
-            
-            return log_sentMessages[msg_id].msg_time;
+        if (msg_id in messagePromises_log) {
+            messagePromises_log[msg_id].server_response = server_response_data;
+            console.log(`LOG - Server response added to messages log - ID: ${msg_id}`);
 
         } else {
-            throw new Error(`LOG - Message payload not found in log`);
-        };
+            throw new Error(`LOG - inbound error - Message promise not found - ID: ${msg_id}`);
+        };  
 
-    } catch (err) {
+    } catch(err) {
         console.log(err);
-
     };
 };
 
+// resolves promise associated with sent message (called by message handler)
+function mark_msg_handled(msg_id){
 
-// web socket initializers, called by core
+    messagePromises_log[msg_id].resolve();
+
+};
+
+
+
+//////////////////////////// WEBSOCKET INIT + EVENT HANDLERS
+
+// initialize web socket, called by core
 export async function init_ws () {
     return new Promise((resolve,reject) => {
-
 
         // if ws is defined and connection is already open -> resolve directly
         if (typeof ws != "undefined" && ws.readyState == 1) {
@@ -109,7 +133,7 @@ export async function init_ws () {
             try{
                 
                 // logging
-                let connection_start = Date.now();
+                let connection_start = Date.now(); //-> we should throw a timeout error
 
                 globalThis.ws = new WebSocket(`ws://${ip_address}:${ws_port}`);
 
@@ -121,7 +145,7 @@ export async function init_ws () {
 
                 // resolve on open
                 ws.onopen = (event) => {
-                    console.log(`LOG - WebSocket - connection OPEN in ${Date.now() - connection_start}ms`);
+                    console.log(`LOG - WebSocket - connection OPEN: ${Date.now() - connection_start}ms`);
                     resolve('ws_connection_open'); // -> resolve promise
                 };
                 
@@ -134,14 +158,11 @@ export async function init_ws () {
     });
 };
 
-//////////////////////////// WEBSOCKET EVENT HANDLERS
-
 /*
 // only invoked when connection is opened
 function onOpen_handler (event) {
     console.log(`LOG - WebSocket - connection OPEN`);
 };
-
 */
 
 // dispatches incoming messages
@@ -152,24 +173,15 @@ function onMessage_handler (event) {
     // parse message payload
     const server_data = JSON.parse(event.data);
 
-    // dispatch based on message codes in responses from the server 
-    switch(server_data.msg_code){
+    // retrieve message id
+    const msg_id = server_data.msg_id;
 
-        // new game ready from server 
-        case "new_game_ready":
+    // save response
+    try_logInbound(msg_id, server_data);
 
-            // retrieves id of original request and logs RTT time (serialization/de-serialization contributes too)
-            const msg_id = server_data.msg_id;
-            
-            // logs RTT time
-            console.log(`LOG - RTT for new game request: ${Date.now() - get_time_msgSent(msg_id)}ms`);
-            
-            // saves server response
-            save_first_server_response(server_data);
+    // mark message as handled -> resolve its promise
+    mark_msg_handled(msg_id);
 
-            break;
-
-    };
 };
 
 
@@ -190,27 +202,42 @@ function onClose_handler (event) {
 //////////////////////////// MESSAGE SENDERS
 
 // Send message for generating new game 
-export function server_ws_genNewGame(){
-
-    // message body
-    const msg_time = Date.now();
-    const msg_id = msg_time.toString(36); // generate random id for the message -> we can use it later to log response times
-    const payload = {msg_code: "new_game", msg_time: msg_time, msg_id: msg_id};
+export async function server_ws_genNewGame(){
     
-    // package message
-    const msg = JSON.stringify(payload)
-    
-    // send message
-    ws.send(msg);
+    try {
 
-    // end timing
-    console.log(`LOG - New game requested`);
+        // message body
+        const msg_time = Date.now();
+        const msg_id = msg_time.toString(36); // generate random id for the message -> we can use it later to log response times
+        const payload = {msg_code: "new_game", msg_time: msg_time, msg_id: msg_id};
+        
+        // log message that is about to be sent
+        const local_msg = new MessagePromise(payload, msg_id, msg_time);
+        try_logOutbound(local_msg);
 
-    // save message payload to log
-    log_msgPayload(payload);
+        // send message
+        ws.send(JSON.stringify(payload));
 
+        // end timing
+        console.log(`LOG - New game requested, message ID: ${msg_id}`);                         
+
+        // wait to receive a response
+        // -> will get resolved by message handler when we receive a response
+        await local_msg.promise;
+
+        console.log(`LOG - New game response received - RTT ${Date.now()-msg_time}ms`);
+        
+        // save response in dedicate objects
+        save_first_server_response(messagePromises_log[msg_id].server_response);
+
+
+    } catch (err) {
+
+        console.log(`LOG - Error fulfilling new game request`);
+        throw err;
+
+    };
 };
-
 
 
 

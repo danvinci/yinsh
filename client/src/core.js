@@ -3,8 +3,8 @@
 
 
 //////////// IMPORTS
-import { server_genNewGame, server_joinWithCode, init_ws, send_testMsg_socket, server_ws_genNewGame} from './server.js'
-import { init_global_obj_params, init_empty_game_objects, save_first_server_response, init_new_game_data } from './data.js'
+import { init_ws, send_testMsg_socket, server_ws_genNewGame} from './server.js'
+import { init_global_obj_params, init_empty_game_objects, init_new_game_data } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
 import { try_start_local_turn, complete_local_turn} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
@@ -44,20 +44,9 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
 
         // initializes websocket and connects to game server
         await init_ws();
-
-        // requests new game data
-        server_ws_genNewGame();
-
-        await sleep(1000); // -> testing
-
-        /*
-        // asks game data to server and saves response in object init above
-        if (joiner) { // joining an existing game with a code
-            save_first_server_response(await server_joinWithCode(input_game_code), true);
-        } else { // generating new game
-            save_first_server_response(await server_genNewGame());
-        };
-        */
+        
+        // requests a new game and writes response
+        await server_ws_genNewGame();
 
         // maps data from server to game objects
         // sets up drop zones and rings
@@ -75,7 +64,7 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
             init_interaction();
 
         // log game ready (not really ready)
-        console.log(`LOG - Game setup in ${Date.now() - request_start_time}ms`);
+        console.log(`LOG - Game setup time: ${Date.now() - request_start_time}ms`);
 
         // log game code (later should be in the UI)
         console.log(`LOG - Your game code is: ${yinsh.server_data.game_id}`);
