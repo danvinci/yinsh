@@ -12,8 +12,8 @@ globalThis.canvas_interaction_flag = false; // global property for trying to pre
 
 export function init_interaction(){
 
-    ['mousedown'].forEach(event => canvas.addEventListener(event, mouseDown_handler, false));
-    ['mousemove'].forEach(event => canvas.addEventListener(event, mouseMove_handler, false));
+    canvas.addEventListener('mousedown', mouseDown_handler, false);
+    canvas.addEventListener('mousemove', mouseMove_handler, false);
 
 };
 

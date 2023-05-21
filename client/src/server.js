@@ -1,8 +1,6 @@
 // SERVER INTERFACE FUNCTIONS
 
-// https://www.pubnub.com/guides/what-are-websockets-and-when-should-you-use-them/
-// https://www.pubnub.com/blog/http-long-polling/
-// trying with long polling before digging into websockets
+import { save_first_server_response } from './data.js'
 
 const port_number = "1099"
 
@@ -46,69 +44,156 @@ export async function server_joinWithCode(game_code){
 
 ////////////////// WEBSOCKETS
 // https://javascript.info/websocket
-
+// https://stackoverflow.com/questions/1349404/generate-random-string-characters-in-javascript
 
 
 const ws_port = 8092;
 const ip_address = "127.0.0.1"
 
+globalThis.log_sentMessages = {}; // initialize log of message payloads (for msgs sent to server)
 
-// note: how can we implement keep-alives?
+// write to log
+function log_msgPayload(msg_payload){ 
+    try {
+        // retrieve id
+        const msg_id = msg_payload.msg_id
+    
+        // tests if key is in log
+        if (msg_id in log_sentMessages) {
+            throw new Error("LOG - Error logging payload, already logged");
 
+        } else {
+            log_sentMessages[msg_id] = msg_payload;
+            console.log('LOG - Message payload logged');
+        };  
+
+    } catch(err) {
+        console.log(err);
+    };
+};
+
+// retrieve when a message was sent 
+function get_time_msgSent(msg_id){ 
+    
+    try {
+
+        // tests if key is in log
+        if (msg_id in log_sentMessages) {
+            
+            return log_sentMessages[msg_id].msg_time;
+
+        } else {
+            throw new Error(`LOG - Message payload not found in log`);
+        };
+
+    } catch (err) {
+        console.log(err);
+
+    };
+};
+
+
+// web socket initializers, called by core
 export async function init_socket () {
 
     // tries opening a new websocket connection
     globalThis.ws = new WebSocket(`ws://${ip_address}:${ws_port}`);
 
     // adds event listeners 
-    ['open'].forEach(event => ws.addEventListener(event, onOpen_handler, false));
-    ['message'].forEach(event => ws.addEventListener(event, onMessage_handler, false));
-    ['error'].forEach(event => ws.addEventListener(event, onError_handler, false));
-    ['close'].forEach(event => ws.addEventListener(event, onClose_handler, false));
+    ws.addEventListener('open', onOpen_handler, false);
+    ws.addEventListener('message', onMessage_handler, false);
+    ws.addEventListener('error', onError_handler, false);
+    ws.addEventListener('close', onClose_handler, false);
 
 
 };
 
+//////////////////////////// WS EVENTS HANDLERS
 
+// only invoked when connection is opened
 function onOpen_handler (event) {
-
-    console.log(`LOG - WebSocket connection open`);
-    console.log(event);
-    
-    ws.send("Hello server, thanks for the connection.");
-    console.log('thanks for connection - msg sent');
-
+    console.log(`LOG - WebSocket - connection OPEN`);
 };
 
 
+
+// dispatches incoming messages
 function onMessage_handler (event) {
 
-    console.log(`LOG - New message from server:`);
-    console.log(event);
+    console.log(`LOG - Websocket - received new MESSAGE`);
+    
+    // parse message payload
+    const server_data = JSON.parse(event.data);
 
+    // dispatch based on message codes in responses from the server 
+    switch(server_data.msg_code){
+
+        // new game ready from server 
+        case "new_game_ready":
+
+            // retrieves id of original request and logs RTT time (serialization/de-serialization contributes too)
+            const msg_id = server_data.msg_id;
+            
+            // logs RTT time
+            console.log(`LOG - RTT for new game request: ${Date.now() - get_time_msgSent(msg_id)}ms`);
+            
+            // saves server response
+            save_first_server_response(server_data);
+
+            break;
+
+    };
 };
+
 
 
 function onError_handler (event) {
 
-    console.log(`LOG - Error with websocket`);
+    console.log(`LOG - Websocket - ERROR`);
     console.log(event);
 
 };
 
 function onClose_handler (event) {
 
-    console.log(`LOG - Websocket was closed`);
-    console.log(event);
+    console.log(`LOG - WebSocket - connection CLOSED - `, event.reason);
 
 };
+
+//////////////////////////// MESSAGE SENDERS
+
+// Send message for generating new game 
+export function server_ws_genNewGame(){
+
+    // message body
+    const msg_time = Date.now();
+    const msg_id = msg_time.toString(36); // generate random id for the message -> we can use it later to log response times
+    const payload = {msg_code: "new_game", msg_time: msg_time, msg_id: msg_id};
+    
+    // package message
+    const msg = JSON.stringify(payload)
+    
+    // send message
+    ws.send(msg);
+
+    // end timing
+    console.log(`LOG - New game requested`);
+
+    // save message payload to log
+    log_msgPayload(payload);
+
+};
+
+
 
 
 export function send_testMsg_socket(){
 
-    ws.send("Hello server, this is a test message.");
-    console.log(" -- test message sent from server function -- ")
+    server_ws_genNewGame()
 };
+
+
+
 
 /*
 // server call for checking allowable moves  // OBSOLETE -> PRE-COMPUTED IN ADVANCE

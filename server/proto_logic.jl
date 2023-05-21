@@ -1561,19 +1561,13 @@ md"### Exposing functions as web endpoint"
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
 port_test = 1099
 
-# ╔═╡ 80bce2d0-d4f4-45fc-bddc-174fc4716dd6
-ws_test_port = 8092;
-
-# ╔═╡ efcfc82a-1693-415a-ae22-888cf6716acd
-ws_test_ip = "127.0.0.1"
-
 # ╔═╡ 1450c9e4-4080-476c-90d2-87b19c00cfdf
 ws_messages_log = [];
 
 # ╔═╡ c9c4129f-b507-4c92-899b-bc31087b63f4
 ws_servers_ref = [];
 
-# ╔═╡ 7e13e88c-f0e7-4bed-ad39-307abe7ffe71
+# ╔═╡ e3b292a4-9351-4286-9b56-cb94530c7e35
 ws_servers_ref
 
 # ╔═╡ 70844698-400f-455f-9b62-17c6da5ca566
@@ -1730,38 +1724,50 @@ end
 
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 function init_ws_server()
+
+	# ip and port to use for the server
+	ws_test_ip = "127.0.0.1"
+	ws_test_port = 8092
 	
-	server_ws = WebSockets.listen!(ws_test_ip, ws_test_port) do ws
+	# starts new websockets server 
+	ws_server = WebSockets.listen!(ws_test_ip, ws_test_port) do ws
 
 		# iterate over incoming messages
-		for in_msg in ws
+		for msg in ws
 
-			println("message received: $in_msg")
-			println("waiting 1.5 sec")
+			# handle incoming msg as json
+			msg_json = JSON3.read(msg)
 
-			sleep(1.5)
+			# retrieve id
+			msg_id = msg_json["msg_id"]
+			
+			# look for flags in messages
+			# new_game, join_game, turn_over
 
-			rand_resp = rand(["hello there", "continue", "close"])
+			# request for a new game
+			if msg_json["msg_code"] == "new_game"
 
-			println("1.5 passed")
-			# craft response
-			resp = in_msg * "_serverSuffix_" * rand_resp
+				# generate new game
+				new_game_data = gen_newGame()
+				println("LOG - New game initialized")
 
-			# send response to client
-			println("response crafted")
-			send(ws, resp)
-			println("response sent")
+				# append original request id + dispatching flag
+				setindex!(new_game_data, msg_id, :msg_id)
+				setindex!(new_game_data, "new_game_ready", :msg_code)
+				
+				resp_newGame = JSON3.write(new_game_data)
+
+				send(ws, resp_newGame)
+				println("LOG - New game data sent to client")
+			
+			end
+			
 		end
     end
 
-	push!(ws_servers_ref, server_ws)
-
-	return server_ws
+	push!(ws_servers_ref, ws_server)
 
 end
-
-# ╔═╡ 54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
-ws_server = init_ws_server()
 
 # ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 function test_ws_client()
@@ -1824,11 +1830,19 @@ function test_ws_client()
 
 end
 
-# ╔═╡ 8ccfe74b-cc63-43e6-bc3a-211d48830efd
-# ╠═╡ disabled = true
-#=╠═╡
-HTTP.forceclose(ws_servers_ref[end])
-  ╠═╡ =#
+# ╔═╡ a89ad247-bde8-4912-a5c3-65a361e6942c
+function respawn_ws_server()
+
+	# forces closure of last server and opens a new one
+
+	HTTP.forceclose(ws_servers_ref[end])
+	init_ws_server()
+	
+
+end
+
+# ╔═╡ 54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
+respawn_ws_server()
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2924,7 +2938,7 @@ version = "1.4.1+0"
 # ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 # ╠═f1949d12-86eb-4236-b887-b750916d3493
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
-# ╠═1f021cc5-edb0-4515-b8c9-6a2395bc9547
+# ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
 # ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╠═8eab6d11-6d28-411d-bd82-7bec59b3f496
@@ -2942,15 +2956,13 @@ version = "1.4.1+0"
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
 # ╠═75ce1c80-1dc6-4e0a-852a-830f88269022
-# ╠═80bce2d0-d4f4-45fc-bddc-174fc4716dd6
-# ╠═efcfc82a-1693-415a-ae22-888cf6716acd
 # ╠═1450c9e4-4080-476c-90d2-87b19c00cfdf
 # ╠═c9c4129f-b507-4c92-899b-bc31087b63f4
 # ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 # ╠═54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
-# ╠═7e13e88c-f0e7-4bed-ad39-307abe7ffe71
-# ╠═8ccfe74b-cc63-43e6-bc3a-211d48830efd
+# ╠═a89ad247-bde8-4912-a5c3-65a361e6942c
+# ╠═e3b292a4-9351-4286-9b56-cb94530c7e35
 # ╠═70844698-400f-455f-9b62-17c6da5ca566
 # ╠═fe8284e2-194b-4db4-8ef5-e38cb13b391a
 # ╠═5a0a2a61-57e6-4044-ad00-c8f0f569159d

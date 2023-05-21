@@ -3,7 +3,7 @@
 
 
 //////////// IMPORTS
-import { server_genNewGame, server_joinWithCode, init_socket, send_testMsg_socket} from './server.js'
+import { server_genNewGame, server_joinWithCode, init_socket, send_testMsg_socket, server_ws_genNewGame} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, save_first_server_response, init_new_game_data } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
 import { try_start_local_turn, complete_local_turn} from './data.js' 
@@ -16,9 +16,15 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
     // inits global event target for core logic
     globalThis.core_et = new EventTarget(); // <- this semicolon is very important
 
-    ['ring_picked'].forEach(event => core_et.addEventListener(event, ringPicked_handler, false));
-    ['ring_moved'].forEach(event => core_et.addEventListener(event, ringMoved_handler, false));
-    ['ring_drop'].forEach(event => core_et.addEventListener(event, ringDrop_handler, false));
+    core_et.addEventListener('ring_picked', ringPicked_handler, false);
+    core_et.addEventListener('ring_moved', ringMoved_handler, false);
+    core_et.addEventListener('ring_drop', ringDrop_handler, false);
+
+//////////// SLEEP UTIL
+
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
 
 //////////// FUNCTIONS FOR INITIALIZING GAMES (NEW or JOIN)
 
@@ -36,12 +42,24 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
         // initialize empty game objects
         init_empty_game_objects();
 
+        // initializes socket -> connection to game server
+        init_socket();
+
+        await sleep(1000)
+
+        // requests new game data
+        server_ws_genNewGame();
+
+        await sleep(1000); // -> testing
+
+        /*
         // asks game data to server and saves response in object init above
         if (joiner) { // joining an existing game with a code
             save_first_server_response(await server_joinWithCode(input_game_code), true);
         } else { // generating new game
             save_first_server_response(await server_genNewGame());
         };
+        */
 
         // maps data from server to game objects
         // sets up drop zones and rings
