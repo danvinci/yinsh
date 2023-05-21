@@ -1539,7 +1539,7 @@ gen_newGame();
 games_log_dict
 
 # ╔═╡ b58b0aa9-817d-4f04-842e-7ee834b5759e
-function join_exGame(game_code::String)
+function try_get_exGame(game_code::String)
 
 	try
 		# note : we should flag games that are confirmed as joined
@@ -1738,22 +1738,21 @@ function init_ws_server()
 			# handle incoming msg as json
 			msg_json = JSON3.read(msg)
 
-			# retrieve id
+			# retrieve id and message code
 			msg_id = msg_json["msg_id"]
-			
-			# look for flags in messages
-			# new_game, join_game, turn_over
+			msg_code = msg_json["msg_code"]
 
-			# request for a new game
-			if msg_json["msg_code"] == "new_game"
+			
+			# handle request for a new game
+			if msg_code == "new_game"
 
 				# generate new game
 				new_game_data = gen_newGame()
 				println("LOG - New game initialized")
 
-				# append original request id + dispatching flag
+				# append original request id + server msg code
 				setindex!(new_game_data, msg_id, :msg_id)
-				setindex!(new_game_data, "new_game_ready", :msg_code)
+				setindex!(new_game_data, "new_game_ok", :msg_code)
 				
 				resp_newGame = JSON3.write(new_game_data)
 
@@ -1761,6 +1760,36 @@ function init_ws_server()
 				println("LOG - New game data sent to client")
 			
 			end
+
+			
+			# handle request to join existing game
+			if msg_code == "join_game"
+
+				try # try retrieving and sending game data
+					ex_game_data = try_get_exGame(msg_json["game_code"])
+					println("LOG - Game data retrieved, ID: $(msg_json["game_code"])")
+
+					# append original request id + server msg code
+					setindex!(ex_game_data, msg_id, :msg_id)
+					setindex!(ex_game_data, "join_game_ok", :msg_code)
+
+					resp_joinGame = JSON3.write(ex_game_data)
+
+					send(ws, resp_joinGame)
+					println("LOG - Ex game data found and sent to client")
+				
+				catch # handle case of game_id not found
+				 
+					bad_msg = Dict(:msg_id => msg_id, :msg_code => "join_game_failed")
+					
+					bad_resp_joinGame = JSON3.write(bad_msg)
+	
+					send(ws, bad_resp_joinGame)
+					println("LOG - Ex game data not found, client notified")
+				end
+			
+			end
+
 			
 		end
     end

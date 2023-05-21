@@ -1,50 +1,11 @@
 // SERVER INTERFACE FUNCTIONS
 
-import { save_first_server_response } from './data.js'
-
-const port_number = "1099"
-
-// server call for generating new game
-// NOTE: should handle errors directly (e.g. server unavailable)
-export async function server_genNewGame(){
-
-    // start timing
-    let call_start = Date.now();
-
-    const srv_new_game_resp = (await fetch(`http://localhost:${port_number}/v1/new_game`, {method: 'GET'})).json();
-
-    // end timing
-    console.log(`LOG - RTT for new game request: ${Date.now() - call_start}ms`);
-
-    return srv_new_game_resp;
-
-};
-
-// server call for generating new game
-export async function server_joinWithCode(game_code){
-
-    let call_start = Date.now();
-
-    const resp_promise = await fetch(`http://localhost:${port_number}/v1/join_game`, {
-        method: 'POST',
-        body: JSON.stringify({"game_code": game_code})
-
-    });
-    
-    const srv_join_game_resp = await resp_promise.json(); 
-
-    // logging time
-    let delta_time = Date.now() - call_start;
-    console.log(`LOG - RTT for join with code request: ${delta_time}ms`);
-
-    return srv_join_game_resp;
-
-};
-
-
 // https://javascript.info/websocket
 // https://stackoverflow.com/questions/1349404/generate-random-string-characters-in-javascript
 // https://javascript.info/promise-basics
+
+
+import { save_first_server_response } from './data.js'
 
 const ws_port = 8092;
 const ip_address = "127.0.0.1"
@@ -205,9 +166,10 @@ export async function server_ws_genNewGame(){
     
     try {
 
-        // message body
-        const msg_time = Date.now();
-        const msg_id = msg_time.toString(36); // generate random id for the message -> we can use it later to log response times
+        // get time and generate id
+        const [msg_time, msg_id] = gen_time_id(); // used later to recognize response and log times
+        
+        // prepare message payoload
         const payload = {msg_code: "new_game", msg_time: msg_time, msg_id: msg_id};
         
         // log message that is about to be sent
@@ -239,3 +201,63 @@ export async function server_ws_genNewGame(){
 };
 
 
+// Send message for generating new game 
+export async function server_ws_joinWithCode(input_game_code){
+    
+    try {
+
+        // get time and generate id
+        const [msg_time, msg_id] = gen_time_id(); // used later to recognize response and log times
+        
+        // prepare message payoload
+        const payload = {msg_code: "join_game", game_code: input_game_code, msg_time: msg_time, msg_id: msg_id};
+        
+        // log message that is about to be sent
+        const local_msg = new MessagePromise(payload, msg_id, msg_time);
+        try_logOutbound(local_msg);
+
+        // send message
+        ws.send(JSON.stringify(payload));
+
+        // end timing
+        console.log(`LOG - Join game (${input_game_code}) requested, message ID: ${msg_id}`);                         
+
+        // wait to receive a response
+        // -> will get resolved by message handler when we receive a response
+        await local_msg.promise;
+        
+        const resp_code = messagePromises_log[msg_id].server_response.msg_code
+        
+        if (resp_code == "join_game_ok"){
+
+            // save response (as joiner) in dedicate objects
+            save_first_server_response(messagePromises_log[msg_id].server_response, true);
+            
+            console.log(`LOG - Join game response received - RTT ${Date.now()-msg_time}ms`);
+       
+        } else {
+            
+            throw new Error(`LOG - Join game (${input_game_code}) error - msg ID : ${msg_id}`);
+        };
+        
+
+    } catch (err) {
+
+        console.log(`LOG - Error fulfilling join game request`);
+        throw err;
+
+    };
+};
+
+
+
+//////////////////////////// UTILS
+
+function gen_time_id() {
+    
+    const msg_time = Date.now();
+    const msg_id = msg_time.toString(36)
+
+    return [msg_time, msg_id]
+
+};

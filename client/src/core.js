@@ -3,7 +3,7 @@
 
 
 //////////// IMPORTS
-import { init_ws, server_ws_genNewGame} from './server.js'
+import { init_ws, server_ws_genNewGame, server_ws_joinWithCode} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_new_game_data } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
 import { try_start_local_turn, complete_local_turn} from './data.js' 
@@ -45,9 +45,16 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
         // initializes websocket and connects to game server
         await init_ws();
         
-        // requests a new game and writes response
-        await server_ws_genNewGame();
+        if (joiner) {
 
+            // asks to join existing game
+            await server_ws_joinWithCode(input_game_code);
+
+        } else {
+            // requests a new game and writes response
+            await server_ws_genNewGame();
+        };
+        
         // maps data from server to game objects
         // sets up drop zones and rings
         init_new_game_data();
