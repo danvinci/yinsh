@@ -43,6 +43,73 @@ export async function server_joinWithCode(game_code){
 
 };
 
+
+////////////////// WEBSOCKETS
+// https://javascript.info/websocket
+
+
+
+const ws_port = 8092;
+const ip_address = "127.0.0.1"
+
+
+// note: how can we implement keep-alives?
+
+export async function init_socket () {
+
+    // tries opening a new websocket connection
+    globalThis.ws = new WebSocket(`ws://${ip_address}:${ws_port}`);
+
+    // adds event listeners 
+    ['open'].forEach(event => ws.addEventListener(event, onOpen_handler, false));
+    ['message'].forEach(event => ws.addEventListener(event, onMessage_handler, false));
+    ['error'].forEach(event => ws.addEventListener(event, onError_handler, false));
+    ['close'].forEach(event => ws.addEventListener(event, onClose_handler, false));
+
+
+};
+
+
+function onOpen_handler (event) {
+
+    console.log(`LOG - WebSocket connection open`);
+    console.log(event);
+    
+    ws.send("Hello server, thanks for the connection.");
+    console.log('thanks for connection - msg sent');
+
+};
+
+
+function onMessage_handler (event) {
+
+    console.log(`LOG - New message from server:`);
+    console.log(event);
+
+};
+
+
+function onError_handler (event) {
+
+    console.log(`LOG - Error with websocket`);
+    console.log(event);
+
+};
+
+function onClose_handler (event) {
+
+    console.log(`LOG - Websocket was closed`);
+    console.log(event);
+
+};
+
+
+export function send_testMsg_socket(){
+
+    ws.send("Hello server, this is a test message.");
+    console.log(" -- test message sent from server function -- ")
+};
+
 /*
 // server call for checking allowable moves  // OBSOLETE -> PRE-COMPUTED IN ADVANCE
 async function server_legal_moves(){

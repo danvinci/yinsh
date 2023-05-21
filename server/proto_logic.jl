@@ -29,15 +29,6 @@ using Random
 # ╔═╡ 13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 using Dates
 
-# ╔═╡ ac38576f-7796-4edb-aa21-391fe9fa9f5b
-using .Threads
-
-# ╔═╡ db228222-fcfa-4e4b-a96d-d8c7adc9c149
-using BenchmarkTools
-
-# ╔═╡ 64b1f98e-2e04-4db2-a827-4bc74ead76ab
-using JLD2
-
 # ╔═╡ 1f9da483-6b05-4867-a509-2c24b41cd5d6
 mm_yinsh = zeros(Int64, 19, 11)
 
@@ -1570,77 +1561,26 @@ md"### Exposing functions as web endpoint"
 # ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
 port_test = 1099
 
-# ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
-begin
-#=
-#WebSocket Examples
+# ╔═╡ 80bce2d0-d4f4-45fc-bddc-174fc4716dd6
+ws_test_port = 8092;
 
-	server_ws = WebSockets.listen!("127.0.0.10", 8082) do ws
-		for msg in ws
-			msg = msg * "_by_the_server"
-			send(ws, msg)
-		end
-    end
-=#
-end
+# ╔═╡ efcfc82a-1693-415a-ae22-888cf6716acd
+ws_test_ip = "127.0.0.1"
 
-# ╔═╡ 713d2f73-d050-4304-8c34-d742370c4306
-# server + router + service functions definition
-#=
-begin
-	
-	# FUNCTIONS
+# ╔═╡ 1450c9e4-4080-476c-90d2-87b19c00cfdf
+ws_messages_log = [];
 
-	function test_async_fun(req::HTTP.Request)
+# ╔═╡ c9c4129f-b507-4c92-899b-bc31087b63f4
+ws_servers_ref = [];
 
-		sleep(0.1)
-			
-		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write("resp"))
-		
-	end
+# ╔═╡ 7e13e88c-f0e7-4bed-ad39-307abe7ffe71
+ws_servers_ref
 
-
-	# define REST endpoints to dispatch calls to functions
-	const ROUTER_async = HTTP.Router()
-	HTTP.register!(ROUTER_async, "GET", "/async_test", test_async_fun)
-
-	
-	
-
-end
-=#
-
-# ╔═╡ c64be7c3-720a-4e7c-a4f4-c5a0673ef6c3
-#port_test_async = 8863
-
-# ╔═╡ 8d63ef76-fbd4-4cb4-8878-7a1964eb3e55
-#=
-begin
-
-# start server 
-simple_srv_async = HTTP.serve!(ROUTER_async, Sockets.localhost, port_test_async)
-
-# force server shutdown
-#HTTP.forceclose(simple_srv)
-
-
-end
-=#
-
-# ╔═╡ c520ba8a-effb-4dae-af3d-2cbb0ca50a87
-#close(simple_srv_async)
-
-# ╔═╡ 594b3872-3cde-4cc9-ba68-6d78c431ace6
-#=
-@btime begin
-
-for i in 1:300
-
-	HTTP.request("GET", "http://127.0.0.1:$port_test_async/async_test")
-end
-	
-end
-=#
+# ╔═╡ 70844698-400f-455f-9b62-17c6da5ca566
+# ╠═╡ disabled = true
+#=╠═╡
+test_ws_client()
+  ╠═╡ =#
 
 # ╔═╡ fe8284e2-194b-4db4-8ef5-e38cb13b391a
 #=@btime begin
@@ -1654,19 +1594,6 @@ end
 end
 end
 =#
-
-# ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
-begin
-	#=
-
-	WebSockets.open("127.0.0.10:8082") do ws
-           send(ws, "Hello")
-           s = WebSockets.receive(ws)
-           println(s)
-       end
-
-=#
-end
 
 # ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
 global_states = []
@@ -1801,64 +1728,113 @@ simple_srv = HTTP.serve!(ROUTER, Sockets.localhost, port_test)
 
 end
 
-# ╔═╡ b13e5c1d-454f-4c87-9523-863a7d5d843f
-global_states
+# ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+function init_ws_server()
+	
+	server_ws = WebSockets.listen!(ws_test_ip, ws_test_port) do ws
 
-# ╔═╡ f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
-req_test = global_states[end-1]
+		# iterate over incoming messages
+		for in_msg in ws
 
-# ╔═╡ 4c983857-8532-487c-bcc4-8843c9a3cc31
-resp_js = JSON3.read(req_test.body)
+			println("message received: $in_msg")
+			println("waiting 1.5 sec")
 
-# ╔═╡ 4132e5bd-540a-4467-aa41-5e8d5b82ae11
-resp_js[:state]
+			sleep(1.5)
 
-# ╔═╡ dc912486-b94e-4d0d-b653-de91aad85c0a
-findall(i -> contains(i, "M"), reshape([i for i in resp_js.state], 19,11))
+			rand_resp = rand(["hello there", "continue", "close"])
 
-# ╔═╡ 762330f8-88a7-4ef8-b67e-74663868f38b
-for row in 1:19
-	println(reshape([i for i in resp_js.state], 19,11)[row,:])
+			println("1.5 passed")
+			# craft response
+			resp = in_msg * "_serverSuffix_" * rand_resp
+
+			# send response to client
+			println("response crafted")
+			send(ws, resp)
+			println("response sent")
+		end
+    end
+
+	push!(ws_servers_ref, server_ws)
+
+	return server_ws
+
 end
 
-# ╔═╡ e28edbf2-fd82-46fd-aca8-0070bc21c289
-begin
+# ╔═╡ 54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
+ws_server = init_ws_server()
 
+# ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
+function test_ws_client()
 
-# check markers that should be flipped
-to_flip = markers_actions(
-						resp_js[:state],
-						resp_js[:start_index], 
-						resp_js[:end_index])
+	msg_sent_counter = 0
+	msg_rec_counter = 0
+
+	try
+		# open ws
+		WebSockets.open("ws://$ws_test_ip:$ws_test_port") do ws
+			
+			println("connection opened")
+
+			for i in 1:10 # max of 10 messages sent
+				# send  message to server
+				msg = "input by client__"
+				send(ws, msg)
+				msg_sent_counter += 1
+		
+				println("--- New message sent, total: $msg_sent_counter")
+
+	
+				# handle incoming responses from server
+				for msg in ws
+	
+					msg_rec_counter +=1
+					println("--- New message received, total: $msg_rec_counter")
+	
+					if contains(msg, "close")
+						#closing websockets
+						println("message received from server:")
+						println(msg)
+						println("closing socket")
+						close(ws)
+					else
+						# receive msg and do something
+						println("message received from server:")
+						println(msg)
+					end
+		
+
+					# wait before sending other messages
+					sleep(2)
+				
+				end
+
+				# iteration
+
+			end
+	
+			println("end of ws iteration")
+	             
+		end
+
+	catch
+
+		throw(error("ERROR occurred"))
+		
+	end
 
 end
 
-# ╔═╡ bbf4868c-eae4-4191-b4d0-9564bb236cbe
-kkk_moves = search_loc(
-			reshape([s for s in resp_js[:state]], 19, 11), 
-			resp_js[:row], 
-			resp_js[:col]
-			)
-
-# ╔═╡ ca4a8229-3b34-4b5d-9807-27b840183109
-md"""### Options for storing game sessions and states"""
-
-# ╔═╡ b8ff58a8-dabe-4e03-baf2-0c351c66ecd7
-# could use JLD2 and write arrays/dicts to disk instead od using Redis etc
-
-# ╔═╡ ad8304c7-f06f-4b59-a981-64f45b2d5e39
-jldsave("states.jld2"; global_states)
-
-# ╔═╡ dea8b51d-b708-4d62-bd14-8814c188ad86
-read_states = jldopen("states.jld2")
+# ╔═╡ 8ccfe74b-cc63-43e6-bc3a-211d48830efd
+# ╠═╡ disabled = true
+#=╠═╡
+HTTP.forceclose(ws_servers_ref[end])
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 PlotThemes = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
@@ -1868,9 +1844,7 @@ Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
-BenchmarkTools = "~1.3.2"
 HTTP = "~1.7.4"
-JLD2 = "~0.4.31"
 JSON3 = "~1.12.0"
 PlotThemes = "~3.1.0"
 Plots = "~1.38.7"
@@ -1884,7 +1858,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "4d4fa7280d7b24d17a74b7f5a1fa09f524deedb1"
+project_hash = "e555c35e095a23a0e0416eca1ac8a4c4937c7f23"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1901,12 +1875,6 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
-
-[[deps.BenchmarkTools]]
-deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
-git-tree-sha1 = "d9a9701b899b30332bbcb3e1679c41cce81fb0e8"
-uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
-version = "1.3.2"
 
 [[deps.BitFlags]]
 git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
@@ -2025,12 +1993,6 @@ git-tree-sha1 = "74faea50c1d007c85837327f6775bea60b5492dd"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
 version = "4.4.2+2"
 
-[[deps.FileIO]]
-deps = ["Pkg", "Requires", "UUIDs"]
-git-tree-sha1 = "299dc33549f68299137e51e6d49a13b5b1da9673"
-uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
-version = "1.16.1"
-
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
@@ -2148,12 +2110,6 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.2.2"
-
-[[deps.JLD2]]
-deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "Pkg", "Printf", "Reexport", "Requires", "TranscodingStreams", "UUIDs"]
-git-tree-sha1 = "42c17b18ced77ff0be65957a591d34f4ed57c631"
-uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
-version = "0.4.31"
 
 [[deps.JLFzf]]
 deps = ["Pipe", "REPL", "Random", "fzf_jll"]
@@ -2500,10 +2456,6 @@ version = "1.4.0"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
-
-[[deps.Profile]]
-deps = ["Printf"]
-uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 
 [[deps.Qt5Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "xkbcommon_jll"]
@@ -2990,29 +2942,17 @@ version = "1.4.1+0"
 # ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
 # ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
 # ╠═75ce1c80-1dc6-4e0a-852a-830f88269022
+# ╠═80bce2d0-d4f4-45fc-bddc-174fc4716dd6
+# ╠═efcfc82a-1693-415a-ae22-888cf6716acd
+# ╠═1450c9e4-4080-476c-90d2-87b19c00cfdf
+# ╠═c9c4129f-b507-4c92-899b-bc31087b63f4
 # ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
-# ╠═713d2f73-d050-4304-8c34-d742370c4306
-# ╠═c64be7c3-720a-4e7c-a4f4-c5a0673ef6c3
-# ╠═8d63ef76-fbd4-4cb4-8878-7a1964eb3e55
-# ╠═c520ba8a-effb-4dae-af3d-2cbb0ca50a87
-# ╠═ac38576f-7796-4edb-aa21-391fe9fa9f5b
-# ╠═db228222-fcfa-4e4b-a96d-d8c7adc9c149
-# ╠═594b3872-3cde-4cc9-ba68-6d78c431ace6
+# ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
+# ╠═54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
+# ╠═7e13e88c-f0e7-4bed-ad39-307abe7ffe71
+# ╠═8ccfe74b-cc63-43e6-bc3a-211d48830efd
+# ╠═70844698-400f-455f-9b62-17c6da5ca566
 # ╠═fe8284e2-194b-4db4-8ef5-e38cb13b391a
-# ╠═2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 # ╠═5a0a2a61-57e6-4044-ad00-c8f0f569159d
-# ╠═b13e5c1d-454f-4c87-9523-863a7d5d843f
-# ╠═f8dbaff4-e5f8-4b69-bcb3-ea163c08c4e6
-# ╠═4c983857-8532-487c-bcc4-8843c9a3cc31
-# ╠═4132e5bd-540a-4467-aa41-5e8d5b82ae11
-# ╠═dc912486-b94e-4d0d-b653-de91aad85c0a
-# ╠═762330f8-88a7-4ef8-b67e-74663868f38b
-# ╠═e28edbf2-fd82-46fd-aca8-0070bc21c289
-# ╠═bbf4868c-eae4-4191-b4d0-9564bb236cbe
-# ╟─ca4a8229-3b34-4b5d-9807-27b840183109
-# ╠═b8ff58a8-dabe-4e03-baf2-0c351c66ecd7
-# ╠═64b1f98e-2e04-4db2-a827-4bc74ead76ab
-# ╠═ad8304c7-f06f-4b59-a981-64f45b2d5e39
-# ╠═dea8b51d-b708-4d62-bd14-8814c188ad86
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
