@@ -3,7 +3,7 @@
 
 
 //////////// IMPORTS
-import { init_ws, send_testMsg_socket, server_ws_genNewGame} from './server.js'
+import { init_ws, server_ws_genNewGame} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_new_game_data } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
 import { try_start_local_turn, complete_local_turn} from './data.js' 
@@ -92,46 +92,6 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
     };
 };
 
-
-export async function core_test_init_ws(){
-
-    console.log(' -- test ws connection --');
-    const test_start_time = Date.now()
-
-    try{
-
-        // inits sockets connection
-        await init_socket();
-
-
-    } catch (err){
-
-        console.log(` -- test ws ERROR --`);
-        console.log(err);
-    };
-
-    // log game ready (not really ready)
-    console.log(` -- test complete: ${Date.now() - test_start_time}ms`);
-
-};
-
-export function core_test_sendMsg_ws(){
-
-    try{
-
-        // tries sending msg through socket
-        send_testMsg_socket();
-        console.log(" -- test message sent from core -- ")
-
-
-    } catch (err){
-
-        console.log(` -- test ws ERROR --`);
-        console.log(err);
-    };
-
-    
-};
 
 
 //////////// EVENT HANDLERS FOR GAME MECHANICS

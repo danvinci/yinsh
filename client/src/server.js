@@ -42,7 +42,6 @@ export async function server_joinWithCode(game_code){
 };
 
 
-////////////////// WEBSOCKETS
 // https://javascript.info/websocket
 // https://stackoverflow.com/questions/1349404/generate-random-string-characters-in-javascript
 // https://javascript.info/promise-basics
@@ -52,7 +51,7 @@ const ip_address = "127.0.0.1"
 
 // custom class for managing the lifecycle of messages
 class MessagePromise {
-    constructor(payload, msg_id, msg_time) {
+    constructor(payload, msg_id, msg_time, timeout = 100000) {
         this.payload = payload;
         this.msg_id = msg_id;
         this.msg_time = msg_time;
@@ -61,7 +60,7 @@ class MessagePromise {
             this.resolve = resolve
 
             // automatic rejection 100s after creation
-            setTimeout(()=> {reject(new Error("LOG - Request timed out - ID: msg_id"))}, 100000);
+            setTimeout(()=> {reject(new Error("LOG - Request timed out - ID: msg_id"))}, timeout);
         })
     }
     getTimeSent() {return this.msg_time;}
@@ -199,7 +198,7 @@ function onClose_handler (event) {
 
 };
 
-//////////////////////////// MESSAGE SENDERS
+//////////////////////////// MESSAGE SENDERS (called by core)
 
 // Send message for generating new game 
 export async function server_ws_genNewGame(){
@@ -240,77 +239,3 @@ export async function server_ws_genNewGame(){
 };
 
 
-
-export function send_testMsg_socket(){
-
-    server_ws_genNewGame()
-};
-
-
-
-
-/*
-// server call for checking allowable moves  // OBSOLETE -> PRE-COMPUTED IN ADVANCE
-async function server_legal_moves(){
-
-    let call_start = Date.now();
-    // https://stackoverflow.com/questions/48708449/promise-pending-why-is-it-still-pending-how-can-i-fix-this
-    // https://stackoverflow.com/questions/40385133/retrieve-data-from-a-readablestream-object
-
-    // reads directly global variables for game_state and current move
-    response = await fetch(`http://localhost:${port_number}/v1/legal_moves`, {
-        method: 'POST', // GET requests cannot have a body
-        body: JSON.stringify({
-                                "game_id": 'game_unique_id', 
-                                "state": game_state, 
-                                "start_index": current_move.start_index
-                            })
-    });
-
-    // the failed fetch should be handled -> game pause or automatic retry?
-    // note: passing the state could be redundant, only game id should be necessary
-    
-    // get legal moves back from the server (array)
-    const srv_legal_moves = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
-
-    // logging time
-    let delta_time = Date.now() - call_start;
-    console.log(`RTT legal moves: ${delta_time}ms`);
-
-    // return response to game status handler
-    return srv_legal_moves;
-
-};
-
-// server call for checking which markers must be flipped
-// change endpoint name to markers_action
-async function server_markers_check(end_move_index){
-
-    let call_start = Date.now();
-    // reads directly global variables for game_state and current move
-    response = await fetch(`http://localhost:${port_number}/v1/markers_check`, {
-        method: 'POST', 
-        body: JSON.stringify({
-                                "game_id": 'game_unique_id', 
-                                "state": game_state, 
-                                "start_index": current_move.start_index,
-                                "end_index": end_move_index
-
-                            })
-    });
-
-    // note: passing the state could be redundant, only game id should be necessary
-    
-    // get markers to be flipped back from the server (array)
-    const srv_mk_response = await response.json(); // note: json() is async and must be awaited, otherwise we print the promise object itself 
-
-    // logging time
-    let delta_time = Date.now() - call_start;
-    console.log(`RTT markers check: ${delta_time}ms`);
-
-    // return response to game status handler
-    return srv_mk_response;
-
-};
-
-*/

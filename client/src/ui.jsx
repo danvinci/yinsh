@@ -1,5 +1,5 @@
 import { createSignal, Show, Switch, Match, createResource, createEffect, on } from "solid-js";
-import { init_game_fromServer, core_test_init_ws, core_test_sendMsg_ws } from "./core.js";
+import { init_game_fromServer } from "./core.js";
 
 export function Play() {
   
@@ -32,8 +32,6 @@ export function Play() {
           <div>
             <p>Welcome!</p>      
             <button type = "button" onClick={toggle_Play}>Play Yinsh</button>
-            <button type = "button" onClick={core_test_init_ws}>Test open WS</button>
-            <button type = "button" onClick={core_test_sendMsg_ws}>Send test msg WS</button>
           </div>}
       >
         <Switch
