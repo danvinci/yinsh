@@ -29,6 +29,12 @@ using Random
 # ╔═╡ 13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 using Dates
 
+# ╔═╡ 70ecd4ed-cbb1-4ebd-85a8-42f7b072bee3
+using HTTP, JSON3
+
+# ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
+using HTTP.WebSockets
+
 # ╔═╡ 1f9da483-6b05-4867-a509-2c24b41cd5d6
 mm_yinsh = zeros(Int64, 19, 11)
 
@@ -378,20 +384,8 @@ setup_graph = rings_marks_graph();
 # ╔═╡ edfa0b25-9132-4de9-bf11-3ea2f0952e4f
 row_start_n = locz[locz_index_n][1]; col_start_n = locz[locz_index_n][2];
 
-# ╔═╡ 31e5c210-0cc0-4c89-8045-fbba3d031bc7
-begin
-
-	rr_start = 16
-	cc_start = 8
-	#16/8
-jjj = rr_start+1:19
-kkk = cc_start+1:11
-		
-zip_range = zip(jjj, kkk)
-[CartesianIndex(z[1],z[2]) for z in zip_range]
-
-
-end
+# ╔═╡ a3ae2bfe-41ea-4fe1-870b-2ac35153da5d
+md"### Search spaces generation"
 
 # ╔═╡ 003f670b-d3b1-4905-b105-67504f16ba19
 # populate dictionary of locations search space 
@@ -494,9 +488,6 @@ begin
 	locs_searchSpace = Dict()
 	populate_searchSpace!(locs_searchSpace)
 end
-
-# ╔═╡ 7435fe56-8646-4754-b960-4c282da5ab78
-locs_searchSpace[CartesianIndex(row_start_n, col_start_n)]
 
 # ╔═╡ f0e9e077-f435-4f4b-bd69-f495dfccec27
 function sub_spaces_split(input_array, key)
@@ -1405,15 +1396,6 @@ function gen_scenarioTree(game_id)
 
 end
 
-# ╔═╡ ebe12b2b-558b-4eba-830b-f034d2e44d37
-test_game = games_log_dict["kIXEk"];
-
-# ╔═╡ 9d357da1-5aa6-4334-968f-ff320493b112
-test_game_moves = test_game[:next_legalMoves]
-
-# ╔═╡ 048ba8c9-47e8-46f1-8717-564c6469636d
-gen_scenarioTree("kIXEk")
-
 # ╔═╡ f86b195e-06a9-493d-8536-16bdcaadd60e
 function print_gameState(server_game_state)
 	# print matrix easy copying in js code
@@ -1443,9 +1425,6 @@ function print_gameState(server_game_state)
 print(mm_to_print)
 
 end
-
-# ╔═╡ 7bc0fc4b-4a2a-429d-a3ae-0dbefccf3129
-print_gameState(test_game[:server_gameState])
 
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
@@ -1552,175 +1531,14 @@ function try_get_exGame(game_code::String)
 
 end
 
-# ╔═╡ 7a1fa0a8-495a-4288-ba7b-3379bfcc5602
-join_exGame("INKwx")
-
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
-md"### Exposing functions as web endpoint"
-
-# ╔═╡ 1b9382a2-729d-4499-9d53-6db63e1114cc
-port_test = 1099
+md"### Running websocket server"
 
 # ╔═╡ 1450c9e4-4080-476c-90d2-87b19c00cfdf
 ws_messages_log = [];
 
 # ╔═╡ c9c4129f-b507-4c92-899b-bc31087b63f4
 ws_servers_ref = [];
-
-# ╔═╡ e3b292a4-9351-4286-9b56-cb94530c7e35
-ws_servers_ref
-
-# ╔═╡ 70844698-400f-455f-9b62-17c6da5ca566
-# ╠═╡ disabled = true
-#=╠═╡
-test_ws_client()
-  ╠═╡ =#
-
-# ╔═╡ fe8284e2-194b-4db4-8ef5-e38cb13b391a
-#=@btime begin
-
-@sync begin
-	for i in 1:300
-	
-		@async HTTP.request("GET", "http://127.0.0.1:$port_test_async/async_test")
-	end
-
-end
-end
-=#
-
-# ╔═╡ 5a0a2a61-57e6-4044-ad00-c8f0f569159d
-global_states = []
-
-# ╔═╡ d3b0a36b-0578-40ad-8c96-bdad11e29a83
-# server + router + service functions definition
-begin
-
-using HTTP, JSON3, Sockets
-
-# CORS preflight headers: which requests are allowed 
-# check this for more details ->
-# https://github.com/JuliaWeb/HTTP.jl/blob/master/docs/examples/cors_server.jl
-#= 
-const CORS_OPT_HEADERS = [
-	"Access-Control-Allow-Origin" => "*",
-	"Access-Control-Allow-Headers" => "*",
-	"Access-Control-Allow-Methods" => "POST, GET, OPTIONS"
-	]
-=#
-
-# CORS response headers: set access right of the client
-const CORS_RES_HEADERS = ["Access-Control-Allow-Origin" => "*"]
-
-# FUNCTIONS
-
-function legalMoves_handler(req::HTTP.Request)
-	
-	# saves request to global states store
-	push!(global_states, req)
-
-	# parses request body to json
-	body_json = JSON3.read(req.body)
-
-	try 
-		# computes legal moves
-		legal_moves = search_loc(body_json[:state], body_json[:start_index])
-		
-		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(legal_moves))
-	catch
-		return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
-	end
-
-end
-
-function mkActions_handler(req::HTTP.Request)
-	
-	# saves request to global states store
-	push!(global_states, req)
-
-	# parses request body to json
-	body_json = JSON3.read(req.body)
-
-	try 
-		# check markers that should be flipped
-		mk_actions = markers_actions(
-									body_json[:state],
-									body_json[:start_index], 
-									body_json[:end_index]
-									)
-		
-		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(mk_actions))
-
-	catch
-		return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("server error"))
-	end
-
-end
-
-
-function newGame_handler(req::HTTP.Request)
-	
-	# saves request to global states store
-	push!(global_states, req)
-	
-	try
-
-		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(gen_newGame()))
-
-	catch
-		return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("LOG - Server error"))
-	end
-
-
-end
-
-
-function joinGame_handler(req::HTTP.Request)
-	
-	# saves request to global states store
-	push!(global_states, req)
-
-	# parses request body to json
-	body_json = JSON3.read(req.body)
-	
-	try
-		game_data = join_exGame(body_json[:game_code])
-		return HTTP.Response(200, CORS_RES_HEADERS, JSON3.write(game_data))
-
-	catch
-		return HTTP.Response(500, CORS_RES_HEADERS, JSON3.write("LOG - Server error"))
-	end
-
-
-end
-
-
-
-
-
-
-# define REST endpoints to dispatch calls to functions
-const ROUTER = HTTP.Router()
-HTTP.register!(ROUTER, "POST", "/v1/legal_moves", legalMoves_handler)
-HTTP.register!(ROUTER, "POST", "/v1/markers_check", mkActions_handler)
-HTTP.register!(ROUTER, "GET", "/v1/new_game", newGame_handler)
-HTTP.register!(ROUTER, "POST", "/v1/join_game", joinGame_handler)
-
-
-
-end
-
-# ╔═╡ 75ce1c80-1dc6-4e0a-852a-830f88269022
-begin
-
-# start server 
-simple_srv = HTTP.serve!(ROUTER, Sockets.localhost, port_test)
-
-# force server shutdown
-#HTTP.forceclose(simple_srv)
-
-
-end
 
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 function init_ws_server()
@@ -1862,16 +1680,30 @@ end
 # ╔═╡ a89ad247-bde8-4912-a5c3-65a361e6942c
 function respawn_ws_server()
 
-	# forces closure of last server and opens a new one
+	# forces closure of last server (if existing) and starts a new one
+	if length(ws_servers_ref) > 0
+		
+		HTTP.forceclose(ws_servers_ref[end])
+		init_ws_server()
 
-	HTTP.forceclose(ws_servers_ref[end])
-	init_ws_server()
+	else
+		init_ws_server()
+	end
 	
 
 end
 
 # ╔═╡ 54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
 respawn_ws_server()
+
+# ╔═╡ e3b292a4-9351-4286-9b56-cb94530c7e35
+ws_servers_ref
+
+# ╔═╡ 19f5940f-cc7d-460e-a309-c4f26a69e69f
+# ╠═╡ disabled = true
+#=╠═╡
+test_ws_client()
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1883,11 +1715,10 @@ PlotThemes = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
-HTTP = "~1.7.4"
+HTTP = "~1.9.5"
 JSON3 = "~1.12.0"
 PlotThemes = "~3.1.0"
 Plots = "~1.38.7"
@@ -1901,7 +1732,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "e555c35e095a23a0e0416eca1ac8a4c4937c7f23"
+project_hash = "3e07a06d64e538a955daef45d305f17ecaae42b8"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1980,6 +1811,12 @@ weakdeps = ["Dates", "LinearAlgebra"]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 version = "1.0.2+0"
+
+[[deps.ConcurrentUtilities]]
+deps = ["Serialization", "Sockets"]
+git-tree-sha1 = "96d823b94ba8d187a6d8f0826e731195a74b90e9"
+uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
+version = "2.2.0"
 
 [[deps.Contour]]
 git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
@@ -2111,10 +1948,10 @@ uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
 
 [[deps.HTTP]]
-deps = ["Base64", "CodecZlib", "Dates", "IniFile", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "37e4657cd56b11abe3d10cd4a1ec5fbdb4180263"
+deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
+git-tree-sha1 = "ba9eca9f8bdb787c6f3cf52cb4a404c0e349a0d1"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.7.4"
+version = "1.9.5"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -2139,11 +1976,6 @@ deps = ["Logging", "Random"]
 git-tree-sha1 = "f7be53659ab06ddc986428d3a9dcc95f6fa6705a"
 uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
 version = "0.2.2"
-
-[[deps.IniFile]]
-git-tree-sha1 = "f550e6e32074c939295eb5ea6de31849ac2c9625"
-uuid = "83e8ac13-25f8-5344-8a64-a9f2b223428f"
-version = "0.5.1"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -2935,16 +2767,15 @@ version = "1.4.1+0"
 # ╠═37ff4698-4418-4abc-b726-c5f719b8f792
 # ╠═abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
 # ╠═403d52da-464e-42df-8739-269eb5f98df1
-# ╠═387eeec5-f483-48af-a27c-468683fe497b
-# ╠═c1ae2819-974f-4209-8cf8-3fa98bc9cf93
+# ╟─387eeec5-f483-48af-a27c-468683fe497b
+# ╟─c1ae2819-974f-4209-8cf8-3fa98bc9cf93
 # ╠═f6811e34-8576-4e1f-9638-79652b30aef3
 # ╠═49ff65f9-8ead-448f-8a44-1a741c20bbc5
 # ╟─6e7ab4f4-7c52-45bc-a503-6bf9cb0d7932
 # ╠═e767b0a7-282f-46c4-b2e7-1f737807a3cb
 # ╠═edfa0b25-9132-4de9-bf11-3ea2f0952e4f
 # ╠═ccbf567a-8923-4343-a2ff-53d81f2b6361
-# ╠═7435fe56-8646-4754-b960-4c282da5ab78
-# ╠═31e5c210-0cc0-4c89-8045-fbba3d031bc7
+# ╟─a3ae2bfe-41ea-4fe1-870b-2ac35153da5d
 # ╠═1d811aa5-940b-4ddd-908d-e94fe3635a6a
 # ╠═003f670b-d3b1-4905-b105-67504f16ba19
 # ╠═2cee3e2b-5061-40f4-a205-94d80cfdc20b
@@ -2971,20 +2802,14 @@ version = "1.4.1+0"
 # ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╠═8eab6d11-6d28-411d-bd82-7bec59b3f496
-# ╠═ebe12b2b-558b-4eba-830b-f034d2e44d37
-# ╠═9d357da1-5aa6-4334-968f-ff320493b112
-# ╠═048ba8c9-47e8-46f1-8717-564c6469636d
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
-# ╠═7bc0fc4b-4a2a-429d-a3ae-0dbefccf3129
 # ╠═466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╠═22845433-0722-4406-af31-2b9afcb72652
 # ╠═b58b0aa9-817d-4f04-842e-7ee834b5759e
-# ╠═7a1fa0a8-495a-4288-ba7b-3379bfcc5602
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
-# ╠═1b9382a2-729d-4499-9d53-6db63e1114cc
-# ╠═d3b0a36b-0578-40ad-8c96-bdad11e29a83
-# ╠═75ce1c80-1dc6-4e0a-852a-830f88269022
+# ╠═70ecd4ed-cbb1-4ebd-85a8-42f7b072bee3
+# ╠═bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 # ╠═1450c9e4-4080-476c-90d2-87b19c00cfdf
 # ╠═c9c4129f-b507-4c92-899b-bc31087b63f4
 # ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
@@ -2992,8 +2817,6 @@ version = "1.4.1+0"
 # ╠═54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
 # ╠═a89ad247-bde8-4912-a5c3-65a361e6942c
 # ╠═e3b292a4-9351-4286-9b56-cb94530c7e35
-# ╠═70844698-400f-455f-9b62-17c6da5ca566
-# ╠═fe8284e2-194b-4db4-8ef5-e38cb13b391a
-# ╠═5a0a2a61-57e6-4044-ad00-c8f0f569159d
+# ╠═19f5940f-cc7d-460e-a309-c4f26a69e69f
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
