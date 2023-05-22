@@ -695,6 +695,37 @@ function keepValid(state, input_array)
 
 end
 
+# ╔═╡ 9d153cf1-3e3b-49c0-abe7-ebd0f524557c
+function _search_legal_srv(ref_state, start_index::CartesianIndex)
+# returns sub-array of valid moves
+# this function is used by the server to compute allowable moves in advance 
+# using server types (matrix, cartesian indexes) both in input and output
+	
+	# checks that row/col are valid
+	if !(start_index in keys(locs_searchSpace))
+		return [] 
+	end
+
+	# retrieve search space for the starting point
+	search_space = locs_searchSpace[start_index]
+
+	# array to be returned
+	search_return = CartesianIndex[]
+
+	for range in search_space
+
+		# check valid moves in each range and append them to returning array
+		append!(search_return, keepValid(ref_state, range)) 
+
+	end
+
+	# append starting index (can drop the ring from where picked)
+	append!(search_return, [start_index]) 
+
+return search_return
+
+end
+
 # ╔═╡ c67154cb-c8cc-406c-90a8-0ea8241d8571
 function markers_toFlip_search(state, input_array)
 	
@@ -1133,6 +1164,29 @@ function markers_actions(client_state, client_start_index, client_end_index)
 
 end
 
+# ╔═╡ c334b67e-594f-49fc-8c11-be4ea11c33b5
+function gen_random_gameState(white_ring, black_ring)
+# generate a new random game state (server format)
+
+	## pick 10 random starting valid locations (without replacement)
+	
+	keys_loc = findall(x -> x==1, mm_yinsh_01)
+	sampled_locs = sample(keys_loc, 10, replace = false)
+
+	# empty state (server format)
+	server_game_state = fill("",19,11)
+
+	# write down state in those locations
+	for (i, loc) in enumerate(sampled_locs)
+
+		# write each odd/even
+		server_game_state[loc] = (i%2 == 0) ? white_ring : black_ring
+
+	end
+
+	return server_game_state
+end
+
 # ╔═╡ bc19e42a-fc82-4191-bca5-09622198d102
 # global variable with log of games -> should be a database with a trail of moves
 global games_log_dict = Dict()
@@ -1317,17 +1371,23 @@ function static_score_lookup(state)
 end
 
 # ╔═╡ 1f021cc5-edb0-4515-b8c9-6a2395bc9547
-function gen_scenarioTree(game_id)
-# given a game IDs, computes results for all possible moves of next moving player
+function gen_scenarioTree(ex_game_state, next_movingPlayer)
+# takes as input game state (server format) and info of next moving player
+# computes results for all possible moves of next moving player
+# output is reshaped for client's consumption
 
+	# scenario tree to be returned
 	scenario_tree = Dict()
 
-	# retrieves game details, assumes valid game_id
-	current_game_details = games_log_dict[game_id]
+	# find all rings for next moving player on the board
+	rings_locs = findall(i -> contains(i, next_movingPlayer), ex_game_state)
 
-		# assumes game state has been updated with move that was actually done
-		next_legalMoves = current_game_details[:next_legalMoves]
-		ex_game_state = current_game_details[:server_gameState]
+	# find legal moves for next moving player
+	next_legalMoves = Dict()
+	for loc in rings_locs
+		legal_moves = _search_legal_srv(ex_game_state, loc) # search for moves
+		setindex!(next_legalMoves, legal_moves, loc)
+	end
 
 	# for each move start
 	for move_start in collect(keys(next_legalMoves))
@@ -1338,23 +1398,19 @@ function gen_scenarioTree(game_id)
 			if move_end == move_start # nothing happens
 				continue
 			else # something happens
-
-				#get move_start/end in cartindex
-				move_start_ci = reshape_in(move_start)
-				move_end_ci = reshape_in(move_end)
 	
 				# generate new game state for start/end combination
 				# new state will have ring in new location and markers flipped
 				# saves if markers need to flip and which IDs
-				new_game_state, flip_flag, markers_toFlip = gen_New_gameState(ex_game_state, move_start_ci, move_end_ci)
+				new_game_state, flip_flag, markers_toFlip = gen_New_gameState(ex_game_state, move_start, move_end)
 	
 				# checks scoring opportunities
 				scoring_rows, scores_toHandle = static_score_lookup(new_game_state)
 				score_flag = (scoring_rows[:tot] >= 1) ? true : false	
 				
-				# save all in a single scenario
-				s_first_key = move_start # linear indexes
-				s_second_key = move_end 
+				# save all in a single scenario -> for client consumption
+				s_first_key = reshape_out(move_start) # linear indexes
+				s_second_key = reshape_out(move_end)
 				s_value = Dict()
 
 				## make scenario data lighter -> only write extra data if flags true
@@ -1446,73 +1502,101 @@ function save_newGame!(games_log_ref, new_game_details)
 # handles writing to dict (redis in the future?)
 
 	# saves starting state of new game
-	setindex!(games_log_ref, new_game_details, new_game_details[:game_id])
+	setindex!(games_log_ref, new_game_details, new_game_details[:identity][:game_id])
 
 
 end
 
 # ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
 function gen_newGame()
-## instatiate new game
-# generate unique game ID
-# randomly assign black/white to invoking player
-# init board with rings randomly placed 
+# initializes new game, saves data server-side and returns object for client
 
+	# constants for players and game objects
+	white_id = 'W'
+	black_id = 'B'
+	ring_id = 'R'
+	marker_id = 'M'
+
+	white_ring = ring_id * white_id
+	black_ring = ring_id * black_id
+
+	# generate random game identifier
 	game_id = randstring(5)
+
+	# pick the id of the originating vs joining player -> should be a setting
+	ORIG_player_id = rand([white_id, black_id]) 
+	JOIN_player_id = (ORIG_player_id == white_id) ? black_id : white_id
+
+	# set next moving player -> should be a setting (for now always white)
+	next_movingPlayer = white_id 
+
+	# generate random initial game state (server format)
+	_game_state = gen_random_gameState(white_ring, black_ring)
 	
-	originating_player = rand(["B", "W"]) # -> should be a client-side setting
-	joining_player = (originating_player == "B") ? "W" : "B"
-	
-	next_movingPlayer = "W" # -> white always starts first
-	
-	whiteRings_locs, blackRings_locs = initRand_ringsLoc()
+	# retrieves location ids in client format 
+	whiteRings_ids_client = reshape_out(findall(i -> i == white_ring, _game_state))
+	blackRings_ids_client = reshape_out(findall(i -> i == black_ring, _game_state))
 
-	## map locations to game state (server representation)
-		# empty state
-		game_state = fill("",19,11)
-	
-		# write white rings
-		for loc in whiteRings_locs
-			game_state[loc] = "RW"
-		end
 
-		# write black rings
-		for loc in blackRings_locs
-			game_state[loc] = "RB"
-		end
-
-	# compute legal moves in advance for starting (white) player
-	next_legalMoves = Dict()
-
-	for loc in whiteRings_locs
-		legal_ids = search_loc_srv(game_state, loc) # returns ids in client format
-		setindex!(next_legalMoves, legal_ids, reshape_out(loc))
-	end
-
-	# package response for client
-	new_game_data = Dict(:game_id => game_id,
-							:server_gameState => game_state,
-							:originating_player => originating_player,
-							:joining_player => joining_player,
-							:whiteRings_ids => reshape_out(whiteRings_locs),
-							:blackRings_ids => reshape_out(blackRings_locs),
-							:next_movingPlayer => next_movingPlayer,
-							:next_legalMoves => next_legalMoves,
-							:init_dateTime => now()
-							)
-
-	save_newGame!(games_log_dict, new_game_data)
-
-	# generate and add scenario tree to response
-	setindex!(new_game_data, gen_scenarioTree(game_id), :scenarioTree)
+	# simulates possible moves and outcomes for each
+	scenario_tree = gen_scenarioTree(_game_state, next_movingPlayer)
 	
 	
-	return new_game_data
+	### package data for server storage
+
+		# game identity
+		_identity = Dict(:game_id => game_id,
+						:orig_player_id => ORIG_player_id,
+						:join_player_id => JOIN_player_id,
+						:init_dateTime => now(),
+						:status => "new_game")
+	
+		# logs of game messages (one per player)
+		_messages = Dict(:orig_player_msg => [], 
+						:join_player_msg => [])
+		
+		# first game state
+		_first_state = Dict(:server_gameState => _game_state,
+							:whiteRings_ids => whiteRings_ids_client,
+							:blackRings_ids => blackRings_ids_client,
+							:whiteMarkers_ids => [],
+							:blackMarkers_ids => [],
+							:next_movingPlayer => next_movingPlayer)
+
+	
+		## package new game data (server storage)
+		new_game_data = Dict(:identity => _identity,
+							:messages => _messages, 
+							:game_states => [_first_state],
+							:scenario_forest => [scenario_tree])
+		
+		# saves game to general log (DB?)
+		save_newGame!(games_log_dict, new_game_data)
+
+
+	
+
+	### package data for client
+
+		client_resp = Dict(:game_id => game_id,
+						:orig_player_id => ORIG_player_id,
+						:join_player_id => JOIN_player_id,
+						:init_dateTime => now(),
+						:status => "new_game",
+						:whiteRings_ids => whiteRings_ids_client,
+						:blackRings_ids => blackRings_ids_client,
+						:whiteMarkers_ids => [],
+						:blackMarkers_ids => [],
+						:next_movingPlayer => next_movingPlayer,
+						:scenarioTree => scenario_tree)
+
+
+	return client_resp
 	
 end
 
 # ╔═╡ 8eab6d11-6d28-411d-bd82-7bec59b3f496
-gen_newGame();
+gen_newGame()
 
 # ╔═╡ 22845433-0722-4406-af31-2b9afcb72652
 games_log_dict
@@ -1566,7 +1650,7 @@ function init_ws_server()
 
 				# generate new game
 				new_game_data = gen_newGame()
-				println("LOG - New game initialized")
+				println("LOG - New game initialized, ID $(new_game_data[:game_id])")
 
 				# append original request id + server msg code
 				setindex!(new_game_data, msg_id, :msg_id)
@@ -1585,7 +1669,7 @@ function init_ws_server()
 
 				try # try retrieving and sending game data
 					ex_game_data = try_get_exGame(msg_json["game_code"])
-					println("LOG - Game data retrieved, ID: $(msg_json["game_code"])")
+					println("LOG - Ex game data retrieved, ID: $(msg_json["game_code"])")
 
 					# append original request id + server msg code
 					setindex!(ex_game_data, msg_id, :msg_id)
@@ -1594,7 +1678,7 @@ function init_ws_server()
 					resp_joinGame = JSON3.write(ex_game_data)
 
 					send(ws, resp_joinGame)
-					println("LOG - Ex game data found and sent to client")
+					println("LOG - Ex game data sent to client")
 				
 				catch # handle case of game_id not found
 				 
@@ -1699,11 +1783,40 @@ respawn_ws_server()
 # ╔═╡ e3b292a4-9351-4286-9b56-cb94530c7e35
 ws_servers_ref
 
-# ╔═╡ 19f5940f-cc7d-460e-a309-c4f26a69e69f
-# ╠═╡ disabled = true
-#=╠═╡
-test_ws_client()
-  ╠═╡ =#
+# ╔═╡ e7de85fc-e51e-47a3-98e8-ddc0fab782ba
+#=
+
+event chain
+
+new game handling
+
+A = originating player
+S = server
+B = joiner
+
+
+--
+A -> requests new game
+S -> sends data
+A -> sets up game -> notifies server of ready state (10s to reply)
+S -> logs game as ready for originator
+--
+A (shares code with B)
+B -> requests server for game data
+S -> checks if A is ready -> sends data
+B -> sets up game -> notifies server of ready state (10s to reply)
+--
+S -> checks if game at step 0 with both players ready
+S -> checks who has to start -> notifies starting player (e.g. B)
+B -> receives message -> acknowledge msg to server (10s to reply)
+B -> interaction enabled -> player completes turn -> notifies server
+S -> server replies acknowledge
+B -> waits for other players' turn (timed ?)
+S -> server handles turn -> presimulates next moves -> notifies other player
+S -> .... (cycle repeats)
+
+
+=#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2783,7 +2896,8 @@ version = "1.4.1+0"
 # ╠═f0e9e077-f435-4f4b-bd69-f495dfccec27
 # ╠═bf2dce8c-f026-40e3-89db-d72edb0b041c
 # ╠═33707130-7703-4aa0-84e6-23ab387c0c4d
-# ╠═52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
+# ╠═9d153cf1-3e3b-49c0-abe7-ebd0f524557c
+# ╟─52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
 # ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
 # ╠═c67154cb-c8cc-406c-90a8-0ea8241d8571
 # ╠═c2797a4c-81d3-4409-9038-117fe50540a8
@@ -2796,9 +2910,10 @@ version = "1.4.1+0"
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╠═6f0ad323-1776-4efd-bf1e-667e8a834f41
 # ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
+# ╠═c334b67e-594f-49fc-8c11-be4ea11c33b5
 # ╠═f1949d12-86eb-4236-b887-b750916d3493
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
-# ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
+# ╠═1f021cc5-edb0-4515-b8c9-6a2395bc9547
 # ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╠═8eab6d11-6d28-411d-bd82-7bec59b3f496
@@ -2817,6 +2932,6 @@ version = "1.4.1+0"
 # ╠═54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
 # ╠═a89ad247-bde8-4912-a5c3-65a361e6942c
 # ╠═e3b292a4-9351-4286-9b56-cb94530c7e35
-# ╠═19f5940f-cc7d-460e-a309-c4f26a69e69f
+# ╠═e7de85fc-e51e-47a3-98e8-ddc0fab782ba
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

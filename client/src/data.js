@@ -150,17 +150,16 @@ export function save_first_server_response(srv_response_input, joiner=false){
         // assign color to client (player_black_id / player_white_id)
         // if this client is joining the game, it will be the joiner
         if (joiner) {
-            _server_response.client_player_id = srv_response_input.joining_player; 
+            _server_response.client_player_id = srv_response_input.join_player_id; 
         } else {
-            _server_response.client_player_id = srv_response_input.originating_player; 
+            _server_response.client_player_id = srv_response_input.orig_player_id; 
         };
         
         // initial rings locations
         _server_response.whiteRings_ids = srv_response_input.whiteRings_ids; 
         _server_response.blackRings_ids = srv_response_input.blackRings_ids;
 
-        // pre-computed possible legal moves (for next moving player)
-        _server_response.next_legal_moves = srv_response_input.next_legalMoves;
+        // next moving player
         _server_response.next_movingPlayer = srv_response_input.next_movingPlayer;
 
         // pre-computed scenario tree for each possible move (except pick/drop in same location)
@@ -564,7 +563,7 @@ export function update_current_move(in_progress = false, start_index = 0){
         } else if (in_progress == true){
             _current_move.in_progress = true;
             _current_move.start_index = start_index;
-            _current_move.legal_drops = getIndexes_legal_moves(start_index);
+            _current_move.legal_drops = getIndexes_legal_drops(start_index);
 
         };
 
@@ -575,9 +574,17 @@ export function update_current_move(in_progress = false, start_index = 0){
 
 
 // retrieve indexes of legal moves/drops from saved server data
-function getIndexes_legal_moves(start_index){
+function getIndexes_legal_drops(start_index){
 
-    return structuredClone(yinsh.server_data.next_legal_moves[start_index])
+    // keys (possible moves) are the first level of the branch for a ring
+    const tree_branch = yinsh.server_data.scenarioTree[start_index];
+
+    let _legal_drops = [];
+    for (const key in tree_branch){
+        _legal_drops.push(parseInt(key)); // javascript forces object keys to be strings, we need to parse them ¯\_(ツ)_/¯
+    };
+    
+    return structuredClone(_legal_drops);
 
 };
 

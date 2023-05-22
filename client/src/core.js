@@ -76,6 +76,7 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
         // log game code (later should be in the UI)
         console.log(`LOG - Your game code is: ${yinsh.server_data.game_id}`);
 
+        
         // assess if it's the current player's turn or not
         if(try_start_local_turn()) {
 
@@ -87,7 +88,23 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
             console.log(`LOG - Invite your opponent and wait for its turn to complete.`);
 
         };
+        
 
+        // interaction is disabled by default -> keeping it disabled
+       //canvas_interaction_flag = true;
+    /*
+        // handle syncing between players
+        if (joiner) {
+            
+            //
+
+        } else {
+            
+            // if this client is the caller, it pings the server about being ready to play
+            await server_ws_ping_player_ready();
+        };
+        
+        */
 
     } catch (err){
 
@@ -98,6 +115,9 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
 
     };
 };
+
+//////////// EVENT HANDLERS FOR TURNS
+
 
 
 
