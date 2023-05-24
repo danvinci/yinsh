@@ -5,7 +5,7 @@
 // https://javascript.info/promise-basics
 
 
-import { save_first_server_response } from './data.js'
+import { save_first_server_response, get_game_id, get_player_id } from './data.js'
 
 const ws_port = 8092;
 const ip_address = "127.0.0.1"
@@ -166,85 +166,109 @@ export async function server_ws_genNewGame(){
     
     try {
 
-        // get time and generate id
-        const [msg_time, msg_id] = gen_time_id(); // used later to recognize response and log times
+        // prepare message payload
+        const msg_code = 'ask_new_game';
+        const payload = {msg_code: msg_code};
+
+        // package message, log it, send it
+        const [msg_time, msg_id] = fwd_outbound(payload) // used later to recognize response and log times
         
-        // prepare message payoload
-        const payload = {msg_code: "new_game", msg_time: msg_time, msg_id: msg_id};
-        
-        // log message that is about to be sent
-        const local_msg = new MessagePromise(payload, msg_id, msg_time);
-        try_logOutbound(local_msg);
-
-        // send message
-        ws.send(JSON.stringify(payload));
-
-        // end timing
-        console.log(`LOG - New game requested, message ID: ${msg_id}`);                         
-
         // wait to receive a response
         // -> will get resolved by message handler when we receive a response
-        await local_msg.promise;
+        await msgPromise_lookup(msg_id);
 
-        console.log(`LOG - New game response received - RTT ${Date.now()-msg_time}ms`);
-        
-        // save response in dedicate objects
-        save_first_server_response(messagePromises_log[msg_id].server_response);
+        // check server response
+        const resp_code = messagePromises_log[msg_id].server_response.msg_code
+        if (resp_code == msg_code.concat('_OK')){ // these codes should be shared by the server on first connection
 
+            console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
+            
+            // save response in dedicate objects
+            save_first_server_response(messagePromises_log[msg_id].server_response);
+
+        } else {
+            throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
+        };
 
     } catch (err) {
 
-        console.log(`LOG - Error fulfilling new game request`);
-        throw err;
+        console.log(err);
 
     };
 };
 
 
 // Send message for generating new game 
-export async function server_ws_joinWithCode(input_game_code){
+export async function server_ws_joinWithCode(input_game_id){
     
     try {
 
-        // get time and generate id
-        const [msg_time, msg_id] = gen_time_id(); // used later to recognize response and log times
-        
-        // prepare message payoload
-        const payload = {msg_code: "join_game", game_code: input_game_code, msg_time: msg_time, msg_id: msg_id};
-        
-        // log message that is about to be sent
-        const local_msg = new MessagePromise(payload, msg_id, msg_time);
-        try_logOutbound(local_msg);
+        // prepare message payload
+        const msg_code = 'ask_join_game';
+        const payload = {msg_code: msg_code, game_id: input_game_id};
 
-        // send message
-        ws.send(JSON.stringify(payload));
-
-        // end timing
-        console.log(`LOG - Join game (${input_game_code}) requested, message ID: ${msg_id}`);                         
-
+        // package message, log it, send it
+        const [msg_time, msg_id] = fwd_outbound(payload)
+                            
         // wait to receive a response
-        // -> will get resolved by message handler when we receive a response
-        await local_msg.promise;
+        await msgPromise_lookup(msg_id);
         
+        // check server response
         const resp_code = messagePromises_log[msg_id].server_response.msg_code
-        
-        if (resp_code == "join_game_ok"){
+        if (resp_code == msg_code.concat('_OK')){
 
             // save response (as joiner) in dedicate objects
             save_first_server_response(messagePromises_log[msg_id].server_response, true);
             
-            console.log(`LOG - Join game response received - RTT ${Date.now()-msg_time}ms`);
+            // log time
+            console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
        
         } else {
             
-            throw new Error(`LOG - Join game (${input_game_code}) error - msg ID : ${msg_id}`);
+            throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
         };
         
 
     } catch (err) {
 
-        console.log(`LOG - Error fulfilling join game request`);
-        throw err;
+        console.log(err);
+
+    };
+};
+
+// Send message for notifying the server that the player is ready for its turn
+export async function notifyServer_playerReady(){
+    
+    try {
+
+        // prepare message payload
+        const msg_code = 'notify_player_ready';
+        const payload = {msg_code: msg_code, game_id: get_game_id(), player_id: get_player_id()};
+
+        // package message, log it, send it
+        const [msg_time, msg_id] = fwd_outbound(payload)
+                            
+        // wait to receive a response
+        await msgPromise_lookup(msg_id);
+        
+        // check server response
+        const resp_code = messagePromises_log[msg_id].server_response.msg_code
+        if (resp_code == msg_code.concat('_OK')){
+
+            // save response (as joiner) in dedicate objects
+            // save_first_server_response(messagePromises_log[msg_id].server_response, true);
+            
+            console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
+       
+        } else {
+            
+            throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
+        };
+        
+
+    } catch (err) {
+
+        console.log(err);
 
     };
 };
@@ -259,5 +283,42 @@ function gen_time_id() {
     const msg_id = msg_time.toString(36)
 
     return [msg_time, msg_id]
+
+};
+
+
+// adds unique id and timestamp to messages, returns id, logs in outbound, and sends them 
+function fwd_outbound(payload){
+
+    try{
+
+        const [msg_time, msg_id] = gen_time_id(); // used later to recognize response and log times
+
+        // add details to message payload -> for the server's consumption
+        payload.msg_time = msg_time;
+        payload.msg_id = msg_id;
+    
+        // log message that is about to be sent -> msg_id/msg_time stored separately for client's consumption
+        const local_msg = new MessagePromise(payload, msg_id, msg_time);
+        try_logOutbound(local_msg);
+    
+        // send message
+        ws.send(JSON.stringify(payload));
+
+        console.log(`LOG - Msg with code "${payload.msg_code}" sent - msg ID: ${msg_id}`);  
+
+
+        return [msg_time, msg_id];
+
+    } catch (err){
+        throw err;
+    };
+};
+
+
+// retrieves promise that should be awaited for resolution -> response received
+function msgPromise_lookup(msg_id){
+
+    return messagePromises_log[msg_id].promise;
 
 };

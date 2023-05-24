@@ -3,7 +3,7 @@
 
 
 //////////// IMPORTS
-import { init_ws, server_ws_genNewGame, server_ws_joinWithCode} from './server.js'
+import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, notifyServer_playerReady} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_new_game_data } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
 import { try_start_local_turn, complete_local_turn} from './data.js' 
@@ -76,7 +76,11 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
         // log game code (later should be in the UI)
         console.log(`LOG - Your game code is: ${yinsh.server_data.game_id}`);
 
-        
+       
+        // notify server of being ready
+        await notifyServer_playerReady();
+       
+        /* 
         // assess if it's the current player's turn or not
         if(try_start_local_turn()) {
 
@@ -92,7 +96,7 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
 
         // interaction is disabled by default -> keeping it disabled
        //canvas_interaction_flag = true;
-    /*
+    
         // handle syncing between players
         if (joiner) {
             

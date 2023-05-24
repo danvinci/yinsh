@@ -178,6 +178,11 @@ export function get_player_id () {
     return yinsh.server_data.client_player_id;
 };
 
+export function get_game_id () {
+
+    return yinsh.server_data.game_id;
+};
+
 // starts local turn if the server says so, returns true/false
 export function try_start_local_turn(){
 

@@ -1187,9 +1187,25 @@ function gen_random_gameState(white_ring, black_ring)
 	return server_game_state
 end
 
+# ╔═╡ 61a0e2bf-2fed-4141-afc0-c8b5507679d1
+md"#### Server-side storage of game data"
+
+
 # ╔═╡ bc19e42a-fc82-4191-bca5-09622198d102
-# global variable with log of games -> should be a database with a trail of moves
-global games_log_dict = Dict()
+const games_log_dict = Dict()
+
+# ╔═╡ 57153574-e5ca-4167-814e-2d176baa0de9
+function save_newGame!(games_log_ref, new_game_details)
+# handles writing to dict (redis in the future?)
+
+	# saves starting state of new game
+	setindex!(games_log_ref, new_game_details, new_game_details[:identity][:game_id])
+
+
+end
+
+# ╔═╡ 6075f560-e190-409b-8435-a7cf08ec1bc6
+games_log_dict
 
 # ╔═╡ aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 function gen_New_gameState(ex_game_state, start_move, end_move)
@@ -1452,6 +1468,121 @@ function gen_scenarioTree(ex_game_state, next_movingPlayer)
 
 end
 
+# ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
+function gen_newGame()
+# initializes new game, saves data server-side and returns object for client
+
+	# constants for players and game objects
+	white_id = 'W'
+	black_id = 'B'
+	ring_id = 'R'
+	marker_id = 'M'
+
+	white_ring = ring_id * white_id
+	black_ring = ring_id * black_id
+
+	# generate random game identifier
+	game_id = randstring(5)
+
+	# pick the id of the originating vs joining player -> should be a setting
+	ORIG_player_id = rand([white_id, black_id]) 
+	JOIN_player_id = (ORIG_player_id == white_id) ? black_id : white_id
+
+	# set next moving player -> should be a setting (for now always white)
+	next_movingPlayer = white_id 
+
+	# generate random initial game state (server format)
+	_game_state = gen_random_gameState(white_ring, black_ring)
+	
+	# retrieves location ids in client format 
+	whiteRings_ids_client = reshape_out(findall(i -> i == white_ring, _game_state))
+	blackRings_ids_client = reshape_out(findall(i -> i == black_ring, _game_state))
+
+
+	# simulates possible moves and outcomes for each
+	scenario_tree = gen_scenarioTree(_game_state, next_movingPlayer)
+	
+	
+	### package data for server storage
+
+		game_status = "new_game"
+
+		# game identity
+		_identity = Dict(:game_id => game_id,
+						:orig_player_id => ORIG_player_id,
+						:join_player_id => JOIN_player_id,
+						:init_dateTime => now(),
+						:status => game_status)
+	
+		# logs of game messages (one per player)
+		_messages = Dict(:orig_player_msg => [], 
+						:join_player_msg => [])
+		
+		# first game state and scenario tree
+		_srv_state = Dict(:server_gameState => _game_state,
+								:next_movingPlayer => next_movingPlayer)
+
+		
+		### package data for client
+		_cli_pkg = Dict(:game_id => game_id,
+							:orig_player_id => ORIG_player_id,
+							:join_player_id => JOIN_player_id,
+							:whiteRings_ids => whiteRings_ids_client,
+							:blackRings_ids => blackRings_ids_client,
+							:whiteMarkers_ids => [],
+							:blackMarkers_ids => [],
+							:next_movingPlayer => next_movingPlayer,
+							:scenarioTree => scenario_tree)
+
+	
+		## package new game data for storage
+		new_game_data = Dict(:identity => _identity,
+							:messages => _messages, 
+							:server_states => Dict{Int, Dict}(1 => _srv_state),
+							:client_pkgs => Dict{Int, Dict}(1 => _cli_pkg))
+
+	
+		
+		# saves game to general log (DB?)
+		save_newGame!(games_log_dict, new_game_data)
+
+
+
+	println("Total stored games: $(length(games_log_dict))")
+	return game_id
+	
+end
+
+# ╔═╡ 8eab6d11-6d28-411d-bd82-7bec59b3f496
+gen_newGame()
+
+# ╔═╡ 761fb8d7-0c7d-4428-ad48-707d219582c0
+## NEED FUNCTION TO HANDLE MESSAGES FROM CLIENT (NEXT MOVES), UPDATE STATE, SEND CHANGERS BACK TO OTHER PLAYER -> AND IDENTIFY OTHER PLAYER (HOW?)
+# FROM THE ID OF THE PLAYER/SOCKET, WE SHOULD ALSO BE ABLE TO HANDLE RECONNECTS (UPDATING IDS)
+
+# ╔═╡ cf587261-6193-4e7a-a3e8-e24ba27929c7
+function getLast_clientPkg(game_id)
+# looks in the games log and retrieves last client package
+
+	try
+		_client_packages = games_log_dict[game_id][:client_pkgs]
+		_prog_ids = collect(keys(_client_packages)) # get key of last pkg
+
+		return _client_packages[_prog_ids[end]]
+	
+	catch 
+		throw(error("ERROR retrieving game data"))
+
+	end
+
+end
+
+# ╔═╡ d9687cb9-e9c8-4739-aa33-8cdcad054cec
+getLast_clientPkg(rand(keys(games_log_dict)))
+
+# ╔═╡ 9cbe1469-38a7-4917-9556-69d86db9c086
+getLast_clientPkg("lsDsD")
+
 # ╔═╡ f86b195e-06a9-493d-8536-16bdcaadd60e
 function print_gameState(server_game_state)
 	# print matrix easy copying in js code
@@ -1497,124 +1628,6 @@ function initRand_ringsLoc()
 	
 end
 
-# ╔═╡ 57153574-e5ca-4167-814e-2d176baa0de9
-function save_newGame!(games_log_ref, new_game_details)
-# handles writing to dict (redis in the future?)
-
-	# saves starting state of new game
-	setindex!(games_log_ref, new_game_details, new_game_details[:identity][:game_id])
-
-
-end
-
-# ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
-function gen_newGame()
-# initializes new game, saves data server-side and returns object for client
-
-	# constants for players and game objects
-	white_id = 'W'
-	black_id = 'B'
-	ring_id = 'R'
-	marker_id = 'M'
-
-	white_ring = ring_id * white_id
-	black_ring = ring_id * black_id
-
-	# generate random game identifier
-	game_id = randstring(5)
-
-	# pick the id of the originating vs joining player -> should be a setting
-	ORIG_player_id = rand([white_id, black_id]) 
-	JOIN_player_id = (ORIG_player_id == white_id) ? black_id : white_id
-
-	# set next moving player -> should be a setting (for now always white)
-	next_movingPlayer = white_id 
-
-	# generate random initial game state (server format)
-	_game_state = gen_random_gameState(white_ring, black_ring)
-	
-	# retrieves location ids in client format 
-	whiteRings_ids_client = reshape_out(findall(i -> i == white_ring, _game_state))
-	blackRings_ids_client = reshape_out(findall(i -> i == black_ring, _game_state))
-
-
-	# simulates possible moves and outcomes for each
-	scenario_tree = gen_scenarioTree(_game_state, next_movingPlayer)
-	
-	
-	### package data for server storage
-
-		# game identity
-		_identity = Dict(:game_id => game_id,
-						:orig_player_id => ORIG_player_id,
-						:join_player_id => JOIN_player_id,
-						:init_dateTime => now(),
-						:status => "new_game")
-	
-		# logs of game messages (one per player)
-		_messages = Dict(:orig_player_msg => [], 
-						:join_player_msg => [])
-		
-		# first game state
-		_first_state = Dict(:server_gameState => _game_state,
-							:whiteRings_ids => whiteRings_ids_client,
-							:blackRings_ids => blackRings_ids_client,
-							:whiteMarkers_ids => [],
-							:blackMarkers_ids => [],
-							:next_movingPlayer => next_movingPlayer)
-
-	
-		## package new game data (server storage)
-		new_game_data = Dict(:identity => _identity,
-							:messages => _messages, 
-							:game_states => [_first_state],
-							:scenario_forest => [scenario_tree])
-		
-		# saves game to general log (DB?)
-		save_newGame!(games_log_dict, new_game_data)
-
-
-	
-
-	### package data for client
-
-		client_resp = Dict(:game_id => game_id,
-						:orig_player_id => ORIG_player_id,
-						:join_player_id => JOIN_player_id,
-						:init_dateTime => now(),
-						:status => "new_game",
-						:whiteRings_ids => whiteRings_ids_client,
-						:blackRings_ids => blackRings_ids_client,
-						:whiteMarkers_ids => [],
-						:blackMarkers_ids => [],
-						:next_movingPlayer => next_movingPlayer,
-						:scenarioTree => scenario_tree)
-
-
-	return client_resp
-	
-end
-
-# ╔═╡ 8eab6d11-6d28-411d-bd82-7bec59b3f496
-gen_newGame()
-
-# ╔═╡ 22845433-0722-4406-af31-2b9afcb72652
-games_log_dict
-
-# ╔═╡ b58b0aa9-817d-4f04-842e-7ee834b5759e
-function try_get_exGame(game_code::String)
-
-	try
-		# note : we should flag games that are confirmed as joined
-		return games_log_dict[game_code]
-
-	catch
-		throw(error("ERROR retrieving game"))
-	end
-	
-
-end
-
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
 md"### Running websocket server"
 
@@ -1623,6 +1636,9 @@ ws_messages_log = [];
 
 # ╔═╡ c9c4129f-b507-4c92-899b-bc31087b63f4
 ws_servers_ref = [];
+
+# ╔═╡ 3f289011-e371-49be-a9c9-a23e14737e30
+random_dump = [];
 
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 function init_ws_server()
@@ -1646,59 +1662,100 @@ function init_ws_server()
 
 			
 			# handle request for a new game
-			if msg_code == "new_game"
+			if msg_code == "ask_new_game"
 
 				# generate new game
-				new_game_data = gen_newGame()
-				println("LOG - New game initialized, ID $(new_game_data[:game_id])")
+				new_game_id = gen_newGame() # <- will generate and save game data
+				new_game_data_client = getLast_clientPkg(new_game_id)
+				println("LOG - New game initialized, ID $new_game_id")
 
-				# append original request id + server msg code
-				setindex!(new_game_data, msg_id, :msg_id)
-				setindex!(new_game_data, "new_game_ok", :msg_code)
+				push!(random_dump, msg_json)
+
+				# append original message/request id
+				setindex!(new_game_data_client, msg_id, :msg_id)
+
+				# generate OK response code
+				resp_msg_code = msg_code * "_OK"
+				setindex!(new_game_data_client, resp_msg_code, :msg_code)
 				
-				resp_newGame = JSON3.write(new_game_data)
+				msg = new_game_data_client
 
-				send(ws, resp_newGame)
-				println("LOG - New game data sent to client")
+				# reply
+				send(ws, JSON3.write(msg))
+				
+				println("LOG - $resp_msg_code")
 			
 			end
 
 			
 			# handle request to join existing game
-			if msg_code == "join_game"
+			if msg_code == "ask_join_game"
 
 				try # try retrieving and sending game data
-					ex_game_data = try_get_exGame(msg_json["game_code"])
-					println("LOG - Ex game data retrieved, ID: $(msg_json["game_code"])")
+					ex_game_id = msg_json["game_id"]
 
-					# append original request id + server msg code
-					setindex!(ex_game_data, msg_id, :msg_id)
-					setindex!(ex_game_data, "join_game_ok", :msg_code)
-
-					resp_joinGame = JSON3.write(ex_game_data)
-
-					send(ws, resp_joinGame)
-					println("LOG - Ex game data sent to client")
-				
-				catch # handle case of game_id not found
-				 
-					bad_msg = Dict(:msg_id => msg_id, :msg_code => "join_game_failed")
+					push!(random_dump, msg_json)
 					
-					bad_resp_joinGame = JSON3.write(bad_msg)
-	
-					send(ws, bad_resp_joinGame)
-					println("LOG - Ex game data not found, client notified")
+					ex_game_data = getLast_clientPkg(ex_game_id)
+					println("LOG - Ex game data retrieved, ID: $ex_game_id")
+
+					# append original request id 
+					setindex!(ex_game_data, msg_id, :msg_id)
+
+					# generate OK response code
+					resp_msg_code = msg_code * "_OK"
+					setindex!(ex_game_data, resp_msg_code, :msg_code)
+					msg = ex_game_data
+
+					# reply
+					send(ws, JSON3.write(msg))
+					
+					println("LOG - $resp_msg_code")
+				
+				catch 
+					
+					# generate BAD response code
+					resp_msg_code = msg_code * "_BAD"
+				 
+					msg = Dict(:msg_id => msg_id, :msg_code => resp_msg_code)
+					
+					# reply
+					send(ws, JSON3.write(msg))
+
+					#log
+					println("LOG - $resp_msg_code")
 				end
 			
 			end
 
-			
+
+			# handle 'player ready' notifications
+			if msg_code == "notify_player_ready"
+
+				push!(random_dump, msg_json)
+
+				# generate OK response code
+				resp_msg_code = msg_code * "_OK"
+				
+				msg = Dict(:msg_id => msg_id, :msg_code => resp_msg_code)
+				
+				# reply
+				send(ws, JSON3.write(msg))
+
+				# log
+				println("LOG - $resp_msg_code")
+
+			end
+
 		end
     end
 
 	push!(ws_servers_ref, ws_server)
 
 end
+
+# ╔═╡ 8424e77e-27d1-4632-92e6-f546f99a7fa8
+random_dump
 
 # ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 function test_ws_client()
@@ -1782,6 +1839,9 @@ respawn_ws_server()
 
 # ╔═╡ e3b292a4-9351-4286-9b56-cb94530c7e35
 ws_servers_ref
+
+# ╔═╡ 972d60e0-ed99-465e-a6fa-aefca286c2cb
+md"#### Handling turns logic "
 
 # ╔═╡ e7de85fc-e51e-47a3-98e8-ddc0fab782ba
 #=
@@ -2912,26 +2972,33 @@ version = "1.4.1+0"
 # ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 # ╠═c334b67e-594f-49fc-8c11-be4ea11c33b5
 # ╠═f1949d12-86eb-4236-b887-b750916d3493
+# ╟─61a0e2bf-2fed-4141-afc0-c8b5507679d1
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
-# ╠═1f021cc5-edb0-4515-b8c9-6a2395bc9547
+# ╠═57153574-e5ca-4167-814e-2d176baa0de9
+# ╠═6075f560-e190-409b-8435-a7cf08ec1bc6
+# ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
 # ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╠═8eab6d11-6d28-411d-bd82-7bec59b3f496
+# ╠═761fb8d7-0c7d-4428-ad48-707d219582c0
+# ╠═d9687cb9-e9c8-4739-aa33-8cdcad054cec
+# ╠═cf587261-6193-4e7a-a3e8-e24ba27929c7
+# ╠═9cbe1469-38a7-4917-9556-69d86db9c086
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╠═466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
-# ╠═57153574-e5ca-4167-814e-2d176baa0de9
-# ╠═22845433-0722-4406-af31-2b9afcb72652
-# ╠═b58b0aa9-817d-4f04-842e-7ee834b5759e
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═70ecd4ed-cbb1-4ebd-85a8-42f7b072bee3
 # ╠═bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 # ╠═1450c9e4-4080-476c-90d2-87b19c00cfdf
 # ╠═c9c4129f-b507-4c92-899b-bc31087b63f4
 # ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+# ╠═3f289011-e371-49be-a9c9-a23e14737e30
+# ╠═8424e77e-27d1-4632-92e6-f546f99a7fa8
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 # ╠═54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
 # ╠═a89ad247-bde8-4912-a5c3-65a361e6942c
 # ╠═e3b292a4-9351-4286-9b56-cb94530c7e35
+# ╟─972d60e0-ed99-465e-a6fa-aefca286c2cb
 # ╠═e7de85fc-e51e-47a3-98e8-ddc0fab782ba
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
