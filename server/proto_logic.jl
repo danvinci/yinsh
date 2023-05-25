@@ -1515,12 +1515,12 @@ function gen_newGame()
 						:status => game_status)
 	
 		# logs of game messages (one per player)
-		_messages = Dict(:orig_player_msg => [], 
-						:join_player_msg => [])
+		_comms = Dict(:orig_player_comms => [], 
+					:join_player_comms => [])
 		
 		# first game state and scenario tree
 		_srv_state = Dict(:server_gameState => _game_state,
-								:next_movingPlayer => next_movingPlayer)
+							:next_movingPlayer => next_movingPlayer)
 
 		
 		### package data for client
@@ -1537,7 +1537,7 @@ function gen_newGame()
 	
 		## package new game data for storage
 		new_game_data = Dict(:identity => _identity,
-							:messages => _messages, 
+							:comms => _comms, 
 							:server_states => Dict{Int, Dict}(1 => _srv_state),
 							:client_pkgs => Dict{Int, Dict}(1 => _cli_pkg))
 
@@ -1547,8 +1547,7 @@ function gen_newGame()
 		save_newGame!(games_log_dict, new_game_data)
 
 
-
-	println("Total stored games: $(length(games_log_dict))")
+	println("LOG - New game initialized - ID $game_id")
 	return game_id
 	
 end
@@ -1567,6 +1566,8 @@ function getLast_clientPkg(game_id)
 	try
 		_client_packages = games_log_dict[game_id][:client_pkgs]
 		_prog_ids = collect(keys(_client_packages)) # get key of last pkg
+		
+		println("LOG - Game data pkg retrieved - ID: $game_id")
 
 		return _client_packages[_prog_ids[end]]
 	
@@ -1579,9 +1580,6 @@ end
 
 # ╔═╡ d9687cb9-e9c8-4739-aa33-8cdcad054cec
 getLast_clientPkg(rand(keys(games_log_dict)))
-
-# ╔═╡ 9cbe1469-38a7-4917-9556-69d86db9c086
-getLast_clientPkg("lsDsD")
 
 # ╔═╡ f86b195e-06a9-493d-8536-16bdcaadd60e
 function print_gameState(server_game_state)
@@ -1637,119 +1635,128 @@ ws_messages_log = [];
 # ╔═╡ c9c4129f-b507-4c92-899b-bc31087b63f4
 ws_servers_ref = [];
 
+# ╔═╡ 0bb77295-be29-4b50-bff8-f712ebe08197
+begin
+	
+# ip and port to use for the server
+ws_test_ip = "127.0.0.1"
+ws_test_port = 8092
+
+
+# codes used with client
+CODE_ask_new_game = "ask_new_game"
+CODE_ask_join_game = "ask_join_game"
+CODE_notify_player_ready = "notify_player_ready"
+
+# positive response
+CODE_OK = "_OK"
+CODE_ERR = "_ERR"
+
+
+end
+
+# ╔═╡ b85d9d1c-213c-4330-9f1d-95823c3a9491
+function fwd_outbound(ws, msg_id, msg_code, resp_payload = Dict(), ok_response = true)
+
+	# copy response payload
+	response_msg = deepcopy(resp_payload)
+
+	# prepare response code
+	resp_msg_code = msg_code * (ok_response ? CODE_OK : CODE_ERR)
+	
+	# append original request id and response_code
+	setindex!(response_msg, msg_id, :msg_id)
+	setindex!(response_msg, resp_msg_code, :msg_code)
+
+	# send response
+	send(ws, JSON3.write(response_msg))
+
+	# log
+	println("LOG - $resp_msg_code")
+
+end
+
 # ╔═╡ 3f289011-e371-49be-a9c9-a23e14737e30
 random_dump = [];
+
+# ╔═╡ a2d0d733-345d-46a7-959b-69c3fac3eabe
+function ws_msg_handler(ws, msg_json)
+
+	# retrieve id and message code
+	msg_id = msg_json["msg_id"]
+	msg_code = msg_json["msg_code"]
+
+	# save incoming message
+	push!(random_dump, msg_json)
+
+	####################################
+	
+	# handle request for a new game
+	if msg_code == CODE_ask_new_game
+
+		# generate new game
+		new_game_id = gen_newGame() # <- will generate and save game data
+		new_game_data = getLast_clientPkg(new_game_id)
+
+		# reply to client
+		fwd_outbound(ws, msg_id, msg_code, new_game_data)
+	
+	end
+
+	
+	# handle request to join existing game
+	if msg_code == CODE_ask_join_game
+
+		# try retrieving and sending game data
+		try 
+
+			# retrieve existing game data
+			ex_game_id = msg_json["game_id"]
+			ex_game_data = getLast_clientPkg(ex_game_id)
+
+			# reply to client
+			fwd_outbound(ws, msg_id, msg_code, ex_game_data)
+
+		# handle errors
+		catch 
+			
+			# reply to client
+			fwd_outbound(ws, msg_id, msg_code, ok_response = false)
+			
+		end
+	end
+
+
+	# handle 'player ready' notifications
+	if msg_code == CODE_notify_player_ready
+
+		# reply to client
+		fwd_outbound(ws, msg_id, msg_code)
+
+	end
+
+
+end
 
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 function init_ws_server()
 
-	# ip and port to use for the server
-	ws_test_ip = "127.0.0.1"
-	ws_test_port = 8092
-	
 	# starts new websockets server 
 	ws_server = WebSockets.listen!(ws_test_ip, ws_test_port) do ws
 
 		# iterate over incoming messages
 		for msg in ws
 
-			# handle incoming msg as json
+			# parse incoming msg as json
 			msg_json = JSON3.read(msg)
-
-			# retrieve id and message code
-			msg_id = msg_json["msg_id"]
-			msg_code = msg_json["msg_code"]
-
 			
-			# handle request for a new game
-			if msg_code == "ask_new_game"
-
-				# generate new game
-				new_game_id = gen_newGame() # <- will generate and save game data
-				new_game_data_client = getLast_clientPkg(new_game_id)
-				println("LOG - New game initialized, ID $new_game_id")
-
-				push!(random_dump, msg_json)
-
-				# append original message/request id
-				setindex!(new_game_data_client, msg_id, :msg_id)
-
-				# generate OK response code
-				resp_msg_code = msg_code * "_OK"
-				setindex!(new_game_data_client, resp_msg_code, :msg_code)
-				
-				msg = new_game_data_client
-
-				# reply
-				send(ws, JSON3.write(msg))
-				
-				println("LOG - $resp_msg_code")
-			
-			end
-
-			
-			# handle request to join existing game
-			if msg_code == "ask_join_game"
-
-				try # try retrieving and sending game data
-					ex_game_id = msg_json["game_id"]
-
-					push!(random_dump, msg_json)
-					
-					ex_game_data = getLast_clientPkg(ex_game_id)
-					println("LOG - Ex game data retrieved, ID: $ex_game_id")
-
-					# append original request id 
-					setindex!(ex_game_data, msg_id, :msg_id)
-
-					# generate OK response code
-					resp_msg_code = msg_code * "_OK"
-					setindex!(ex_game_data, resp_msg_code, :msg_code)
-					msg = ex_game_data
-
-					# reply
-					send(ws, JSON3.write(msg))
-					
-					println("LOG - $resp_msg_code")
-				
-				catch 
-					
-					# generate BAD response code
-					resp_msg_code = msg_code * "_BAD"
-				 
-					msg = Dict(:msg_id => msg_id, :msg_code => resp_msg_code)
-					
-					# reply
-					send(ws, JSON3.write(msg))
-
-					#log
-					println("LOG - $resp_msg_code")
-				end
-			
-			end
-
-
-			# handle 'player ready' notifications
-			if msg_code == "notify_player_ready"
-
-				push!(random_dump, msg_json)
-
-				# generate OK response code
-				resp_msg_code = msg_code * "_OK"
-				
-				msg = Dict(:msg_id => msg_id, :msg_code => resp_msg_code)
-				
-				# reply
-				send(ws, JSON3.write(msg))
-
-				# log
-				println("LOG - $resp_msg_code")
-
-			end
+			# dispatch parsed message to message handler
+			ws_msg_handler(ws, msg_json)
 
 		end
     end
 
+	# saves websocket server handler
 	push!(ws_servers_ref, ws_server)
 
 end
@@ -1818,6 +1825,9 @@ function test_ws_client()
 
 end
 
+# ╔═╡ bd16c53e-bd3e-4328-988d-857bab42f0e6
+typeof(collect(ws_servers_ref[end].connections))
+
 # ╔═╡ a89ad247-bde8-4912-a5c3-65a361e6942c
 function respawn_ws_server()
 
@@ -1861,13 +1871,11 @@ S -> sends data
 A -> sets up game -> notifies server of ready state (10s to reply)
 S -> logs game as ready for originator
 --
-A (shares code with B)
-B -> requests server for game data
-S -> checks if A is ready -> sends data
-B -> sets up game -> notifies server of ready state (10s to reply)
+A -> (shares code with B)
+B -> requests server for game data -> sets up game -> notifies server of ready state
+S -> logs game as ready for joiner -> game can start
+S -> checks who is the first moving player -> notifies player
 --
-S -> checks if game at step 0 with both players ready
-S -> checks who has to start -> notifies starting player (e.g. B)
 B -> receives message -> acknowledge msg to server (10s to reply)
 B -> interaction enabled -> player completes turn -> notifies server
 S -> server replies acknowledge
@@ -2983,7 +2991,6 @@ version = "1.4.1+0"
 # ╠═761fb8d7-0c7d-4428-ad48-707d219582c0
 # ╠═d9687cb9-e9c8-4739-aa33-8cdcad054cec
 # ╠═cf587261-6193-4e7a-a3e8-e24ba27929c7
-# ╠═9cbe1469-38a7-4917-9556-69d86db9c086
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╠═466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
@@ -2991,11 +2998,15 @@ version = "1.4.1+0"
 # ╠═bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 # ╠═1450c9e4-4080-476c-90d2-87b19c00cfdf
 # ╠═c9c4129f-b507-4c92-899b-bc31087b63f4
+# ╠═0bb77295-be29-4b50-bff8-f712ebe08197
 # ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+# ╠═a2d0d733-345d-46a7-959b-69c3fac3eabe
+# ╠═b85d9d1c-213c-4330-9f1d-95823c3a9491
 # ╠═3f289011-e371-49be-a9c9-a23e14737e30
 # ╠═8424e77e-27d1-4632-92e6-f546f99a7fa8
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 # ╠═54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
+# ╠═bd16c53e-bd3e-4328-988d-857bab42f0e6
 # ╠═a89ad247-bde8-4912-a5c3-65a361e6942c
 # ╠═e3b292a4-9351-4286-9b56-cb94530c7e35
 # ╟─972d60e0-ed99-465e-a6fa-aefca286c2cb
