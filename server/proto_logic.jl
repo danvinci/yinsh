@@ -1473,10 +1473,10 @@ function gen_newGame()
 # initializes new game, saves data server-side and returns object for client
 
 	# constants for players and game objects
-	white_id = 'W'
-	black_id = 'B'
-	ring_id = 'R'
-	marker_id = 'M'
+	white_id = "W"
+	black_id = "B"
+	ring_id = "R"
+	marker_id = "M"
 
 	white_ring = ring_id * white_id
 	black_ring = ring_id * black_id
@@ -1534,12 +1534,16 @@ function gen_newGame()
 							:next_movingPlayer => next_movingPlayer,
 							:scenarioTree => scenario_tree)
 
+		_first_turn = Dict(:status => :not_started,
+							:player => next_movingPlayer)
+
 	
 		## package new game data for storage
 		new_game_data = Dict(:identity => _identity,
 							:comms => _comms, 
-							:server_states => Dict{Int, Dict}(1 => _srv_state),
-							:client_pkgs => Dict{Int, Dict}(1 => _cli_pkg))
+							:turns => [_first_turn],
+							:server_states => [_srv_state],
+							:client_pkgs => [_cli_pkg])
 
 	
 		
@@ -1547,7 +1551,7 @@ function gen_newGame()
 		save_newGame!(games_log_dict, new_game_data)
 
 
-	println("LOG - New game initialized - ID $game_id")
+	println("LOG - New game initialized - Game ID $game_id")
 	return game_id
 	
 end
@@ -1564,12 +1568,11 @@ function getLast_clientPkg(game_id)
 # looks in the games log and retrieves last client package
 
 	try
-		_client_packages = games_log_dict[game_id][:client_pkgs]
-		_prog_ids = collect(keys(_client_packages)) # get key of last pkg
+		_client_packages = games_log_dict[game_id][:client_pkgs][end]
 		
-		println("LOG - Game data pkg retrieved - ID: $game_id")
+		println("LOG - Game data pkg retrieved - Game ID: $game_id")
 
-		return _client_packages[_prog_ids[end]]
+		return _client_packages
 	
 	catch 
 		throw(error("ERROR retrieving game data"))
@@ -1579,7 +1582,7 @@ function getLast_clientPkg(game_id)
 end
 
 # ╔═╡ d9687cb9-e9c8-4739-aa33-8cdcad054cec
-getLast_clientPkg(rand(keys(games_log_dict)))
+getLast_clientPkg("Yxxjp")
 
 # ╔═╡ f86b195e-06a9-493d-8536-16bdcaadd60e
 function print_gameState(server_game_state)
@@ -1630,22 +1633,22 @@ end
 md"### Running websocket server"
 
 # ╔═╡ 1450c9e4-4080-476c-90d2-87b19c00cfdf
-ws_messages_log = [];
+ws_messages_log = []; # test log
 
 # ╔═╡ c9c4129f-b507-4c92-899b-bc31087b63f4
-ws_servers_ref = [];
+ws_servers_ref = []; # array of server handles
 
 # ╔═╡ 0bb77295-be29-4b50-bff8-f712ebe08197
 begin
 	
 # ip and port to use for the server
 ws_test_ip = "127.0.0.1"
-ws_test_port = 8092
-
+ws_test_port = 8090
 
 # codes used with client
 CODE_ask_new_game = "ask_new_game"
 CODE_ask_join_game = "ask_join_game"
+CODE_ask_new_game_AI = "ask_new_game_AI"
 CODE_notify_player_ready = "notify_player_ready"
 
 # positive response
@@ -1672,24 +1675,42 @@ function fwd_outbound(ws, msg_id, msg_code, resp_payload = Dict(), ok_response =
 	send(ws, JSON3.write(response_msg))
 
 	# log
-	println("LOG - $resp_msg_code")
+	println("LOG - $resp_msg_code - msg ID: $msg_id")
 
 end
 
-# ╔═╡ 3f289011-e371-49be-a9c9-a23e14737e30
-random_dump = [];
+# ╔═╡ f479f1f8-d6fd-4e48-a0f3-447997bc0416
+function log_client_comm(msg_id, msg_code, msg_parsed)
+
+	# get info from payload
+	_game_code = msg_parsed[:game_id]
+	_player_id = msg_parsed[:player_id]
+
+	# retrieve game setup info
+	_orig_player = games_log_dict[_game_code][:identity][:orig_player_id]
+
+	# understand who is the communicating player 
+	where_log = (_orig_player == _player_id) ? :orig_player_comms : :join_player_comms
+
+	# save communication
+	push!(games_log_dict[_game_code][:comms][where_log], msg_parsed)
+
+	# log
+	println("LOG - Client msg logged - msg ID: $msg_id")
+
+end
 
 # ╔═╡ a2d0d733-345d-46a7-959b-69c3fac3eabe
-function ws_msg_handler(ws, msg_json)
+function ws_msg_handler(ws, msg_parsed)
 
 	# retrieve id and message code
-	msg_id = msg_json["msg_id"]
-	msg_code = msg_json["msg_code"]
+	msg_id = msg_parsed[:msg_id]
+	msg_code = msg_parsed[:msg_code]
 
 	# save incoming message
-	push!(random_dump, msg_json)
+	push!(ws_messages_log, msg_parsed)
 
-	####################################
+####################################
 	
 	# handle request for a new game
 	if msg_code == CODE_ask_new_game
@@ -1703,6 +1724,7 @@ function ws_msg_handler(ws, msg_json)
 	
 	end
 
+####################################
 	
 	# handle request to join existing game
 	if msg_code == CODE_ask_join_game
@@ -1711,7 +1733,7 @@ function ws_msg_handler(ws, msg_json)
 		try 
 
 			# retrieve existing game data
-			ex_game_id = msg_json["game_id"]
+			ex_game_id = msg_parsed[:game_id]
 			ex_game_data = getLast_clientPkg(ex_game_id)
 
 			# reply to client
@@ -1726,9 +1748,31 @@ function ws_msg_handler(ws, msg_json)
 		end
 	end
 
+####################################
+
+	# handle request to play with AI
+	if msg_code == CODE_ask_new_game_AI
+
+		# generate new game
+		new_game_id = gen_newGame() # <- will generate and save game data
+		new_game_data = getLast_clientPkg(new_game_id)
+
+		# reply to client
+		fwd_outbound(ws, msg_id, msg_code, new_game_data)
+	
+	end
+
+####################################
 
 	# handle 'player ready' notifications
 	if msg_code == CODE_notify_player_ready
+
+		# save communication
+		log_client_comm(msg_id, msg_code, msg_parsed)
+		
+		# update game status
+		# do something
+		# reply
 
 		# reply to client
 		fwd_outbound(ws, msg_id, msg_code)
@@ -1748,10 +1792,10 @@ function init_ws_server()
 		for msg in ws
 
 			# parse incoming msg as json
-			msg_json = JSON3.read(msg)
+			msg_parsed = Dict(JSON3.read(msg))
 			
 			# dispatch parsed message to message handler
-			ws_msg_handler(ws, msg_json)
+			ws_msg_handler(ws, msg_parsed)
 
 		end
     end
@@ -1761,8 +1805,47 @@ function init_ws_server()
 
 end
 
+# ╔═╡ a89ad247-bde8-4912-a5c3-65a361e6942c
+function respawn_ws_server()
+
+	# forces closure of last server (if existing) and starts a new one
+	if length(ws_servers_ref) > 0
+		
+		HTTP.forceclose(ws_servers_ref[end])
+		init_ws_server()
+
+	else
+		init_ws_server()
+	end
+	
+
+end
+
+# ╔═╡ 31bea118-f628-4f98-bd25-4f0077f06538
+respawn_ws_server()
+
+# ╔═╡ 3c20926d-5e0f-43a7-a127-6b6f1e424418
+#=
+
+turns manager
+notifed by communications
+gets_message of ready or turn completed by player
+
+determines next moving player
+
+-> reply back if it's turn
+-> craft response and reply
+
+# data structure for turns/moves to be define and leveraged client-site for cues
+
+
+=#
+
+# ╔═╡ 2bf729f5-d918-4965-b514-2a247fc9c760
+games_log_dict["8nTvV"]
+
 # ╔═╡ 8424e77e-27d1-4632-92e6-f546f99a7fa8
-random_dump
+ws_messages_log
 
 # ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 function test_ws_client()
@@ -1825,30 +1908,11 @@ function test_ws_client()
 
 end
 
+# ╔═╡ 664de69a-aaa6-4139-806b-b3d241bd7e40
+ws_servers_ref[end]
+
 # ╔═╡ bd16c53e-bd3e-4328-988d-857bab42f0e6
-typeof(collect(ws_servers_ref[end].connections))
-
-# ╔═╡ a89ad247-bde8-4912-a5c3-65a361e6942c
-function respawn_ws_server()
-
-	# forces closure of last server (if existing) and starts a new one
-	if length(ws_servers_ref) > 0
-		
-		HTTP.forceclose(ws_servers_ref[end])
-		init_ws_server()
-
-	else
-		init_ws_server()
-	end
-	
-
-end
-
-# ╔═╡ 54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
-respawn_ws_server()
-
-# ╔═╡ e3b292a4-9351-4286-9b56-cb94530c7e35
-ws_servers_ref
+last_conn = collect(ws_servers_ref[end].connections)
 
 # ╔═╡ 972d60e0-ed99-465e-a6fa-aefca286c2cb
 md"#### Handling turns logic "
@@ -1872,8 +1936,12 @@ A -> sets up game -> notifies server of ready state (10s to reply)
 S -> logs game as ready for originator
 --
 A -> (shares code with B)
-B -> requests server for game data -> sets up game -> notifies server of ready state
-S -> logs game as ready for joiner -> game can start
+B -> requests server for game data 
+S -> sends data
+B -> sets up game -> notifies server of ready state
+S -> logs game as ready for joiner
+--
+S -> both players ready -> game can start
 S -> checks who is the first moving player -> notifies player
 --
 B -> receives message -> acknowledge msg to server (10s to reply)
@@ -1885,6 +1953,9 @@ S -> .... (cycle repeats)
 
 
 =#
+
+# ╔═╡ 26ce8f2c-efc2-4ff0-84c6-54c75dc887f1
+
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2992,24 +3063,27 @@ version = "1.4.1+0"
 # ╠═d9687cb9-e9c8-4739-aa33-8cdcad054cec
 # ╠═cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
-# ╠═466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
+# ╟─466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═70ecd4ed-cbb1-4ebd-85a8-42f7b072bee3
 # ╠═bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 # ╠═1450c9e4-4080-476c-90d2-87b19c00cfdf
 # ╠═c9c4129f-b507-4c92-899b-bc31087b63f4
+# ╠═31bea118-f628-4f98-bd25-4f0077f06538
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
-# ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+# ╟─1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+# ╟─a89ad247-bde8-4912-a5c3-65a361e6942c
 # ╠═a2d0d733-345d-46a7-959b-69c3fac3eabe
 # ╠═b85d9d1c-213c-4330-9f1d-95823c3a9491
-# ╠═3f289011-e371-49be-a9c9-a23e14737e30
+# ╠═f479f1f8-d6fd-4e48-a0f3-447997bc0416
+# ╠═3c20926d-5e0f-43a7-a127-6b6f1e424418
+# ╠═2bf729f5-d918-4965-b514-2a247fc9c760
 # ╠═8424e77e-27d1-4632-92e6-f546f99a7fa8
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
-# ╠═54ce2931-6120-4e1c-82fb-8d6e31fb8f3f
+# ╠═664de69a-aaa6-4139-806b-b3d241bd7e40
 # ╠═bd16c53e-bd3e-4328-988d-857bab42f0e6
-# ╠═a89ad247-bde8-4912-a5c3-65a361e6942c
-# ╠═e3b292a4-9351-4286-9b56-cb94530c7e35
 # ╟─972d60e0-ed99-465e-a6fa-aefca286c2cb
 # ╠═e7de85fc-e51e-47a3-98e8-ddc0fab782ba
+# ╠═26ce8f2c-efc2-4ff0-84c6-54c75dc887f1
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

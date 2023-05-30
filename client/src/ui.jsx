@@ -39,7 +39,7 @@ export function Play() {
             <div>
               <button type="button" onClick={toggle_Play}>Go back</button>
               <button type="button" onClick={toggle_PlayFriend}>Play with a friend</button>
-              <button type="button" disabled="true" onClick={toggle_PlayAI}>Play with AI</button>
+              <button type="button" onClick={toggle_PlayAI}>Play with AI</button>
             </div>
           }
         >
@@ -70,9 +70,10 @@ export function Play() {
           </Match>
 
           <Match when={playAI()}>
-            <div>
+            <>
               <button type="button" onClick={toggle_PlayAI}>Go back</button>
-            </div>
+              <Option_playAI></Option_playAI>
+            </>
           </Match>
         </Switch>
       </Show>
@@ -98,7 +99,6 @@ function Option_new_game() {
       <GameCanvas></GameCanvas>
     </Show>
   );
-
 }
 
 
@@ -117,9 +117,26 @@ function Option_join_with_code() {
       <GameCanvas></GameCanvas>
     </Show>
   );
-
 }
 
+
+function Option_playAI() {
+
+  // handle option confirmation -> shows handler and canvas
+  const [confirm, set_confirm] = createSignal(false);
+  const toggle_confirm = () => set_confirm(!confirm());  
+
+  return (
+    <Show
+    when = {confirm()}
+    fallback = {<button type="button" onClick={toggle_confirm}>Confirm play with AI</button>}
+    >
+      <Handler_playAI></Handler_playAI>
+      <GameCanvas></GameCanvas>
+    </Show>
+  );
+
+}
 
 
 function Handler_newGame(){
@@ -127,8 +144,8 @@ function Handler_newGame(){
   // signal for button interaction
   const [reqTriggered, set_reqTriggered] = createSignal(false); 
 
-  // function wrapper for requesting new game
-  const req_newGame = async () => (await init_game_fromServer());
+  // function wrapper for requesting new game as originator
+  const req_newGame = async () => (await init_game_fromServer(true));
   
   // resource handler for new games
   const [request_handler] = createResource(reqTriggered, req_newGame);
@@ -136,18 +153,9 @@ function Handler_newGame(){
   // handling interaction and resource fetching
   // createResource is triggered for anything other than: false, null, undefined onMount
   // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
-  const triggerRequest = () => {
-    if (reqTriggered() == false) {
-      // if NOT triggered 
-      set_reqTriggered(!reqTriggered()); // -> set to true -> triggers refetch
-    } else {
-      // if already triggered
-      set_reqTriggered(!reqTriggered()); // -> set to false 
-      set_reqTriggered(!reqTriggered()); // -> and then to true again -> triggers refetch
-    }
-  };
+  const triggerRequest = () => doubleSwitch(set_reqTriggered, reqTriggered);
   
-
+  // NOTE: snippet below should be reusable component
   return (
     <>
     <button type="button" onClick={triggerRequest}>Start!</button>
@@ -178,7 +186,7 @@ function Handler_joinWithCode(){
 
   // function wrapper for requesting new game
   let code_input_field; // -> this is later attached to the input field
-  const req_newGame = async () => (await init_game_fromServer(code_input_field.value, true));
+  const req_newGame = async () => (await init_game_fromServer(false, true, code_input_field.value));
   
   // resource handler for new games
   const [request_handler] = createResource(reqTriggered, req_newGame);
@@ -186,22 +194,51 @@ function Handler_joinWithCode(){
   // handling interaction and resource fetching
   // createResource is triggered for anything other than: false, null, undefined onMount
   // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
-  const triggerRequest = () => {
-    if (reqTriggered() == false) {
-      // if NOT triggered 
-      set_reqTriggered(!reqTriggered()); // -> set to true -> triggers refetch
-    } else {
-      // if already triggered
-      set_reqTriggered(!reqTriggered()); // -> set to false 
-      set_reqTriggered(!reqTriggered()); // -> and then to true again -> triggers refetch
-    }
-  };
+  const triggerRequest = () => doubleSwitch(set_reqTriggered, reqTriggered);
   
-
+  // NOTE: snippet below should be reusable component
   return (
     <>
     <input type="text" ref={code_input_field} placeholder="Input game code"></input>
     <button type="button" onClick={triggerRequest}>Join!</button>
+
+    <Switch
+      fallback={<p>{""}</p>}
+    >
+      
+      <Match when = {request_handler.loading}>
+        <p>{"Loading..."}</p>
+      </Match>
+
+      <Match when = {request_handler.error}>
+        <p>{"ERROR !"}</p>
+      </Match>
+
+    </Switch>
+    </>
+  );
+}
+
+
+function Handler_playAI(){
+
+  // signal for button interaction
+  const [reqTriggered, set_reqTriggered] = createSignal(false); 
+
+  // function wrapper for requesting new game
+  const req_newGame_AI = async () => (await init_game_fromServer(false, false, undefined, true));
+  
+  // resource handler for new games
+  const [request_handler] = createResource(reqTriggered, req_newGame_AI);
+  
+  // handling interaction and resource fetching
+  // createResource is triggered for anything other than: false, null, undefined onMount
+  // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
+  const triggerRequest = () => doubleSwitch(set_reqTriggered, reqTriggered);
+  
+  return (
+    <>
+    <button type="button" onClick={triggerRequest}>Start!</button>
 
     <Switch
       fallback={<p>{""}</p>}
@@ -232,6 +269,18 @@ function GameCanvas(){
   );
 }
 
+
+// used to retrigger resource-wrapped fetch: if on -> off and then on again
+function doubleSwitch(setter, value){
+  if (value() == false) {
+    // if NOT triggered 
+    setter(!value()); // -> set to true -> triggers refetch
+  } else {
+    // if already triggered
+    setter(!value()); // -> set to false 
+    setter(!value()); // -> and then to true again -> triggers refetch
+  }
+};
 
 
 export default Play;

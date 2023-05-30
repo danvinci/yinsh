@@ -3,7 +3,7 @@
 
 
 //////////// IMPORTS
-import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, notifyServer_playerReady} from './server.js'
+import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, notifyServer_playerReady} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_new_game_data } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
 import { try_start_local_turn, complete_local_turn} from './data.js' 
@@ -29,7 +29,10 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
 //////////// FUNCTIONS FOR INITIALIZING GAMES (NEW or JOIN)
 
 // retrieve data from server (as originator or joiner) and init new game
-export async function init_game_fromServer(input_game_code = '', joiner = false){
+export async function init_game_fromServer(originator = false, joiner = false, game_code = '', ai_game = false){
+
+    // input could be changed to a more general purpose object, also to save/send game setup settings
+    //_setup = {originator: false, joiner: false, game_code: undefined, ai_game: false}
 
     console.log(' -- Requesting new game --');
     const request_start_time = Date.now()
@@ -44,15 +47,16 @@ export async function init_game_fromServer(input_game_code = '', joiner = false)
 
         // initializes websocket and connects to game server
         await init_ws();
-        
+    
         if (joiner) {
-
             // asks to join existing game
-            await server_ws_joinWithCode(input_game_code);
-
-        } else {
-            // requests a new game and writes response
+            await server_ws_joinWithCode(game_code);
+        } else if (originator) {
+            // requests a new game and writes response (as originator)
             await server_ws_genNewGame();
+        } else if (ai_game) {
+            // requests a new game and writes response (as originator vs AI server)
+            await server_ws_genNewGame_AI();
         };
         
         // maps data from server to game objects

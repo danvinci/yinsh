@@ -7,7 +7,7 @@
 
 import { save_first_server_response, get_game_id, get_player_id } from './data.js'
 
-const ws_port = 8092;
+const ws_port = 8090;
 const ip_address = "127.0.0.1"
 
 // custom class for managing the lifecycle of messages
@@ -128,7 +128,7 @@ function onOpen_handler (event) {
 // dispatches incoming messages
 function onMessage_handler (event) {
 
-    console.log(`LOG - Websocket - received new MESSAGE`);
+    console.log(`LOG - Websocket - received new message`);
     
     // parse message payload
     const server_data = JSON.parse(event.data);
@@ -160,6 +160,7 @@ function onClose_handler (event) {
 };
 
 //////////////////////////// MESSAGE SENDERS (called by core)
+// could be unified in single function to handle cases/dispatch
 
 // Send message for generating new game 
 export async function server_ws_genNewGame(){
@@ -228,6 +229,43 @@ export async function server_ws_joinWithCode(input_game_id){
             throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
         };
         
+
+    } catch (err) {
+
+        console.log(err);
+
+    };
+};
+
+
+// Send message for generating new game 
+export async function server_ws_genNewGame_AI(){
+    
+    try {
+
+        // prepare message payload
+        const msg_code = 'ask_new_game_AI';
+        const payload = {msg_code: msg_code};
+
+        // package message, log it, send it
+        const [msg_time, msg_id] = fwd_outbound(payload) // used later to recognize response and log times
+        
+        // wait to receive a response
+        // -> will get resolved by message handler when we receive a response
+        await msgPromise_lookup(msg_id);
+
+        // check server response
+        const resp_code = messagePromises_log[msg_id].server_response.msg_code
+        if (resp_code == msg_code.concat('_OK')){ // these codes should be shared by the server on first connection
+
+            console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
+            
+            // save response in dedicate objects
+            save_first_server_response(messagePromises_log[msg_id].server_response);
+
+        } else {
+            throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
+        };
 
     } catch (err) {
 
