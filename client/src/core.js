@@ -3,7 +3,7 @@
 
 
 //////////// IMPORTS
-import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, notifyServer_playerReady} from './server.js'
+import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_whatNow} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_new_game_data } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
 import { try_start_local_turn, complete_local_turn} from './data.js' 
@@ -81,38 +81,18 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         console.log(`LOG - Your game code is: ${yinsh.server_data.game_id}`);
 
        
-        // notify server of being ready
-        await notifyServer_playerReady();
-       
-        /* 
-        // assess if it's the current player's turn or not
-        if(try_start_local_turn()) {
+        // ask server what to do (who moves / wait)
+        const next_action = await server_ws_whatNow();
 
+        if (next_action == 'move') {
+
+
+            // from here on, it should go to the client turn manager
             canvas_interaction_flag = true; // enable interaction
-            console.log(`LOG - It's yout turn, pick a ring to start!`);
-        } else {
-
-            canvas_interaction_flag = false;
-            console.log(`LOG - Invite your opponent and wait for its turn to complete.`);
+            console.log(`LOG - It's yout turn, make a move!`);
 
         };
-        
-
-        // interaction is disabled by default -> keeping it disabled
-       //canvas_interaction_flag = true;
-    
-        // handle syncing between players
-        if (joiner) {
             
-            //
-
-        } else {
-            
-            // if this client is the caller, it pings the server about being ready to play
-            await server_ws_ping_player_ready();
-        };
-        
-        */
 
     } catch (err){
 
@@ -123,6 +103,9 @@ export async function init_game_fromServer(originator = false, joiner = false, g
 
     };
 };
+
+
+
 
 //////////// EVENT HANDLERS FOR TURNS
 

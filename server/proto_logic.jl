@@ -1652,7 +1652,7 @@ ws_test_port = 8090
 CODE_ask_new_game = "ask_new_game"
 CODE_ask_join_game = "ask_join_game"
 CODE_ask_new_game_AI = "ask_new_game_AI"
-CODE_notify_player_ready = "notify_player_ready"
+CODE_what_now = "what_now"
 
 # positive response
 CODE_OK = "_OK"
@@ -1711,7 +1711,7 @@ determines next moving player
 =#
 
 # ╔═╡ 2bf729f5-d918-4965-b514-2a247fc9c760
-games_log_dict["JAN03"]
+games_log_dict["TDh3I"]
 
 # ╔═╡ 063f76ac-7bfe-49bd-8a37-0ba8f260c325
 #=
@@ -1757,8 +1757,8 @@ function update_player_status!(game_code, player_id)
 	last_player_comm = games_log_dict[game_code][:players][which_log][end]
 	last_msg_code = last_player_comm[:msg_code]
 
-	# if player not ready but notified okay -> update its status
-	if last_msg_code == CODE_notify_player_ready && _player_status == :not_available
+	# if player is asking what to do and wasn't logged as ready -> mark as ready
+	if last_msg_code == CODE_what_now && _player_status == :not_available
 
 		_new_player_status = :ready
 		games_log_dict[game_code][:players][which_status] = _new_player_status
@@ -1827,7 +1827,8 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 	_player_id = msg_parsed[:player_id]
 
 	# is this the originator or joiner? -> log accordingly
-	where_log = (whos_player(_game_code, _player_id) == :originator) ? :orig_player_comms : :join_player_comms
+	who_msg = whos_player(_game_code, _player_id)
+	where_log = (who_msg == :originator) ? :orig_player_comms : :join_player_comms
 
 	# save communication -> assumes is about player ready or turn completed
 	push!(games_log_dict[_game_code][:players][where_log], msg_parsed)
@@ -1860,22 +1861,19 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 		# who moves next?
 		who_moves = whos_player(_game_code, next_player)
 
-		if who_moves == :joiner
+	## here we're always responding to a single player
+	# -> pinging all players regardless should come at some point
+
+		if who_msg == who_moves
 			
-			if _game_type == :h_vs_ai
+			# -> make move
+			return Dict(:next_action_code => "move")
 
-				# if AI -> compute move -> send data to client
+		elseif who_msg != who_moves
 
-			elseif _game_type == :h_vs_h
+			# -> wait for opponent's move
+			return Dict(:next_action_code => "wait")
 
-				# TODO -> H vs H
-
-			end
-
-		elseif who_moves == :originator
-			
-			# tell client to make move
-			return Dict(:message_from_server => "It's your turn!")
 		end
 
 	else
@@ -1948,15 +1946,11 @@ function ws_msg_handler(ws, msg_parsed)
 
 ####################################
 
-	# handle 'player ready' notifications
-	if msg_code == CODE_notify_player_ready
+	# handle players asking for what to do next (turns)
+	if msg_code == CODE_what_now
 
 		# orchestrator
 		_resp = wannabe_orchestrator(msg_id, msg_code, msg_parsed)
-		
-		# update game status
-		# do something
-		# reply
 
 		# reply to client
 		fwd_outbound(ws, msg_id, msg_code, _resp)

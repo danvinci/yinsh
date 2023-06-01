@@ -274,13 +274,13 @@ export async function server_ws_genNewGame_AI(){
     };
 };
 
-// Send message for notifying the server that the player is ready for its turn
-export async function notifyServer_playerReady(){
+// Send message asking the server what to do (wait or move?)
+export async function server_ws_whatNow(){
     
     try {
 
         // prepare message payload
-        const msg_code = 'notify_player_ready';
+        const msg_code = 'what_now';
         const payload = {msg_code: msg_code, game_id: get_game_id(), player_id: get_player_id()};
 
         // package message, log it, send it
@@ -293,10 +293,14 @@ export async function notifyServer_playerReady(){
         const resp_code = messagePromises_log[msg_id].server_response.msg_code
         if (resp_code == msg_code.concat('_OK')){
 
-            // save response (as joiner) in dedicate objects
-            // save_first_server_response(messagePromises_log[msg_id].server_response, true);
+            // log server response 
+            const srv_message = messagePromises_log[msg_id].server_response.next_action_code
+            
+            console.log(`LOG - Server msg:`, srv_message);
             
             console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
+
+            return srv_message
        
         } else {
             
@@ -311,6 +315,7 @@ export async function notifyServer_playerReady(){
     };
 };
 
+///// UNIFY CALLS TO SERVER INTO SINGLE FUNCTION - WORK WITH CODES/DATA FROM CORE (?)
 
 
 //////////////////////////// UTILS
