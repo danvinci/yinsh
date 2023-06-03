@@ -19,6 +19,8 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
     core_et.addEventListener('ring_picked', ringPicked_handler, false);
     core_et.addEventListener('ring_moved', ringMoved_handler, false);
     core_et.addEventListener('ring_drop', ringDrop_handler, false);
+    core_et.addEventListener('srv_next_action', server_actions_handler, false);
+
 
 //////////// SLEEP UTIL
 
@@ -80,20 +82,8 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         // log game code (later should be in the UI)
         console.log(`LOG - Your game code is: ${yinsh.server_data.game_id}`);
 
-       
-        // ask server what to do (who moves / wait)
-        const next_action = await server_ws_whatNow();
-
-        if (next_action == 'move') {
-
-            turn_start(); // -> start player's turn
-
-            // from here on, it should go to the client turn manager
-            enableInteraction();
-            console.log(`LOG - It's yout turn, make a move!`); // -> this should go to the UI
-
-        };
-            
+        // ask server what to do -> it will emit event on response
+        server_ws_whatNow();
 
     } catch (err){
 
@@ -110,8 +100,26 @@ export async function init_game_fromServer(originator = false, joiner = false, g
 
 //////////// EVENT HANDLERS FOR TURNS
 
+function server_actions_handler (event) {
 
+    const _next_action = event.detail.next_action_code;
 
+    if (_next_action == 'move') {
+
+        turn_start(); // -> start player's turn
+
+        // from here on, it should go to the client turn manager
+        enableInteraction();
+        console.log(`LOG - It's yout turn, make a move!`); // -> this should go to the UI
+
+    } else if (_next_action == 'wait') {
+
+        disableInteraction(); // a bit redundant, is disabled by default
+        console.log(`LOG - Wait for your opponent.`); // -> this should bubble up to a UI component
+
+    };
+
+};
 
 //////////// EVENT HANDLERS FOR GAME MECHANICS
 

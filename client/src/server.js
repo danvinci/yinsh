@@ -288,20 +288,21 @@ export async function server_ws_whatNow(scenario_pick = false){
                             
         // wait to receive a response
         await msgPromise_lookup(msg_id);
+
+        const srv_response = messagePromises_log[msg_id].server_response;
+        const resp_code = srv_response.msg_code;
         
         // check server response
-        const resp_code = messagePromises_log[msg_id].server_response.msg_code
         if (resp_code == msg_code.concat('_OK')){
 
-            // log server response 
-            const srv_message = messagePromises_log[msg_id].server_response.next_action_code
+            // log server response             
             
-            console.log(`LOG - Server msg:`, srv_message);
-            
+            console.log(`LOG - Server response:`, srv_response);
             console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
 
-            return srv_message
-       
+            // dispatch event for core game logic
+            core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: srv_response }));
+
         } else {
             
             throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);

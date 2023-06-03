@@ -1204,6 +1204,17 @@ function save_newGame!(games_log_ref, new_game_details)
 
 end
 
+# ╔═╡ 1fe8a98e-6dc6-466e-9bc9-406c416d8076
+function save_new_clientPkg!(games_log_ref, game_id, _client_pkg)
+# handles writing to dict (redis in the future?)
+# returns index to last saved package
+
+	# saves starting state of new game
+	push!(games_log_ref[game_id][:client_pkgs], _client_pkg)
+
+	
+end
+
 # ╔═╡ 6075f560-e190-409b-8435-a7cf08ec1bc6
 games_log_dict
 
@@ -1224,6 +1235,13 @@ function gen_New_gameState(ex_game_state, start_move, end_move)
 		# get ring details
 		picked_ring = ex_game_state[start_move]
 		picked_ring_color = picked_ring[end] # RW, RB -> should work with identifiers
+
+		added_marker = Dict(:cli_index => reshape_out(start_move), 
+							:player_id => picked_ring_color)
+
+		moved_ring = Dict(:cli_index_start => reshape_out(start_move),
+							:cli_index_end => reshape_out(end_move),
+							:player_id => picked_ring_color)
 
 		# marker placed in start_move (same color as picked ring)
 		new_gs[start_move] = "M"*picked_ring_color # should work with identifiers
@@ -1252,7 +1270,7 @@ function gen_New_gameState(ex_game_state, start_move, end_move)
 			flip_flag, markers_toFlip = markers_toFlip_search(new_gs, search_space[direction])
 
 			if flip_flag
-				# actually flip markers -> assumes 
+				# actually flip markers in game state
 				for m_id in markers_toFlip
 					if contains(new_gs[m_id], 'M')
 	
@@ -1263,7 +1281,15 @@ function gen_New_gameState(ex_game_state, start_move, end_move)
 
 	end
 
-	return new_gs, flip_flag, markers_toFlip
+
+	_return = Dict(:new_game_state_srv => new_gs, 
+					:flip_flag => flip_flag,
+					:markers_toFlip_srv => markers_toFlip,
+					:markers_toFlip_cli => reshape_out(markers_toFlip),
+					:added_marker_cli => added_marker,
+					:moved_ring_cli => moved_ring)
+
+	return _return
 
 end
 
@@ -1392,47 +1418,62 @@ function gen_scenarioTree(ex_game_state, next_movingPlayer)
 # computes results for all possible moves of next moving player
 # output is reshaped for client's consumption
 
-	# scenario tree to be returned
-	scenario_tree = Dict()
+# scenario tree to be returned
+scenario_tree = Dict()
 
-	# find all rings for next moving player on the board
-	rings_locs = findall(i -> contains(i, next_movingPlayer), ex_game_state)
+# add summary to tree
+summary = Dict(:global_score_flag => false, 
+				:global_flip_flag => false,
+				:scoring_moves => [],
+				:flipping_moves => [])
+setindex!(scenario_tree, summary, :summary)
 
-	# find legal moves for next moving player
-	next_legalMoves = Dict()
-	for loc in rings_locs
-		legal_moves = _search_legal_srv(ex_game_state, loc) # search for moves
-		setindex!(next_legalMoves, legal_moves, loc)
-	end
+# find all rings for next moving player on the board
+rings_locs = findall(i -> contains(i, next_movingPlayer), ex_game_state)
 
-	# for each move start
-	for move_start in collect(keys(next_legalMoves))
+# find legal moves for next moving player
+next_legalMoves = Dict()
+for loc in rings_locs
+	legal_moves = _search_legal_srv(ex_game_state, loc) # search for moves
+	setindex!(next_legalMoves, legal_moves, loc)
+end
 
-		# for each move end
-		for move_end in next_legalMoves[move_start]
+# for each move start
+for move_start in collect(keys(next_legalMoves))
 
-			if move_end == move_start # nothing happens
-				continue
-			else # something happens
-	
-				# generate new game state for start/end combination
-				# new state will have ring in new location and markers flipped
-				# saves if markers need to flip and which IDs
-				new_game_state, flip_flag, markers_toFlip = gen_New_gameState(ex_game_state, move_start, move_end)
-	
-				# checks scoring opportunities
-				scoring_rows, scores_toHandle = static_score_lookup(new_game_state)
-				score_flag = (scoring_rows[:tot] >= 1) ? true : false	
-				
-				# save all in a single scenario -> for client consumption
-				s_first_key = reshape_out(move_start) # linear indexes
-				s_second_key = reshape_out(move_end)
-				s_value = Dict()
+	# for each move end
+	for move_end in next_legalMoves[move_start]
 
-				## make scenario data lighter -> only write extra data if flags true
-				# scoring details
-				setindex!(s_value, score_flag, :score_flag)
-				if score_flag
+		if move_end == move_start # nothing happens
+			continue
+		else # something happens
+
+			# generate new game state for start/end combination
+			# new state will have ring in new location and markers flipped
+			# saves if markers need to flip and which IDs
+			new_gs_delta = gen_New_gameState(ex_game_state, move_start, move_end)
+
+				new_game_state = new_gs_delta[:new_game_state_srv]
+				flip_flag = new_gs_delta[:flip_flag]
+				markers_toFlip = new_gs_delta[:markers_toFlip_srv]
+
+			# checks scoring opportunities
+			scoring_rows, scores_toHandle = static_score_lookup(new_game_state)
+			score_flag = (scoring_rows[:tot] >= 1) ? true : false	
+			
+			# save all in a single scenario -> for client consumption
+			s_first_key = reshape_out(move_start) # linear indexes
+			s_second_key = reshape_out(move_end)
+			s_value = Dict()
+
+			## make scenario data lighter -> only write extra data if flags true
+			# scoring details
+			setindex!(s_value, score_flag, :score_flag)
+			if score_flag
+
+				# log in summary
+				scenario_tree[:summary][:global_score_flag] = true
+				push!(scenario_tree[:summary][:scoring_moves], Dict(:start => s_first_key, :end => s_second_key))
 
 				# reshape for client consumption
 				for (row_id, row) in enumerate(scores_toHandle)
@@ -1441,30 +1482,35 @@ function gen_scenarioTree(ex_game_state, next_movingPlayer)
 				end
 					
 					setindex!(s_value, scores_toHandle, :scores_toHandle)
-				end
-				
-				# markers details
-				setindex!(s_value, flip_flag, :flip_flag)
-				if flip_flag
-					# saving reshaped indexes
-					setindex!(s_value, reshape_out(markers_toFlip), :markers_toFlip)
-				end
-				
-				## save scenario in tree (first_key -> second_key -> scenario)
-				# test if root branch already created
-				if haskey(scenario_tree, s_first_key)
-
-					setindex!(scenario_tree[s_first_key], s_value, s_second_key)
-				
-				else #create root branch first
-					setindex!(scenario_tree, Dict(s_second_key => s_value), s_first_key)
-				end
-				
 			end
+			
+			# markers details
+			setindex!(s_value, flip_flag, :flip_flag)
+			if flip_flag
+
+				# log in summary
+				scenario_tree[:summary][:global_flip_flag] = true
+				push!(scenario_tree[:summary][:flipping_moves], Dict(:start => s_first_key, :end => s_second_key))
+				
+				# saving reshaped indexes
+				setindex!(s_value, reshape_out(markers_toFlip), :markers_toFlip)
+			end
+			
+			## save scenario in tree (first_key -> second_key -> scenario)
+			# test if root branch already created
+			if haskey(scenario_tree, s_first_key)
+
+				setindex!(scenario_tree[s_first_key], s_value, s_second_key)
+			
+			else #create root branch first
+				setindex!(scenario_tree, Dict(s_second_key => s_value), s_first_key)
+			end
+			
 		end
 	end
+end
 
-	return scenario_tree
+return scenario_tree
 
 end
 
@@ -1544,6 +1590,7 @@ function gen_newGame(vs_ai=false)
 							:players => _players, 
 							:turns => Dict(:pointer => 1, :data => [_first_turn]),
 							:server_states => _srv_states,
+							:client_delta => [],
 							:client_pkgs => [_cli_pkg])
 
 	
@@ -1585,8 +1632,29 @@ function getLast_clientPkg(game_id)
 
 end
 
-# ╔═╡ d9687cb9-e9c8-4739-aa33-8cdcad054cec
-getLast_clientPkg("Yxxjp")
+# ╔═╡ 439903cb-c2d1-49d8-a5ef-59dbff96e792
+function getLast_clientDelta(game_id)
+# looks in the games log and retrieves last client package
+
+	try
+		_client_delta = games_log_dict[game_id][:client_delta][end]
+		
+		println("LOG - Game data client delta retrieved - Game ID: $game_id")
+
+		return _client_delta
+	
+	catch 
+		throw(error("ERROR retrieving game data"))
+
+	end
+
+end
+
+# ╔═╡ 9a08682a-6406-45d2-b655-9fe24a9158e5
+games_log_dict["Ij6AV"]
+
+# ╔═╡ d9077e87-df02-43c8-ae5c-0df75eeee846
+getLast_clientDelta("Ij6AV")
 
 # ╔═╡ f86b195e-06a9-493d-8536-16bdcaadd60e
 function print_gameState(server_game_state)
@@ -1700,70 +1768,184 @@ swap_player_id(player_id) = ( player_id == "W") ? "B" : "W"
 # ╔═╡ f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 get_last_srv_gameState(game_id) = games_log_dict[game_id][:server_states][end]
 
+# ╔═╡ e0368e81-fb5a-4dc4-aebb-130c7fd0a123
+function gen_new_clientPkg(game_id, moving_client_id)
+# generates follow up responses for the client, whenever the preceding turn is completed by the other player or AI
+
+
+	# constants for players and game objects
+	white_id = "W"
+	black_id = "B"
+	ring_id = "R"
+	marker_id = "M"
+
+	white_ring = ring_id * white_id
+	black_ring = ring_id * black_id
+	black_mk = marker_id * black_id
+	white_mk = marker_id * white_id
+
+	# set next moving player -> should be a setting (for now always white)
+	next_movingPlayer = moving_client_id 
+
+	# retrieve latest game state (server format)
+	_game_state = get_last_srv_gameState(game_id)
+	
+	# retrieves location ids in client format 
+	whiteRings_ids_client = reshape_out(findall(i -> i == white_ring, _game_state))
+	blackRings_ids_client = reshape_out(findall(i -> i == black_ring, _game_state))
+	whiteMarkers_ids_client = reshape_out(findall(i -> i == white_mk, _game_state))
+	blackMarkers_ids_client = reshape_out(findall(i -> i == black_mk, _game_state))
+
+
+	# simulates possible moves and outcomes for each
+	scenario_tree = gen_scenarioTree(_game_state, next_movingPlayer)
+	
+
+		
+	### package data for client
+	_cli_pkg = Dict(:game_id => game_id,
+					:whiteRings_ids => whiteRings_ids_client,
+					:blackRings_ids => blackRings_ids_client,
+					:whiteMarkers_ids => whiteMarkers_ids_client,
+					:blackMarkers_ids => blackMarkers_ids_client,
+					:scenarioTree => scenario_tree,
+					:next_action_code => "move") # client is next moving
+					# later we should address cases of double scoring
+	
+	
+	# saves game to general log (DB?)
+	save_new_clientPkg!(games_log_dict, game_id, _cli_pkg)
+
+
+	println("LOG - New client pkg created for game: $game_id")
+	
+	
+end
+
 # ╔═╡ f55bb88f-ecce-4c14-b9ac-4fc975c3592e
-function align_serverState(_game_code, _player_id, _client_scenario_pick)
+function update_serverStates(_game_code, _player_id, _scenario_pick)
 
 	# convert moves to server indexes
-	_start_index = reshape_in(_client_scenario_pick.start)
-	_end_index =  reshape_in(_client_scenario_pick.end)
+	_start_index = reshape_in(_scenario_pick[:start])
+	_end_index =  reshape_in(_scenario_pick[:end])
 
 	# retrieve old game state and last moving
 	ex_game_state = get_last_srv_gameState(_game_code)
 
 	# get new game state
-	_new_gs, _, _ = gen_New_gameState(ex_game_state, _start_index, _end_index)
+	_new_gs_delta = gen_New_gameState(ex_game_state, _start_index, _end_index)
 
-	push!(games_log_dict[_game_code][:server_states], _new_gs)
+	push!(games_log_dict[_game_code][:server_states], _new_gs_delta[:new_game_state_srv])
 
-	println("LOG - Server game state updated")
+	
+
+	# extract delta to be logged and passed onto client
+	_delta_client = Dict(:flip_flag => _new_gs_delta[:flip_flag],
+						:markers_toFlip => _new_gs_delta[:markers_toFlip_cli],
+						:added_marker => _new_gs_delta[:added_marker_cli],
+						:moved_ring => _new_gs_delta[:moved_ring_cli])
+
+
+	push!(games_log_dict[_game_code][:client_delta], _delta_client)
+	
+	
+	#=
+	added marker index and color
+	moved ring
+	flipped markers
+	removed markers (later, scoring)
+	removed rings (later, scoring)
+
+	=#
+
+	println("LOG - Server game state and delta updated")
 
 
 end
 
-# ╔═╡ 3c20926d-5e0f-43a7-a127-6b6f1e424418
-#=
+# ╔═╡ c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
+function get_last_moving_player(game_code)
 
-turns manager
-notifed by communications
-gets_message of ready or turn completed by player
+	return games_log_dict[game_code][:turns][:data][end][:moving_player]
 
-determines next moving player
-
--> reply back if it's turn
--> craft response and reply
-
-# data structure for turns/moves to be define and leveraged client-site for cues
-
-
-=#
+end
 
 # ╔═╡ 2bf729f5-d918-4965-b514-2a247fc9c760
-games_log_dict["xtNqr"]
+games_log_dict["yNHKU"]
 
 # ╔═╡ 7c0ea928-2cfc-472b-8320-e9420a498da8
-print_gameState(games_log_dict["xtNqr"][:server_states][end-1])
+print_gameState(games_log_dict["SopiI"][:server_states][end-1])
+
+# ╔═╡ 388190e2-b017-40e6-9ec7-a984824a6f9a
+reshape_out(findall(i -> i == "MB", get_last_srv_gameState("8Hil3")))
 
 # ╔═╡ b483f566-e454-4f56-9625-607e9d158237
-print_gameState(get_last_srv_gameState("xtNqr"))
+print_gameState(get_last_srv_gameState("SopiI"))
 
-# ╔═╡ 063f76ac-7bfe-49bd-8a37-0ba8f260c325
-#=
+# ╔═╡ 8dfd18a5-4127-40d2-819c-f17da2d6453d
 
--> all players ready -> change game status
--> activate_turn() -> update_game_status -> starting player notified
--> client or AI complete their turn
--> handle client response on turn -> update game states accordingly
--> activate_turn()
 
-=#
+# ╔═╡ 14aa5b7c-9065-4ca3-b0e9-19c104b1854d
+function scenario_choice(_tree::Dict)
+	# value function for picking moves
+	# works with depth-1 game scenario trees
+
+	# retrieve summary function
+	global_score_flag = _tree[:summary][:global_score_flag]
+	global_flip_flag = _tree[:summary][:global_flip_flag]
+
+	# pick random scoring option if available
+	if global_score_flag && !isempty(_tree[:summary][:scoring_moves])
+		
+		_pick = rand(_tree[:summary][:scoring_moves])
+
+	# if none, pick random that leads to flipped markers
+	elseif global_flip_flag && !isempty(_tree[:summary][:flipping_moves])
+
+		_pick = rand(_tree[:summary][:flipping_moves])
+
+	# otherwise, pick a random move
+	else
+		_first_k = rand(filter(k -> k != :summary, collect(keys(_tree))))
+		_second_k = rand(collect(keys(_tree[_first_k])))
+
+		_pick = Dict(:start => _first_k, :end => _second_k)
+
+	end
+
+	return _pick::Dict{Symbol, Int}
+
+end
+
+# ╔═╡ 6a174abd-c9bc-4c3c-93f0-05a7d70db4af
+function play_turn_AI(game_code::String, _moving_player_id::String)
+
+	# get last game state and id of moving player
+	# assumes turns are updated and moving player is AI
+	_ex_game_state = get_last_srv_gameState(game_code)
+
+	# generate scenarios
+	_scenarios = gen_scenarioTree(_ex_game_state, _moving_player_id)
+
+	# make choice
+	_pick = scenario_choice(_scenarios)
+
+	return _pick
+
+end
 
 # ╔═╡ a6f38ca6-99a9-4353-b820-0896b09b32f0
 #=
 
-		# update not_started game if necessary
-		if _game_status == :not_started
-			_game_status = :in_progress
-		end
+	- get client response
+	- update server game state
+	- trigger AI
+		- generate new scenarios
+		- pick action
+		- complete move/turn
+	- reply to client
+	- have client show results
+	- repeat turn client-wise
 
 
 =#
@@ -1953,17 +2135,48 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 		# check information from player
 		if !(_scenario_pick == false)
 		
+			# update server game state
+			update_serverStates(_game_code, _player_id, _scenario_pick)
+
 			# complete turn
 			complete_turn!(_game_code)
 			
-			# update server game state
-			align_serverState(_game_code, _player_id, _scenario_pick)
-			
-			# compute next move
-			# reply back
-	
-			# -> wait for opponent's move
-			return Dict(:next_action_code => "cool, now wait until this shit works!")
+			# compute next move if AI game 
+			if _game_type == :h_vs_ai
+
+				# create AI turn
+				activate_next_turn!(_game_code)
+
+				# activate turn
+				turn_no, next_player, turn_status = activate_next_turn!(_game_code)
+
+				# pick move
+				_pick = play_turn_AI(_game_code, next_player)
+
+				# update server game state and extract delta
+				update_serverStates(_game_code, next_player, _pick)
+
+				# complete turn
+				complete_turn!(_game_code)
+						
+				# create & activate turn
+				activate_next_turn!(_game_code)
+				turn_no, next_player, turn_status = activate_next_turn!(_game_code)
+
+				# gen new game data for client
+				gen_new_clientPkg(_game_code, next_player)
+
+				# retrieve client package
+				_client_pkg = getLast_clientPkg(_game_code)
+
+				# retrieve states delta
+				_client_delta = getLast_clientDelta(_game_code)
+
+				# append delta to package for client
+				setindex!(_client_pkg, _client_delta, :delta)
+				
+				return _client_pkg
+			end
 		
 		end
 
@@ -2026,7 +2239,7 @@ function ws_msg_handler(ws, msg_parsed)
 	if msg_code == CODE_ask_new_game_AI
 
 		# generate new game
-		new_game_id = gen_newGame(true) # <- will generate and save game data
+		new_game_id = gen_newGame(true) # <- generate and save game data vs AI
 		new_game_data = getLast_clientPkg(new_game_id)
 
 		# reply to client
@@ -3296,17 +3509,21 @@ version = "1.4.1+0"
 # ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 # ╠═c334b67e-594f-49fc-8c11-be4ea11c33b5
 # ╠═f1949d12-86eb-4236-b887-b750916d3493
+# ╠═e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╟─61a0e2bf-2fed-4141-afc0-c8b5507679d1
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
+# ╠═1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╠═6075f560-e190-409b-8435-a7cf08ec1bc6
-# ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
-# ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
+# ╠═1f021cc5-edb0-4515-b8c9-6a2395bc9547
+# ╠═aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╠═8eab6d11-6d28-411d-bd82-7bec59b3f496
 # ╠═761fb8d7-0c7d-4428-ad48-707d219582c0
-# ╠═d9687cb9-e9c8-4739-aa33-8cdcad054cec
-# ╠═cf587261-6193-4e7a-a3e8-e24ba27929c7
+# ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
+# ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
+# ╠═9a08682a-6406-45d2-b655-9fe24a9158e5
+# ╠═d9077e87-df02-43c8-ae5c-0df75eeee846
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╟─466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
@@ -3318,18 +3535,21 @@ version = "1.4.1+0"
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
 # ╟─1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 # ╟─a89ad247-bde8-4912-a5c3-65a361e6942c
-# ╠═a2d0d733-345d-46a7-959b-69c3fac3eabe
-# ╠═b85d9d1c-213c-4330-9f1d-95823c3a9491
+# ╟─a2d0d733-345d-46a7-959b-69c3fac3eabe
+# ╟─b85d9d1c-213c-4330-9f1d-95823c3a9491
 # ╠═f479f1f8-d6fd-4e48-a0f3-447997bc0416
-# ╠═ebd8e962-2150-4ada-8ebd-3eba6e29c12e
+# ╟─ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 # ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
-# ╠═67322d28-5f9e-43da-90a0-2e517b003b58
-# ╠═f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
-# ╠═3c20926d-5e0f-43a7-a127-6b6f1e424418
+# ╟─67322d28-5f9e-43da-90a0-2e517b003b58
+# ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
+# ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
 # ╠═2bf729f5-d918-4965-b514-2a247fc9c760
 # ╠═7c0ea928-2cfc-472b-8320-e9420a498da8
+# ╠═388190e2-b017-40e6-9ec7-a984824a6f9a
 # ╠═b483f566-e454-4f56-9625-607e9d158237
-# ╠═063f76ac-7bfe-49bd-8a37-0ba8f260c325
+# ╠═8dfd18a5-4127-40d2-819c-f17da2d6453d
+# ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
+# ╠═14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 # ╠═a6f38ca6-99a9-4353-b820-0896b09b32f0
 # ╠═1d64e575-2efe-4c50-a07b-1cd722e7a755
 # ╠═3539b21d-4082-4b84-84dd-b736ea24978e
