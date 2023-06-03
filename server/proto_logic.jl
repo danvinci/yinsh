@@ -1528,7 +1528,7 @@ function gen_newGame(vs_ai=false)
 	black_ring = ring_id * black_id
 
 	# generate random game identifier
-	game_id = randstring(5)
+	game_id = randstring(6)
 
 	# pick the id of the originating vs joining player -> should be a setting
 	ORIG_player_id = rand([white_id, black_id]) 
@@ -1541,11 +1541,17 @@ function gen_newGame(vs_ai=false)
 	_game_state = gen_random_gameState(white_ring, black_ring)
 	
 	# retrieves location ids in client format 
-	whiteRings_ids_client = reshape_out(findall(i -> i == white_ring, _game_state))
-	blackRings_ids_client = reshape_out(findall(i -> i == black_ring, _game_state))
+	whiteRings_ids = reshape_out(findall(i -> i == white_ring, _game_state))
+	blackRings_ids = reshape_out(findall(i -> i == black_ring, _game_state))
+
+	white_rings = [Dict(:id => id, :player => white_id) for id in whiteRings_ids]
+	black_rings = [Dict(:id => id, :player => black_id) for id in blackRings_ids]
+
+	# prepare rings array to be sent to client
+	rings = union(white_rings, black_rings)
 
 
-	# simulates possible moves and outcomes for each
+	# simulates possible moves and scoring/flipping outcomes for each
 	scenario_tree = gen_scenarioTree(_game_state, next_movingPlayer)
 	
 	
@@ -1575,10 +1581,7 @@ function gen_newGame(vs_ai=false)
 		_cli_pkg = Dict(:game_id => game_id,
 							:orig_player_id => ORIG_player_id,
 							:join_player_id => JOIN_player_id,
-							:whiteRings_ids => whiteRings_ids_client,
-							:blackRings_ids => blackRings_ids_client,
-							:whiteMarkers_ids => [],
-							:blackMarkers_ids => [],
+							:rings => rings,
 							:scenarioTree => scenario_tree)
 
 		_first_turn = Dict(:status => :not_started,
@@ -1791,10 +1794,14 @@ function gen_new_clientPkg(game_id, moving_client_id)
 	_game_state = get_last_srv_gameState(game_id)
 	
 	# retrieves location ids in client format 
-	whiteRings_ids_client = reshape_out(findall(i -> i == white_ring, _game_state))
-	blackRings_ids_client = reshape_out(findall(i -> i == black_ring, _game_state))
-	whiteMarkers_ids_client = reshape_out(findall(i -> i == white_mk, _game_state))
-	blackMarkers_ids_client = reshape_out(findall(i -> i == black_mk, _game_state))
+	whiteRings_ids = reshape_out(findall(i -> i == white_ring, _game_state))
+	blackRings_ids = reshape_out(findall(i -> i == black_ring, _game_state))
+
+	white_rings = [Dict(:id => id, :player => white_id) for id in whiteRings_ids]
+	black_rings = [Dict(:id => id, :player => black_id) for id in blackRings_ids]
+
+	# prepare rings array to be sent to client
+	rings = union(white_rings, black_rings)
 
 
 	# simulates possible moves and outcomes for each
@@ -1804,10 +1811,7 @@ function gen_new_clientPkg(game_id, moving_client_id)
 		
 	### package data for client
 	_cli_pkg = Dict(:game_id => game_id,
-					:whiteRings_ids => whiteRings_ids_client,
-					:blackRings_ids => blackRings_ids_client,
-					:whiteMarkers_ids => whiteMarkers_ids_client,
-					:blackMarkers_ids => blackMarkers_ids_client,
+					:rings => rings,
 					:scenarioTree => scenario_tree,
 					:next_action_code => "move") # client is next moving
 					# later we should address cases of double scoring
@@ -1882,9 +1886,6 @@ reshape_out(findall(i -> i == "MB", get_last_srv_gameState("8Hil3")))
 # ╔═╡ b483f566-e454-4f56-9625-607e9d158237
 print_gameState(get_last_srv_gameState("SopiI"))
 
-# ╔═╡ 8dfd18a5-4127-40d2-819c-f17da2d6453d
-
-
 # ╔═╡ 14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 function scenario_choice(_tree::Dict)
 	# value function for picking moves
@@ -1916,6 +1917,9 @@ function scenario_choice(_tree::Dict)
 	return _pick::Dict{Symbol, Int}
 
 end
+
+# ╔═╡ 8dfd18a5-4127-40d2-819c-f17da2d6453d
+_pick = scenario_choice(games_log_dict["SopiI"][])
 
 # ╔═╡ 6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 function play_turn_AI(game_code::String, _moving_player_id::String)

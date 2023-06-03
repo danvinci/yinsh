@@ -5,7 +5,7 @@
 // https://javascript.info/promise-basics
 
 
-import { save_first_server_response, get_game_id, get_player_id } from './data.js'
+import { save_first_server_response, save_next_server_response, get_game_id, get_player_id } from './data.js'
 
 const ws_port = 8090;
 const ip_address = "127.0.0.1"

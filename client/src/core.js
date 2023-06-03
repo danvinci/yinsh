@@ -4,7 +4,7 @@
 
 //////////// IMPORTS
 import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_whatNow} from './server.js'
-import { init_global_obj_params, init_empty_game_objects, init_new_game_data } from './data.js'
+import { init_global_obj_params, init_empty_game_objects, init_new_game_data, save_next_server_response } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
 import { turn_start, turn_end} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
@@ -22,11 +22,6 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
     core_et.addEventListener('srv_next_action', server_actions_handler, false);
 
 
-//////////// SLEEP UTIL
-
-    function sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
 
 //////////// FUNCTIONS FOR INITIALIZING GAMES (NEW or JOIN)
 
@@ -76,7 +71,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
             // initialize event listeners for canvas interaction
             init_interaction();
 
-        // log game ready (not really ready)
+        // log local game ready
         console.log(`LOG - Game setup time: ${Date.now() - request_start_time}ms`);
 
         // log game code (later should be in the UI)
@@ -100,11 +95,17 @@ export async function init_game_fromServer(originator = false, joiner = false, g
 
 //////////// EVENT HANDLERS FOR TURNS
 
-function server_actions_handler (event) {
+async function server_actions_handler (event) {
 
     const _next_action = event.detail.next_action_code;
 
     if (_next_action == 'move') {
+
+        // save server response data
+        save_next_server_response(event.detail);
+
+        // replay move by opponent (if we have delta data)
+        await replay_opponent_move()
 
         turn_start(); // -> start player's turn
 
@@ -120,6 +121,62 @@ function server_actions_handler (event) {
     };
 
 };
+
+
+//////////// UTILS
+
+async function replay_opponent_move(){
+
+    // do something only if we have delta data
+    // dispatch should be smarter
+    if (typeof yinsh.delta !== "undefined") {
+
+        console.log(`LOG - Replaying opponent's move`);
+        const replay_start_time = Date.now()
+
+        console.log(`LOG - Delta: `, yinsh.delta);
+
+        // add opponent's marker
+            const _marker_add_wait = 2000;
+            await sleep(_marker_add_wait);
+            const _added_mk_index = yinsh.delta.added_marker.cli_index
+            add_marker(_added_mk_index, true); // -> as opponent
+            refresh_canvas_state();
+
+
+        // moved ring -> animate -> data change -> draw -> play sound
+        // flipped markers -> 
+        // removed markers
+        // removed ring (scoring)
+
+        // total sleep time
+        const _tot_sleep_time = array_sum([_marker_add_wait])
+
+        // log replay done
+        console.log(`LOG - Move replay time: ${Date.now() - replay_start_time}ms`);
+        console.log(`LOG - Net move replay time: ${Date.now() - replay_start_time - _tot_sleep_time}ms`);
+
+
+    };
+
+};
+
+// useful for pauses during move replay
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function array_sum(input_array) {
+
+    let _running_sum = 0
+
+    for (const v of input_array) {
+
+        _running_sum = _running_sum + v
+    };
+
+    return _running_sum
+
+};
+
 
 //////////// EVENT HANDLERS FOR GAME MECHANICS
 
@@ -147,8 +204,8 @@ function ringPicked_handler (event) {
     // write start of the currently active move to a global variable
     update_current_move(true, picked_ring_loc_index);
 
-    // place marker in same location (it's assumed client player)
-    add_marker(picked_ring_loc);
+    // place marker in same location (it's assumed this player)
+    add_marker(picked_ring_loc_index);
 
     // initializes array of legal drop ids + visual cues for starting index
     // will read from current move to see which moves to consider
@@ -276,6 +333,11 @@ async function ringDrop_handler (event) {
         // NOTE: we could play specific sound 
     };
 };
+
+
+
+
+       
 
 
 
