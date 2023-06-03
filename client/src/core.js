@@ -5,7 +5,7 @@
 //////////// IMPORTS
 import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_whatNow} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_new_game_data, save_next_server_response } from './data.js'
-import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
+import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { turn_start, turn_end} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
@@ -107,6 +107,10 @@ async function server_actions_handler (event) {
         // replay move by opponent (if we have delta data)
         await replay_opponent_move()
 
+        // ensure new turn data is ready
+        // TODO NEXT
+        // -> reinit/redraw everything (final result shouldn't change)
+
         turn_start(); // -> start player's turn
 
         // from here on, it should go to the client turn manager
@@ -137,25 +141,39 @@ async function replay_opponent_move(){
         console.log(`LOG - Delta: `, yinsh.delta);
 
         // add opponent's marker
-            const _marker_add_wait = 2000;
+            const _marker_add_wait = 1250;
             await sleep(_marker_add_wait);
             const _added_mk_index = yinsh.delta.added_marker.cli_index
             add_marker(_added_mk_index, true); // -> as opponent
             refresh_canvas_state();
 
+        // move ring
+            const _ring_move_wait = 1250;
+            await sleep(_ring_move_wait);
+            await synthetic_ring_move(yinsh.delta.moved_ring);
+            ringDrop_play_sound(); 
+        
+        // flipped markers 
+            let _flip_wait = 0;
+            if (yinsh.delta.flip_flag == true) {
 
-        // moved ring -> animate -> data change -> draw -> play sound
-        // flipped markers -> 
-        // removed markers
+                _flip_wait = 100;
+                await sleep(_flip_wait);
+                flip_markers(yinsh.delta.markers_toFlip);
+                refresh_canvas_state();
+            };
+            
+
+        // removed markers (scoring)
         // removed ring (scoring)
 
         // total sleep time
-        const _tot_sleep_time = array_sum([_marker_add_wait])
+        const _tot_sleep_time = array_sum([_marker_add_wait, _ring_move_wait, _flip_wait])
+        const _tot_time = Date.now() - replay_start_time;
+        const _net_time = _tot_time - _tot_sleep_time
 
         // log replay done
-        console.log(`LOG - Move replay time: ${Date.now() - replay_start_time}ms`);
-        console.log(`LOG - Net move replay time: ${Date.now() - replay_start_time - _tot_sleep_time}ms`);
-
+        console.log(`LOG - Move replay time - Total: ${_tot_time}ms - Net: ${_net_time}ms`);
 
     };
 
@@ -164,6 +182,7 @@ async function replay_opponent_move(){
 // useful for pauses during move replay
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// used for summing ms paused
 function array_sum(input_array) {
 
     let _running_sum = 0
@@ -177,8 +196,75 @@ function array_sum(input_array) {
 
 };
 
+// move ring between start and end state
+async function synthetic_ring_move(moved_ring_details) {
 
-//////////// EVENT HANDLERS FOR GAME MECHANICS
+    // start/end indexes for moved ring
+    const _mr_start_index = moved_ring_details.cli_index_start;
+    const _mr_end_index = moved_ring_details.cli_index_end;
+    const _mr_player = moved_ring_details.player_id;
+
+    console.log(`LOG - Ring ${_mr_player} picked from index ${_mr_start_index}`);
+
+    // clean up game state for starting position
+    update_game_state(_mr_start_index, "");
+
+    // move ring to end of array (top for drawing)
+    const _mr_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == _mr_start_index);
+    reorder_rings(_mr_index_in_array);
+
+    // grab start/end (x,y) coordinates
+    const _drop_start = yinsh.objs.drop_zones.find(d => d.loc.index == _mr_start_index);
+    const _drop_end = yinsh.objs.drop_zones.find(d => d.loc.index == _mr_end_index);
+
+        const _x_start = _drop_start.loc.x;
+        const _y_start = _drop_start.loc.y;
+
+        const _x_end = _drop_end.loc.x;
+        const _y_end = _drop_end.loc.y;
+
+    // animate move via synthetic mouse event
+    const _steps = 25; 
+    let _progress = 0;
+
+    for(let i=1; i <= _steps; i++){ 
+
+        // compute cumulative integral for sin
+        // results in non-linear progress for having ease-in/out effect
+        if (i == _steps) { // force 100% as integral is very approximated
+            _progress = 1;
+        } else {
+            _progress += (Math.sin(Math.PI*((i)/_steps)) * Math.PI/_steps )/2;
+        };
+    
+        const _new_x = _x_start + _progress*(_x_end - _x_start);
+        const _new_y = _y_start + _progress*(_y_end - _y_start);
+
+        await sleep(20);
+
+        const synthetic_mouse_move = {x:_new_x, y:_new_y};
+        core_et.dispatchEvent(new CustomEvent('ring_moved', { detail: synthetic_mouse_move }));
+
+    };
+
+    // update dropping ring loc information 
+    updateLoc_last_ring(_drop_end.loc);
+
+    // retrieve ring and its index details
+    const dropping_ring = yinsh.objs.rings.at(-1); // last ring
+    const dropping_ring_loc_index = dropping_ring.loc.index;
+
+    // update game state
+    const gs_value = dropping_ring.type.concat(dropping_ring.player); // -> RB, RW
+    update_game_state(dropping_ring_loc_index, gs_value);
+
+    console.log(`LOG - Ring ${dropping_ring.player} moved to index ${dropping_ring_loc_index}`);
+
+};
+
+
+
+//////////// EVENT HANDLERS FOR LOCAL GAME MECHANICS
 
 // listens to ring picks and updates game state
 function ringPicked_handler (event) {
@@ -217,7 +303,6 @@ function ringPicked_handler (event) {
 };
 
 
-
 // listens to a ring being moved -> updates ring location & triggers re-draw
 function ringMoved_handler (event) {
 
@@ -249,20 +334,17 @@ async function ringDrop_handler (event) {
     // check if drop coordinates are valid -> drop rings
     if (_current_legal_drops.includes(snap_drop_loc.index)){
 
-        // the active ring is always last in the array
-        const index_dropping_ring_in_array = getIndex_last_ring();
+        // update ring loc information (last)
+        updateLoc_last_ring(snap_drop_loc);
 
-            // update ring loc information 
-            updateLoc_last_ring(snap_drop_loc);
-
-            // retrieve ring and its index details
-            const dropping_ring = yinsh.objs.rings[index_dropping_ring_in_array];
-            const dropping_ring_loc_index = dropping_ring.loc.index;
-        
-            // update game state
-            // if ring is dropped in same location, this automatically overrides the existing marker (MB/MW)
-            const gs_value = dropping_ring.type.concat(dropping_ring.player); // -> RB, RW
-            update_game_state(dropping_ring_loc_index, gs_value);
+        // retrieve ring and its index details (last)
+        const dropping_ring = yinsh.objs.rings.at(-1);
+        const dropping_ring_loc_index = dropping_ring.loc.index;
+    
+        // update game state
+        // if ring is dropped in same location, this automatically overrides the existing marker (MB/MW)
+        const gs_value = dropping_ring.type.concat(dropping_ring.player); // -> RB, RW
+        update_game_state(dropping_ring_loc_index, gs_value);
 
         // resets data for current move (move is complete/off), but let's save starting index first
         const start_move_index = yinsh.objs.current_move.start_index;
@@ -276,7 +358,7 @@ async function ringDrop_handler (event) {
         ringDrop_play_sound(); 
 
         // logging
-        console.log(`LOG - Ring ${dropping_ring.player} dropped at index ${dropping_ring_loc_index}`);
+        console.log(`LOG - Ring ${dropping_ring.player} moved to index ${dropping_ring_loc_index}`);
 
 
         ////// handle markers removal, flipping, and trigger score handling

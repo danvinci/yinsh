@@ -444,7 +444,7 @@ export function add_marker(loc_index, as_opponent = false){
     const _drop_zones = yinsh.objs.drop_zones;
 
     // get loc for matching drop zones at loc_index
-    const matching_drop = _drop_zones.filter(d => (d.loc.index == loc_index))[0];
+    const matching_drop = _drop_zones.find(d => (d.loc.index == loc_index));
 
     
     // instate new marker object 
@@ -496,14 +496,14 @@ export function remove_markers(mk_indexes_array){ // input is array of loc index
     
 
 // flips markers (swaps player for objects & updates game state)
-function flip_markers(mk_indexes_array){
+export function flip_markers(mk_indexes_array){
 
     // retrieve consts for player ids and marker type
     const _player_black_id = structuredClone(yinsh.constant_params.player_black_id);
     const _player_white_id = structuredClone(yinsh.constant_params.player_white_id);
 
     // retrieve array of markers and latest game_state
-    let _markers = structuredClone(yinsh.objs.markers);
+    let _markers = yinsh.objs.markers;
     let _game_state = structuredClone(yinsh.objs.game_state);
 
         // flips markers and logs change to game state
