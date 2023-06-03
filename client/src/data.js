@@ -159,9 +159,6 @@ export function save_first_server_response(srv_response_input, joiner=false){
         _server_response.whiteRings_ids = srv_response_input.whiteRings_ids; 
         _server_response.blackRings_ids = srv_response_input.blackRings_ids;
 
-        // next moving player
-        _server_response.next_movingPlayer = srv_response_input.next_movingPlayer;
-
         // pre-computed scenario tree for each possible move (except pick/drop in same location)
         _server_response.scenarioTree = srv_response_input.scenarioTree;
     
@@ -173,16 +170,25 @@ export function save_first_server_response(srv_response_input, joiner=false){
 
 };
 
-export function get_player_id () {
+export function turn_start(){
+   yinsh.objs.current_turn.in_progress = true;
+   console.log(`LOG - Turn started`);
+};
 
+export function turn_end(){
+   yinsh.objs.current_turn.in_progress = false;
+   console.log(`LOG - Turn completed`);
+};
+
+export function get_player_id () {
     return yinsh.server_data.client_player_id;
 };
 
 export function get_game_id () {
-
     return yinsh.server_data.game_id;
 };
 
+/*
 // starts local turn if the server says so, returns true/false
 export function try_start_local_turn(){
 
@@ -203,6 +209,8 @@ export function complete_local_turn(){
     yinsh.objs.current_turn.in_progress = false;
 
 };
+
+*/
 
 
 // initialize drop zones -> used to propagate location data to rings, markers, and visual cues

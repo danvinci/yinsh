@@ -1521,9 +1521,8 @@ function gen_newGame(vs_ai=false)
 						:orig_player_comms => [], 
 						:join_player_comms => [])
 		
-		# first game state and scenario tree
-		_srv_state = Dict(:server_gameState => _game_state,
-							:next_movingPlayer => next_movingPlayer)
+		# first game state (server format)
+		_srv_states = [_game_state]
 
 		
 		### package data for client
@@ -1534,7 +1533,6 @@ function gen_newGame(vs_ai=false)
 							:blackRings_ids => blackRings_ids_client,
 							:whiteMarkers_ids => [],
 							:blackMarkers_ids => [],
-							:next_movingPlayer => next_movingPlayer,
 							:scenarioTree => scenario_tree)
 
 		_first_turn = Dict(:status => :not_started,
@@ -1545,7 +1543,7 @@ function gen_newGame(vs_ai=false)
 		new_game_data = Dict(:identity => _identity,
 							:players => _players, 
 							:turns => Dict(:pointer => 1, :data => [_first_turn]),
-							:server_states => [_srv_state],
+							:server_states => _srv_states,
 							:client_pkgs => [_cli_pkg])
 
 	
@@ -1560,7 +1558,10 @@ function gen_newGame(vs_ai=false)
 end
 
 # ╔═╡ 8eab6d11-6d28-411d-bd82-7bec59b3f496
+# ╠═╡ disabled = true
+#=╠═╡
 gen_newGame()
+  ╠═╡ =#
 
 # ╔═╡ 761fb8d7-0c7d-4428-ad48-707d219582c0
 ## NEED FUNCTION TO HANDLE MESSAGES FROM CLIENT (NEXT MOVES), UPDATE STATE, SEND CHANGERS BACK TO OTHER PLAYER -> AND IDENTIFY OTHER PLAYER (HOW?)
@@ -1693,6 +1694,32 @@ function whos_player(game_code, player_id)
 
 end
 
+# ╔═╡ 67322d28-5f9e-43da-90a0-2e517b003b58
+swap_player_id(player_id) = ( player_id == "W") ? "B" : "W"
+
+# ╔═╡ f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
+get_last_srv_gameState(game_id) = games_log_dict[game_id][:server_states][end]
+
+# ╔═╡ f55bb88f-ecce-4c14-b9ac-4fc975c3592e
+function align_serverState(_game_code, _player_id, _client_scenario_pick)
+
+	# convert moves to server indexes
+	_start_index = reshape_in(_client_scenario_pick.start)
+	_end_index =  reshape_in(_client_scenario_pick.end)
+
+	# retrieve old game state and last moving
+	ex_game_state = get_last_srv_gameState(_game_code)
+
+	# get new game state
+	_new_gs, _, _ = gen_New_gameState(ex_game_state, _start_index, _end_index)
+
+	push!(games_log_dict[_game_code][:server_states], _new_gs)
+
+	println("LOG - Server game state updated")
+
+
+end
+
 # ╔═╡ 3c20926d-5e0f-43a7-a127-6b6f1e424418
 #=
 
@@ -1711,7 +1738,13 @@ determines next moving player
 =#
 
 # ╔═╡ 2bf729f5-d918-4965-b514-2a247fc9c760
-games_log_dict["TDh3I"]
+games_log_dict["xtNqr"]
+
+# ╔═╡ 7c0ea928-2cfc-472b-8320-e9420a498da8
+print_gameState(games_log_dict["xtNqr"][:server_states][end-1])
+
+# ╔═╡ b483f566-e454-4f56-9625-607e9d158237
+print_gameState(get_last_srv_gameState("xtNqr"))
 
 # ╔═╡ 063f76ac-7bfe-49bd-8a37-0ba8f260c325
 #=
@@ -1819,12 +1852,43 @@ function activate_next_turn!(game_code)
 		
 end
 
+# ╔═╡ 903e103c-ec53-423f-9fe1-99abea55c28d
+function complete_turn!(game_code)
+
+	# get more comfy handlers
+	_game = games_log_dict[game_code]
+	_turns = games_log_dict[game_code][:turns]
+	_pointer = games_log_dict[game_code][:turns][:pointer]
+	_status = games_log_dict[game_code][:turns][:data][_pointer][:status]
+	_player = games_log_dict[game_code][:turns][:data][_pointer][:moving_player]
+
+
+	# case: turn in progress -> mark as completed
+	if _status == :in_progress 
+
+		_new_status = :completed
+		_turns[:data][_pointer][:status] = _new_status
+
+		return _pointer, _turns[:data][_pointer][:moving_player], _new_status
+
+	# case: turn not_started or completed -> throw error
+	else
+		throw(error("ERROR: turn $_pointer in status $_status"))
+	end
+
+
+end
+
 # ╔═╡ f479f1f8-d6fd-4e48-a0f3-447997bc0416
 function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 
 	# get info from payload
 	_game_code = msg_parsed[:game_id]
 	_player_id = msg_parsed[:player_id]
+	_scenario_pick = msg_parsed[:scenario_pick]
+
+	# get game type info
+	_game_type = games_log_dict[_game_code][:identity][:game_type]
 
 	# is this the originator or joiner? -> log accordingly
 	who_msg = whos_player(_game_code, _player_id)
@@ -1835,50 +1899,76 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 	# log save action
 	println("LOG - Client msg logged - msg ID: $msg_id")
 
-	# update player status
-	update_player_status!(_game_code, _player_id)
+	###### -> this should run as a separate service with websockets pings
+		# update player status
+		update_player_status!(_game_code, _player_id)
+	
+		# update player turn data -> should set turn to completed
+		# TODO
+	
+		# everyone ready? -> check turns
+		_status_orig = games_log_dict[_game_code][:players][:orig_player_status]
+		_status_join = games_log_dict[_game_code][:players][:join_player_status]
 
-	# update player turn data -> should set turn to completed
-	# TODO
+	######
 
-	# everyone ready? -> check turns
-	_status_orig = games_log_dict[_game_code][:players][:orig_player_status]
-	_status_join = games_log_dict[_game_code][:players][:join_player_status]
 
-	# get game type info
-	_game_type = games_log_dict[_game_code][:identity][:game_type]
+	## understand what's going on in the game
+	_pointer = games_log_dict[_game_code][:turns][:pointer]
+	_status = games_log_dict[_game_code][:turns][:data][_pointer][:status]
 
-	if _status_orig == _status_join == :ready 
 
-		# get new turn -> no error handling, assumes last turn was completed
-		turn_no, next_player, turn_status = activate_next_turn!(_game_code)
+	#### handling first turn / game start
+	if _pointer == 1 && _status == :not_started 
 		
-		# start turn if status is not_started
-		if turn_status == :not_started
+		if _status_orig == _status_join == :ready 
+	
+			# activate turn
 			turn_no, next_player, turn_status = activate_next_turn!(_game_code)
+	
+			# who moves next?
+			who_moves = whos_player(_game_code, next_player)
+	
+			if who_msg == who_moves
+				
+				# -> make move
+				return Dict(:next_action_code => "move")
+	
+			elseif who_msg != who_moves
+	
+				# -> wait for opponent's move
+				return Dict(:next_action_code => "wait")
+	
+			end
+	
+		else
+			throw(error("ERROR - players not ready"))
 		end
-
-		# who moves next?
-		who_moves = whos_player(_game_code, next_player)
-
-	## here we're always responding to a single player
-	# -> pinging all players regardless should come at some point
-
-		if who_msg == who_moves
-			
-			# -> make move
-			return Dict(:next_action_code => "move")
-
-		elseif who_msg != who_moves
-
-			# -> wait for opponent's move
-			return Dict(:next_action_code => "wait")
-
-		end
-
-	else
-		throw(error("ERROR - players not ready"))
 	end
+
+
+	## handling following turns
+	if _pointer >= 1 && _status == :in_progress
+
+		# check information from player
+		if !(_scenario_pick == false)
+		
+			# complete turn
+			complete_turn!(_game_code)
+			
+			# update server game state
+			align_serverState(_game_code, _player_id, _scenario_pick)
+			
+			# compute next move
+			# reply back
+	
+			# -> wait for opponent's move
+			return Dict(:next_action_code => "cool, now wait until this shit works!")
+		
+		end
+
+	end
+
 
 end
 
@@ -2001,36 +2091,6 @@ end
 
 # ╔═╡ 31bea118-f628-4f98-bd25-4f0077f06538
 respawn_ws_server()
-
-# ╔═╡ 903e103c-ec53-423f-9fe1-99abea55c28d
-function complete_turn!(game_code)
-
-	# get more comfy handlers
-	_game = games_log_dict[game_code]
-	_turns = games_log_dict[game_code][:turns]
-	_pointer = games_log_dict[game_code][:turns][:pointer]
-	_status = games_log_dict[game_code][:turns][:data][_pointer][:status]
-	_player = games_log_dict[game_code][:turns][:data][_pointer][:moving_player]
-
-
-	# case: turn in progress -> mark as completed
-	if _status == :in_progress 
-
-		_new_status = :completed
-		_turns[:data][_pointer][:status] = _new_status
-
-		return _pointer, _turns[:data][_pointer][:moving_player], _new_status
-
-	# case: turn not_started or completed -> throw error
-	else
-		throw(error("ERROR: turn $_pointer in status $_status"))
-	end
-
-
-end
-
-# ╔═╡ f79d30b6-d913-4d37-801f-bac4a87ae2d0
-activate_next_turn!("9CtYr")
 
 # ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 function test_ws_client()
@@ -3214,9 +3274,9 @@ version = "1.4.1+0"
 # ╠═ccbf567a-8923-4343-a2ff-53d81f2b6361
 # ╟─a3ae2bfe-41ea-4fe1-870b-2ac35153da5d
 # ╠═1d811aa5-940b-4ddd-908d-e94fe3635a6a
-# ╠═003f670b-d3b1-4905-b105-67504f16ba19
+# ╟─003f670b-d3b1-4905-b105-67504f16ba19
 # ╠═2cee3e2b-5061-40f4-a205-94d80cfdc20b
-# ╠═a96a9a78-0aeb-4b00-8f3c-db61839deb5c
+# ╟─a96a9a78-0aeb-4b00-8f3c-db61839deb5c
 # ╠═f0e9e077-f435-4f4b-bd69-f495dfccec27
 # ╠═bf2dce8c-f026-40e3-89db-d72edb0b041c
 # ╠═33707130-7703-4aa0-84e6-23ab387c0c4d
@@ -3262,15 +3322,19 @@ version = "1.4.1+0"
 # ╠═b85d9d1c-213c-4330-9f1d-95823c3a9491
 # ╠═f479f1f8-d6fd-4e48-a0f3-447997bc0416
 # ╠═ebd8e962-2150-4ada-8ebd-3eba6e29c12e
+# ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
+# ╠═67322d28-5f9e-43da-90a0-2e517b003b58
+# ╠═f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╠═3c20926d-5e0f-43a7-a127-6b6f1e424418
 # ╠═2bf729f5-d918-4965-b514-2a247fc9c760
+# ╠═7c0ea928-2cfc-472b-8320-e9420a498da8
+# ╠═b483f566-e454-4f56-9625-607e9d158237
 # ╠═063f76ac-7bfe-49bd-8a37-0ba8f260c325
 # ╠═a6f38ca6-99a9-4353-b820-0896b09b32f0
 # ╠═1d64e575-2efe-4c50-a07b-1cd722e7a755
 # ╠═3539b21d-4082-4b84-84dd-b736ea24978e
 # ╠═5b4f9b35-0246-4813-9eb4-be8d28726f3f
 # ╠═903e103c-ec53-423f-9fe1-99abea55c28d
-# ╠═f79d30b6-d913-4d37-801f-bac4a87ae2d0
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 # ╠═664de69a-aaa6-4139-806b-b3d241bd7e40
 # ╠═bd16c53e-bd3e-4328-988d-857bab42f0e6

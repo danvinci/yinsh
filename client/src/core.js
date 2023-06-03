@@ -6,9 +6,9 @@
 import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_whatNow} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_new_game_data } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, remove_markers } from './data.js'
-import { try_start_local_turn, complete_local_turn} from './data.js' 
+import { turn_start, turn_end} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
-import { init_interaction } from './interaction.js'
+import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
 import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
 
 //////////// GLOBAL DEFINITIONS
@@ -86,10 +86,11 @@ export async function init_game_fromServer(originator = false, joiner = false, g
 
         if (next_action == 'move') {
 
+            turn_start(); // -> start player's turn
 
             // from here on, it should go to the client turn manager
-            canvas_interaction_flag = true; // enable interaction
-            console.log(`LOG - It's yout turn, make a move!`);
+            enableInteraction();
+            console.log(`LOG - It's yout turn, make a move!`); // -> this should go to the UI
 
         };
             
@@ -219,7 +220,7 @@ async function ringDrop_handler (event) {
              
             remove_markers([dropping_ring_loc_index]); // removes markers from their array and game state
         
-            // player's turn should continue // NOTE -> turns not handled yet
+            // player's turn should continue 
 
         // CASE: ring moved -> looking into scenarioTree to see what happens
         } else {
@@ -253,6 +254,13 @@ async function ringDrop_handler (event) {
         // MOVE COMPLETED (but turn might not be over yet)
         // redraw changes
         refresh_canvas_state(); 
+
+        turn_end(); // local turn ends
+
+        disableInteraction();
+
+        // -> notify server about completed move (next turn)
+        await server_ws_whatNow({start: start_move_index, end: dropping_ring_loc_index}); 
     
     } else{
 

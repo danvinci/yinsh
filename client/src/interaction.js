@@ -17,6 +17,10 @@ export function init_interaction(){
 
 };
 
+export const enableInteraction = () => {canvas_interaction_flag = true};
+export const disableInteraction = () => {canvas_interaction_flag = false};
+
+
 
 function mouseDown_handler (event) {
 

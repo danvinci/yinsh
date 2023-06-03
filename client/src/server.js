@@ -275,13 +275,13 @@ export async function server_ws_genNewGame_AI(){
 };
 
 // Send message asking the server what to do (wait or move?)
-export async function server_ws_whatNow(){
+export async function server_ws_whatNow(scenario_pick = false){
     
     try {
 
         // prepare message payload
         const msg_code = 'what_now';
-        const payload = {msg_code: msg_code, game_id: get_game_id(), player_id: get_player_id()};
+        const payload = {msg_code: msg_code, game_id: get_game_id(), player_id: get_player_id(), scenario_pick: scenario_pick};
 
         // package message, log it, send it
         const [msg_time, msg_id] = fwd_outbound(payload)
@@ -314,6 +314,7 @@ export async function server_ws_whatNow(){
 
     };
 };
+
 
 ///// UNIFY CALLS TO SERVER INTO SINGLE FUNCTION - WORK WITH CODES/DATA FROM CORE (?)
 
