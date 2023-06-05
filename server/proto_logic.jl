@@ -1582,6 +1582,7 @@ function gen_newGame(vs_ai=false)
 							:orig_player_id => ORIG_player_id,
 							:join_player_id => JOIN_player_id,
 							:rings => rings,
+							# no markers yet
 							:scenarioTree => scenario_tree)
 
 		_first_turn = Dict(:status => :not_started,
@@ -1784,25 +1785,38 @@ function gen_new_clientPkg(game_id, moving_client_id)
 
 	white_ring = ring_id * white_id
 	black_ring = ring_id * black_id
-	black_mk = marker_id * black_id
+	
 	white_mk = marker_id * white_id
-
+	black_mk = marker_id * black_id
+	
 	# set next moving player -> should be a setting (for now always white)
 	next_movingPlayer = moving_client_id 
 
 	# retrieve latest game state (server format)
 	_game_state = get_last_srv_gameState(game_id)
+
+	## RINGS
+		# retrieves location ids in client format 
+		whiteRings_ids = reshape_out(findall(i -> i == white_ring, _game_state))
+		blackRings_ids = reshape_out(findall(i -> i == black_ring, _game_state))
 	
-	# retrieves location ids in client format 
-	whiteRings_ids = reshape_out(findall(i -> i == white_ring, _game_state))
-	blackRings_ids = reshape_out(findall(i -> i == black_ring, _game_state))
+		white_rings = [Dict(:id => id, :player => white_id) for id in whiteRings_ids]
+		black_rings = [Dict(:id => id, :player => black_id) for id in blackRings_ids]
+	
+		# prepare rings array to be sent to client
+		rings = union(white_rings, black_rings)
 
-	white_rings = [Dict(:id => id, :player => white_id) for id in whiteRings_ids]
-	black_rings = [Dict(:id => id, :player => black_id) for id in blackRings_ids]
-
-	# prepare rings array to be sent to client
-	rings = union(white_rings, black_rings)
-
+	## MARKERS
+		# retrieves location ids in client format 
+		whiteMarkers_ids = reshape_out(findall(i -> i == white_mk, _game_state))
+		blackMarkers_ids = reshape_out(findall(i -> i == black_mk, _game_state))
+	
+		whiteMks = [Dict(:id => id, :player => white_id) for id in whiteMarkers_ids]
+		blackMks = [Dict(:id => id, :player => black_id) for id in blackMarkers_ids]
+	
+		# prepare markers array to be sent to client
+		markers = union(whiteMks, blackMks)
+	
 
 	# simulates possible moves and outcomes for each
 	scenario_tree = gen_scenarioTree(_game_state, next_movingPlayer)
@@ -1812,6 +1826,7 @@ function gen_new_clientPkg(game_id, moving_client_id)
 	### package data for client
 	_cli_pkg = Dict(:game_id => game_id,
 					:rings => rings,
+					:markers => markers,
 					:scenarioTree => scenario_tree,
 					:next_action_code => "move") # client is next moving
 					# later we should address cases of double scoring
@@ -2116,9 +2131,12 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 			who_moves = whos_player(_game_code, next_player)
 	
 			if who_msg == who_moves
+
+				_cli_response = Dict(:next_action_code => "move",
+									:turn_no => turn_no)
 				
 				# -> make move
-				return Dict(:next_action_code => "move")
+				return _cli_response
 	
 			elseif who_msg != who_moves
 	
@@ -2176,8 +2194,12 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 				# retrieve states delta
 				_client_delta = getLast_clientDelta(_game_code)
 
-				# append delta to package for client
-				setindex!(_client_pkg, _client_delta, :delta)
+					# append delta to package for client
+					setindex!(_client_pkg, _client_delta, :delta)
+	
+					# add info on turn_no
+					setindex!(_client_pkg, turn_no, :turn_no)
+				
 				
 				return _client_pkg
 			end

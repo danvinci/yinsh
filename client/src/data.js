@@ -178,13 +178,11 @@ export function save_next_server_response(srv_response_input){
     // init temporary object
     const _server_response = {};
         
-        // new rings locations
-        _server_response.whiteMarkers_ids = srv_response_input.whiteMarkers_ids; 
-        _server_response.blackRings_ids = srv_response_input.blackRings_ids;
+        // rings update
+        _server_response.rings = srv_response_input.rings; 
 
-        // new markers locations
-        _server_response.whiteRings_ids = srv_response_input.whiteRings_ids; 
-        _server_response.blackMarkers_ids = srv_response_input.blackMarkers_ids; 
+        // markers update
+        _server_response.markers = srv_response_input.markers; 
 
         // pre-computed scenario tree for each possible move (except pick/drop in same location)
         _server_response.scenarioTree = srv_response_input.scenarioTree;
@@ -207,6 +205,31 @@ export function save_next_server_response(srv_response_input){
 };
 
 
+// updates rings, markers, and scenario tree so to match data for next turn
+export function swap_data_next_turn() {
+
+    // rings
+    yinsh.server_data.rings = structuredClone(yinsh.next_server_data.rings);
+
+    // markers
+    yinsh.server_data.markers = structuredClone(yinsh.next_server_data.markers);
+
+    // tree
+    yinsh.server_data.scenarioTree = structuredClone(yinsh.next_server_data.scenarioTree);
+
+
+    console.log('LOG - Data ready for next turn');
+
+};
+
+export function update_objects_next_turn(){
+
+    init_rings();
+
+    init_markers();
+
+
+};
 
 
 export function turn_start(){
@@ -372,6 +395,55 @@ function init_rings(){
     yinsh.objs.rings = structuredClone(_rings_array);
     
     console.log('LOG - Rings initialized & game state updated');
+
+};
+
+// initializes markers (only called after 1st+ turn)
+function init_markers(){
+
+    // initial locations of rings from server
+    const server_markers = yinsh.server_data.markers; 
+
+    // constants used in logic
+    const marker_id = yinsh.constant_params.marker_id;
+
+    // init temporary rings array
+    let _markers_array = [];
+    // retrieve game state
+    let _game_state = yinsh.objs.game_state;
+
+    // retrieve drop_zones
+    const _drop_zones = yinsh.objs.drop_zones;
+    
+    // INITIALIZE RINGS
+    // loop and match rings over drop zones
+    for (const d_zone of _drop_zones) {
+        for (const s_marker of server_markers) {
+
+            if (s_marker.id == d_zone.loc.index){
+
+            // create ring object
+            const marker = {  path: {}, //  will hold the path, filled in by drawing function
+                            loc: structuredClone(d_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
+                            type: marker_id, 
+                            player: s_marker.player
+                        };            
+
+            // add to temporary array
+            _markers_array.push(marker); 
+                
+            // update game state
+            _game_state[marker.loc.index] = marker.type.concat(marker.player); // -> RB, RW at index
+            
+            };
+        };
+    };
+
+    // save rings, updated game state, and log
+    yinsh.objs.game_state = structuredClone(_game_state);
+    yinsh.objs.markers = structuredClone(_markers_array);
+    
+    console.log('LOG - Markers initialized & game state updated');
 
 };
 

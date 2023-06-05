@@ -6,7 +6,7 @@
 import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_whatNow} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_new_game_data, save_next_server_response } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
-import { turn_start, turn_end} from './data.js' 
+import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
 import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
@@ -78,7 +78,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         console.log(`LOG - Your game code is: ${yinsh.server_data.game_id}`);
 
         // ask server what to do -> it will emit event on response
-        server_ws_whatNow();
+        await server_ws_whatNow();
 
     } catch (err){
 
@@ -107,15 +107,16 @@ async function server_actions_handler (event) {
         // replay move by opponent (if we have delta data)
         await replay_opponent_move()
 
-        // ensure new turn data is ready
-        // TODO NEXT
-        // -> reinit/redraw everything (final result shouldn't change)
+        // handle scoring by opponent if necessary (multiple rows too) :|
+        
+        // prepare data, objects, and canvas for next turn
+        prep_next_turn(event.detail.turn_no);
 
         turn_start(); // -> start player's turn
 
         // from here on, it should go to the client turn manager
         enableInteraction();
-        console.log(`LOG - It's yout turn, make a move!`); // -> this should go to the UI
+        console.log(`LOG - It's yout turn, make a move! - Turn [${event.detail.turn_no}]`); // -> this should go to the UI
 
     } else if (_next_action == 'wait') {
 
@@ -147,10 +148,10 @@ async function replay_opponent_move(){
             add_marker(_added_mk_index, true); // -> as opponent
             refresh_canvas_state();
 
-        // move ring
+        // move and drop ring
             const _ring_move_wait = 1250;
             await sleep(_ring_move_wait);
-            await synthetic_ring_move(yinsh.delta.moved_ring);
+            await synthetic_ring_move_drop(yinsh.delta.moved_ring);
             ringDrop_play_sound(); 
         
         // flipped markers 
@@ -179,6 +180,21 @@ async function replay_opponent_move(){
 
 };
 
+// update current/next data -> reinit/redraw everything (on-canvas nothing should change)
+function prep_next_turn(_turn_no){
+
+    // do something only for turns no 1+ (calling function is checking we are moving)
+    if (_turn_no > 1) {
+
+        swap_data_next_turn(); // -> takes data from next
+        update_objects_next_turn(); // -> update objcts
+        refresh_canvas_state(); 
+
+    };
+};
+
+ 
+
 // useful for pauses during move replay
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -197,7 +213,7 @@ function array_sum(input_array) {
 };
 
 // move ring between start and end state
-async function synthetic_ring_move(moved_ring_details) {
+async function synthetic_ring_move_drop(moved_ring_details) {
 
     // start/end indexes for moved ring
     const _mr_start_index = moved_ring_details.cli_index_start;
@@ -224,7 +240,7 @@ async function synthetic_ring_move(moved_ring_details) {
         const _y_end = _drop_end.loc.y;
 
     // animate move via synthetic mouse event
-    const _steps = 25; 
+    const _steps = 20; 
     let _progress = 0;
 
     for(let i=1; i <= _steps; i++){ 
