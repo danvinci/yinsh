@@ -101,22 +101,21 @@ async function server_actions_handler (event) {
 
     if (_next_action == 'move') {
 
-        // save server response data
-        save_next_server_response(event.detail);
-
         // replay move by opponent (if we have delta data)
-        await replay_opponent_move()
+        await replay_opponent_move();
 
         // handle scoring by opponent if necessary (multiple rows too) :|
-        
+        // TODO
+
         // prepare data, objects, and canvas for next turn
         prep_next_turn(event.detail.turn_no);
 
-        turn_start(); // -> start player's turn
+        // -> start player's turn
+        turn_start(); 
 
         // from here on, it should go to the client turn manager
         enableInteraction();
-        console.log(`LOG - It's yout turn, make a move! - Turn [${event.detail.turn_no}]`); // -> this should go to the UI
+        console.log(`LOG - It's yout turn, make a move! - # ${event.detail.turn_no}`); // -> this should go to the UI
 
     } else if (_next_action == 'wait') {
 
@@ -137,19 +136,19 @@ async function replay_opponent_move(){
     if (typeof yinsh.delta !== "undefined") {
 
         console.log(`LOG - Replaying opponent's move`);
-        const replay_start_time = Date.now()
+        const replay_start_time = Date.now();
 
         console.log(`LOG - Delta: `, yinsh.delta);
 
         // add opponent's marker
-            const _marker_add_wait = 1250;
+            const _marker_add_wait = 1000;
             await sleep(_marker_add_wait);
-            const _added_mk_index = yinsh.delta.added_marker.cli_index
+            const _added_mk_index = yinsh.delta.added_marker.cli_index;
             add_marker(_added_mk_index, true); // -> as opponent
             refresh_canvas_state();
 
         // move and drop ring
-            const _ring_move_wait = 1250;
+            const _ring_move_wait = 1000;
             await sleep(_ring_move_wait);
             await synthetic_ring_move_drop(yinsh.delta.moved_ring);
             ringDrop_play_sound(); 
@@ -183,7 +182,7 @@ async function replay_opponent_move(){
 // update current/next data -> reinit/redraw everything (on-canvas nothing should change)
 function prep_next_turn(_turn_no){
 
-    // do something only for turns no 1+ (calling function is checking we are moving)
+    // do something only for turns no 1+ (no delta data at turn 1)
     if (_turn_no > 1) {
 
         swap_data_next_turn(); // -> takes data from next
@@ -240,7 +239,7 @@ async function synthetic_ring_move_drop(moved_ring_details) {
         const _y_end = _drop_end.loc.y;
 
     // animate move via synthetic mouse event
-    const _steps = 20; 
+    const _steps = 30; 
     let _progress = 0;
 
     for(let i=1; i <= _steps; i++){ 
@@ -256,7 +255,7 @@ async function synthetic_ring_move_drop(moved_ring_details) {
         const _new_x = _x_start + _progress*(_x_end - _x_start);
         const _new_y = _y_start + _progress*(_y_end - _y_start);
 
-        await sleep(20);
+        await sleep(15);
 
         const synthetic_mouse_move = {x:_new_x, y:_new_y};
         core_et.dispatchEvent(new CustomEvent('ring_moved', { detail: synthetic_mouse_move }));
@@ -392,16 +391,14 @@ async function ringDrop_handler (event) {
             const move_scenario = yinsh.server_data.scenarioTree[start_move_index][dropping_ring_loc_index];
             console.log(move_scenario);
 
-            /////////////////////////////////// -> refactoring progress
             // CASE: some markers must be flipped
             if (move_scenario.flip_flag == true){
-                // update drawing objects
-                console.log("UNHANDLED - MARKERS FLIP");
-                //flip_markers(srv_mk_resp.markers_toFlip);
-
-                // update game state
-                //flip_markers_game_state(srv_mk_resp.markers_toFlip)
+                // flip and re-draw
+                flip_markers(move_scenario.markers_toFlip);
+                refresh_canvas_state(); 
             };
+
+            /////////////////////////////////// -> refactoring progress
 
             // CASE: scoring was made -> score handling is triggered
             if (move_scenario.score_flag == true){
@@ -415,7 +412,7 @@ async function ringDrop_handler (event) {
         };
 
         // MOVE COMPLETED (but turn might not be over yet)
-        // redraw changes
+        // draw any changes
         refresh_canvas_state(); 
 
         turn_end(); // local turn ends

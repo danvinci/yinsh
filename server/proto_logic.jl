@@ -1421,15 +1421,15 @@ function gen_scenarioTree(ex_game_state, next_movingPlayer)
 # scenario tree to be returned
 scenario_tree = Dict()
 
-# add summary to tree
+# add summary to tree (only relevant for moving player)
 summary = Dict(:global_score_flag => false, 
 				:global_flip_flag => false,
 				:scoring_moves => [],
 				:flipping_moves => [])
 setindex!(scenario_tree, summary, :summary)
 
-# find all rings for next moving player on the board
-rings_locs = findall(i -> contains(i, next_movingPlayer), ex_game_state)
+# find all rings for next moving player on the board (should use IDs)
+rings_locs = findall(i -> isequal(i, "R"*next_movingPlayer), ex_game_state)
 
 # find legal moves for next moving player
 next_legalMoves = Dict()
@@ -1655,7 +1655,10 @@ function getLast_clientDelta(game_id)
 end
 
 # ╔═╡ 9a08682a-6406-45d2-b655-9fe24a9158e5
-games_log_dict["Ij6AV"]
+games_log_dict["oOSYvY"]
+
+# ╔═╡ 1344591a-7da8-4ed9-925e-b0a797924c11
+
 
 # ╔═╡ d9077e87-df02-43c8-ae5c-0df75eeee846
 getLast_clientDelta("Ij6AV")
@@ -1890,21 +1893,31 @@ function get_last_moving_player(game_code)
 end
 
 # ╔═╡ 2bf729f5-d918-4965-b514-2a247fc9c760
-games_log_dict["yNHKU"]
+games_log_dict["sBb2kb"]
+
+# ╔═╡ 123398e8-a4ab-4cc5-8347-72e9c8ac7051
+print_gameState(games_log_dict["sBb2kb"][:server_states][1])
 
 # ╔═╡ 7c0ea928-2cfc-472b-8320-e9420a498da8
-print_gameState(games_log_dict["SopiI"][:server_states][end-1])
+print_gameState(games_log_dict["sBb2kb"][:server_states][2])
 
-# ╔═╡ 388190e2-b017-40e6-9ec7-a984824a6f9a
-reshape_out(findall(i -> i == "MB", get_last_srv_gameState("8Hil3")))
+# ╔═╡ c9b59bd2-3703-4f26-a53f-bb2e8336e120
+print_gameState(games_log_dict["sBb2kb"][:server_states][3])
 
-# ╔═╡ b483f566-e454-4f56-9625-607e9d158237
-print_gameState(get_last_srv_gameState("SopiI"))
+# ╔═╡ f5ca3d2b-6486-4a10-b09b-5cac60144afa
+print_gameState(games_log_dict["sBb2kb"][:server_states][4])
+
+# ╔═╡ 8bcb902a-d540-4718-a4c5-1db66d82601f
+print_gameState(games_log_dict["sBb2kb"][:server_states][5])
+
+# ╔═╡ b7904c00-035c-44cb-b258-10c5c2e6cee0
+ gen_scenarioTree(games_log_dict["sBb2kb"][:server_states][4], "B")
 
 # ╔═╡ 14aa5b7c-9065-4ca3-b0e9-19c104b1854d
-function scenario_choice(_tree::Dict)
+function scenario_choice(_tree::Dict, ai_moving_player_id::String)
 	# value function for picking moves
 	# works with depth-1 game scenario trees
+	# important to pass id of player so that it picks with more context
 
 	# retrieve summary function
 	global_score_flag = _tree[:summary][:global_score_flag]
@@ -1933,46 +1946,25 @@ function scenario_choice(_tree::Dict)
 
 end
 
-# ╔═╡ 8dfd18a5-4127-40d2-819c-f17da2d6453d
-_pick = scenario_choice(games_log_dict["SopiI"][])
-
 # ╔═╡ 6a174abd-c9bc-4c3c-93f0-05a7d70db4af
-function play_turn_AI(game_code::String, _moving_player_id::String)
+function play_turn_AI(game_code::String, ai_moving_player_id::String)
 
 	# get last game state and id of moving player
 	# assumes turns are updated and moving player is AI
 	_ex_game_state = get_last_srv_gameState(game_code)
 
 	# generate scenarios
-	_scenarios = gen_scenarioTree(_ex_game_state, _moving_player_id)
+	_scenarios = gen_scenarioTree(_ex_game_state, ai_moving_player_id)
 
 	# make choice
-	_pick = scenario_choice(_scenarios)
+	_pick = scenario_choice(_scenarios, ai_moving_player_id)
 
 	return _pick
 
 end
 
-# ╔═╡ a6f38ca6-99a9-4353-b820-0896b09b32f0
-#=
-
-	- get client response
-	- update server game state
-	- trigger AI
-		- generate new scenarios
-		- pick action
-		- complete move/turn
-	- reply to client
-	- have client show results
-	- repeat turn client-wise
-
-
-=#
-
-# ╔═╡ 1d64e575-2efe-4c50-a07b-1cd722e7a755
-# update players status
-# activate game
-# trigger first turn
+# ╔═╡ 8dfd18a5-4127-40d2-819c-f17da2d6453d
+play_turn_AI("sBb2kb", "B")
 
 # ╔═╡ 3539b21d-4082-4b84-84dd-b736ea24978e
 function update_player_status!(game_code, player_id)
@@ -2157,10 +2149,10 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 		# check information from player
 		if !(_scenario_pick == false)
 		
-			# update server game state
+			# update server game state (with client move)
 			update_serverStates(_game_code, _player_id, _scenario_pick)
 
-			# complete turn
+			# complete turn (for client)
 			complete_turn!(_game_code)
 			
 			# compute next move if AI game 
@@ -2169,19 +2161,19 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 				# create AI turn
 				activate_next_turn!(_game_code)
 
-				# activate turn
+				# activate AI turn
 				turn_no, next_player, turn_status = activate_next_turn!(_game_code)
 
 				# pick move
 				_pick = play_turn_AI(_game_code, next_player)
 
-				# update server game state and extract delta
+				# update server game state and extract delta (from AI move)
 				update_serverStates(_game_code, next_player, _pick)
 
-				# complete turn
+				# complete AI turn
 				complete_turn!(_game_code)
 						
-				# create & activate turn
+				# create & activate turn (client)
 				activate_next_turn!(_game_code)
 				turn_no, next_player, turn_status = activate_next_turn!(_game_code)
 
@@ -3549,6 +3541,7 @@ version = "1.4.1+0"
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
 # ╠═9a08682a-6406-45d2-b655-9fe24a9158e5
+# ╠═1344591a-7da8-4ed9-925e-b0a797924c11
 # ╠═d9077e87-df02-43c8-ae5c-0df75eeee846
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╟─466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
@@ -3570,14 +3563,15 @@ version = "1.4.1+0"
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
 # ╠═2bf729f5-d918-4965-b514-2a247fc9c760
+# ╠═123398e8-a4ab-4cc5-8347-72e9c8ac7051
 # ╠═7c0ea928-2cfc-472b-8320-e9420a498da8
-# ╠═388190e2-b017-40e6-9ec7-a984824a6f9a
-# ╠═b483f566-e454-4f56-9625-607e9d158237
+# ╠═c9b59bd2-3703-4f26-a53f-bb2e8336e120
+# ╠═f5ca3d2b-6486-4a10-b09b-5cac60144afa
+# ╠═8bcb902a-d540-4718-a4c5-1db66d82601f
+# ╠═b7904c00-035c-44cb-b258-10c5c2e6cee0
 # ╠═8dfd18a5-4127-40d2-819c-f17da2d6453d
 # ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 # ╠═14aa5b7c-9065-4ca3-b0e9-19c104b1854d
-# ╠═a6f38ca6-99a9-4353-b820-0896b09b32f0
-# ╠═1d64e575-2efe-4c50-a07b-1cd722e7a755
 # ╠═3539b21d-4082-4b84-84dd-b736ea24978e
 # ╠═5b4f9b35-0246-4813-9eb4-be8d28726f3f
 # ╠═903e103c-ec53-423f-9fe1-99abea55c28d

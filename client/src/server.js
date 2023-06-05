@@ -300,6 +300,9 @@ export async function server_ws_whatNow(scenario_pick = false){
             console.log(`LOG - Server response:`, srv_response);
             console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
 
+             // save server response data
+            save_next_server_response(srv_response);
+
             // dispatch event for core game logic
             core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: srv_response }));
 

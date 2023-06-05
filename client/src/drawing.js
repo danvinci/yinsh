@@ -5,7 +5,7 @@ export function refresh_canvas_state(){
 
     // https://docs.solidjs.com/references/api-reference/lifecycles/onMount
 
-    const painting_start_time = Date.now()
+    //const painting_start_time = Date.now()
 
     try {
         // clear canvas (assumes canvas already binded)
@@ -28,7 +28,7 @@ export function refresh_canvas_state(){
         draw_markers_halos();
 
         // logging time 
-        console.log(`LOG - Drawing time: ${Date.now() - painting_start_time}ms`);
+        //console.log(`LOG - Drawing time: ${Date.now() - painting_start_time}ms`);
 
     } catch(err) {
 

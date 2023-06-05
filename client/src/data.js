@@ -190,17 +190,12 @@ export function save_next_server_response(srv_response_input){
     // save to global obj and log
     yinsh.next_server_data = structuredClone(_server_response);
 
-    if (Object.keys(srv_response_input).includes('delta')) {
+    // save delta data if present
+    const has_delta = Object.keys(srv_response_input).includes('delta');
+    yinsh.delta = has_delta ? structuredClone(srv_response_input.delta) : undefined;
 
-        yinsh.delta = structuredClone(srv_response_input.delta);
 
-    } else {
-
-        yinsh.delta = undefined;
-
-    };
-
-    console.log('LOG - Next server response saved');
+    console.log('LOG - Next turn data from server saved');
     
 };
 
