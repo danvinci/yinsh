@@ -40,13 +40,10 @@ function mouseDown_handler (event) {
         // If not, check which ring is being picked and send event to core_et
         if (move_in_progress == false){
 
-            // check all the rings and dispatch event to core logic if found for current player
-            for (const [ring_index, ring] of yinsh.objs.rings.entries()) {
-                if (ring.player == player_id && ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)){
-
-                    core_et.dispatchEvent(new CustomEvent('ring_picked', { detail: ring_index }));
-                    break; // breaks looping
-                };
+            // check all the rings and dispatch event to core logic if match found for local player
+            const picked_ring_index = yinsh.objs.rings.findIndex((ring) => (ring.player == player_id && ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)));
+            if (picked_ring_index != -1) {
+                core_et.dispatchEvent(new CustomEvent('ring_picked', { detail: picked_ring_index }));
             };
 
         // move in progress -> ring is being dropped -> checking is there's a nearby drop zone
@@ -174,24 +171,14 @@ function getMousePos(canvasBinding, mouseEvent) {
 // function to return location object of closest drop zone (if xp,yp are within drop zone )
 function drop_snap(xp, yp){
 
-    let snap_found = false;
-    let loc_to_return = {};
-
     // test which drop zone the mouse is closest to -> return loc of drop_zone
-    for (const d_zone of yinsh.objs.drop_zones){
-        if (ctx.isPointInPath(d_zone.path, xp, yp)){
-            loc_to_return = structuredClone(d_zone.loc); 
-            snap_found = true;
-            break;
-        };
-    };
-
-    if (snap_found == false) {
-        throw new Error("LOG - Close snap not found");
+    const snap_d_zone = yinsh.objs.drop_zones.find((d_zone) => (ctx.isPointInPath(d_zone.path, xp, yp)));
+    
+    if (typeof snap_d_zone !== "undefined") {
+        return structuredClone(snap_d_zone.loc);
     } else {
-        return loc_to_return;
+        throw new Error("LOG - Close snap not found");
     };
-
 };
 
 
