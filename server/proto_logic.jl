@@ -1792,7 +1792,7 @@ function gen_new_clientPkg(game_id, moving_client_id)
 	white_mk = marker_id * white_id
 	black_mk = marker_id * black_id
 	
-	# set next moving player -> should be a setting (for now always white)
+	# set next moving player (invoking function knows who's turn is it)
 	next_movingPlayer = moving_client_id 
 
 	# retrieve latest game state (server format)
@@ -2131,6 +2131,8 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 				return _cli_response
 	
 			elseif who_msg != who_moves
+
+			 	# AI should play turn 
 	
 				# -> wait for opponent's move
 				return Dict(:next_action_code => "wait")
@@ -2458,7 +2460,7 @@ StatsBase = "~0.33.21"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.0"
+julia_version = "1.9.1"
 manifest_format = "2.0"
 project_hash = "3e07a06d64e538a955daef45d305f17ecaae42b8"
 
@@ -3422,7 +3424,7 @@ version = "0.15.1+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.7.0+0"
+version = "5.8.0+0"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]

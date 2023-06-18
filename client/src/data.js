@@ -124,13 +124,9 @@ export function init_empty_game_objects(){
         _game_objects.current_move = {in_progress: false, start_index: 0, legal_drops: []}; // -> details for move currently in progress 
         _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal drops ids)
         
-        _game_objects.current_score_handling = {in_progress: false};; // tracking if score handling is in progress
-        _game_objects.markers_halos = []; // -> halos around markers when scoring
-
-            // NOTE: revisit if these are necessary, or if temp values within functions are enough
-            // score handling
-            _game_objects.mk_sel_scoring = {ids:[], hot:false}; // -> tracking IDs of markers/halos that can be selected for finalizing the score
-            _game_objects.score_handling_var = {in_progress: false, mk_sel_array: [], num_rows: {}, details: []}; // // -> object with all scoring information, used for handling scoring scenarios
+        _game_objects.current_score_handling = {in_progress: false, task_ref: {}}; // tracking if score handling is in progress
+        _game_objects.scoring_options = []; // keeping info on scoring options
+        _game_objects.mk_halos = []; // -> halos objects
 
 
     // save to global obj and log
@@ -217,13 +213,46 @@ export function swap_data_next_turn() {
 
 };
 
+export function update_scoring_data(scoring_task = undefined){
+    
+    if (typeof scoring_task === 'undefined') { // we don't pass anything -> wipe all 
+
+        yinsh.objs.current_score_handling.in_progress = false; 
+        yinsh.objs.current_score_handling.task_ref = {};
+
+    } else { // log progress
+
+        yinsh.objs.current_score_handling.in_progress = true; // score handling is in progress
+        yinsh.objs.current_score_handling.task_ref = scoring_task;
+    };
+
+};
+
+
+export function get_move_status(){
+
+    return yinsh.objs.current_move.in_progress;
+};
+
+export function get_scoring_status(){
+
+    return yinsh.objs.current_score_handling.in_progress;
+};
+
+export function get_scoring_options(){
+
+    return structuredClone(yinsh.objs.current_score_handling.task_ref.task_data);
+};
+
+export function complete_score_handling_task(){
+
+    yinsh.objs.current_score_handling.task_ref.resolve();
+};
+
 export function update_objects_next_turn(){
 
     init_rings();
-
     init_markers();
-
-
 };
 
 
@@ -665,6 +694,45 @@ function getIndexes_legal_drops(start_index){
 
 };
 
+
+// creates and destroys highlight around markers for row selection/highlight in scoring
+// assumes that we either have all cold or all hot halos
+export function update_mk_halos(mk_ids = [], hot_flag = false){
+
+    // empty inner var
+    let _mk_halos = [];
+        
+    if (mk_ids.length > 0) {
+
+        // drawing param
+        const S = yinsh.drawing_params.S;
+        
+        // retrieve drop zones
+        const _drop_zones = yinsh.objs.drop_zones;
+        
+        for (const mk_id of mk_ids) {
+
+            // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
+            for(const d_zone of _drop_zones){
+                if (d_zone.loc.index == mk_id) {
+
+                    // create shape + coordinates and store in the global array
+                    let h_path = new Path2D()
+                    h_path.arc(d_zone.loc.x, d_zone.loc.y, S*0.33, 0, 2*Math.PI);
+            
+                    _mk_halos.push({path: h_path, hot: hot_flag});
+            
+                };
+            };  
+        };      
+    };
+
+    // acts as a reset function if arguments stay as default
+    yinsh.objs.mk_halos = _mk_halos;
+ 
+};
+
+
 // DONE
     // add_marker + remove_marker (move)
     // update_current_move (move)
@@ -674,16 +742,13 @@ function getIndexes_legal_drops(start_index){
     // getter for ids of legal drops
     // getter for id (in array) of last ring
     // setter for updating loc of dropping ring
+    // update_score_handling (next move)
+    // update mk halos (score handling)
+
 
 
 // TODO
-    // update_score_handling (next move)
-    // update mk scoring (next move)
-    // update mk halos (score handling)
     // refresh_objects (window resize)
-    // when data model consolidated, serve objects operations through specialized functions (e.g. retrieve drop_zones, single/bulk update game state)
-    // DEFINE GETTERS FOR USED OBJECTS -> REDUCE COUPLING (could use structuredClone for returning specific values)
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -717,53 +782,6 @@ function update_sizing(win_height, win_width) {
 };
 
 
-// glue function to setup new game
-function init_objects(){
-
-    // initialize drop zones
-    init_drop_zones();
-
-    // init random rings and markers
-    init_rings();
-    init_markers();
-
-};
-
-
-
-function update_mk_sel_scoring(input_ids = [], hot_flag = false){
-    
-    mk_sel_scoring.ids = input_ids;
-    mk_sel_scoring.hot = hot_flag;
-
-};
-
-// creates and destroys highlight around markers for row selection/highlight in scoring
-function update_mk_halos(){
-    // manipulates global variable 
-
-    // empty variable every time before rebuilding it
-    mk_halos = [];
-        
-    if (mk_sel_scoring.ids.length > 0) {
-        // for each linear id 
-        for (const id of mk_sel_scoring.ids.values()) {
-
-            // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
-            for(let i=0; i<drop_zones.length; i++){
-                if (drop_zones[i].loc.index == id) {
-
-                    // create shape + coordinates and store in the global array
-                    let h_path = new Path2D()
-                    h_path.arc(drop_zones[i].loc.x, drop_zones[i].loc.y, S*0.33, 0, 2*Math.PI);
-            
-                    mk_halos.push({path: h_path, hot_flag: mk_sel_scoring.hot});
-            
-                };
-            };  
-        };      
-    };
- };
 
 
 
@@ -827,28 +845,3 @@ function destroy_objects(){
 
 
 };
-
-
-
-
-
-
-
-function update_score_handling(on = false, mk_sel_array = [], num_rows = {}, details = []){
-    // let score_handling_var = {on: false, mk_sel_array: [], num_rows: {}, details: []};
-
-    if (on == true){
-        score_handling_var.on = true;
-        score_handling_var.mk_sel_array = mk_sel_array;
-        score_handling_var.num_rows = num_rows;
-        score_handling_var.details = details;
-
-    } else if (on == false){
-        score_handling_var.on = false;
-        score_handling_var.mk_sel_array = null;
-        score_handling_var.num_rows = {};
-        score_handling_var.details = [];
-
-    };
-};
-

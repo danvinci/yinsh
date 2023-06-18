@@ -2,7 +2,7 @@
 // handle mouse events and relays events to core logic
 // https://bencentra.com/code/2014/12/05/html5-canvas-touch-events.html
 
-import { get_player_id } from './data.js'
+import { get_player_id, get_move_status, get_scoring_status, get_scoring_options } from './data.js'
 
 
 //////////////////////////////////////// ADD EVENT LISTENERS TO CANVAS
@@ -33,17 +33,20 @@ function mouseDown_handler (event) {
         const player_id = get_player_id();
 
         // retrieve variable used to asses if move or score handling is underway
-        const move_in_progress = yinsh.objs.current_move.in_progress;
-        const score_handling_in_progress = yinsh.objs.score_handling_var.in_progress;
+        const move_in_progress = get_move_status();
+        const score_handling_in_progress = get_scoring_status(); 
 
         // check if move currently underway
         // If not, check which ring is being picked and send event to core_et
         if (move_in_progress == false){
 
+            // retrieve array of rings
+            const _rings = yinsh.objs.rings;
+
             // check all the rings and dispatch event to core logic if match found for local player
-            const picked_ring_index = yinsh.objs.rings.findIndex((ring) => (ring.player == player_id && ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)));
-            if (picked_ring_index != -1) {
-                core_et.dispatchEvent(new CustomEvent('ring_picked', { detail: picked_ring_index }));
+            const picked_ring_index_inArray = _rings.findIndex((ring) => (ring.player == player_id && ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)));
+            if (picked_ring_index_inArray != -1) {
+                core_et.dispatchEvent(new CustomEvent('ring_picked', { detail: picked_ring_index_inArray }));
             };
 
         // move in progress -> ring is being dropped -> checking is there's a nearby drop zone
@@ -61,29 +64,24 @@ function mouseDown_handler (event) {
             };
         };
 
-        //////////////////////////////////////////////////////////////////////////////// <-- refactoring progress
-        /*
+
         // scoring action is in progress 
-        if (score_handling_var.on == true){
+        if (score_handling_in_progress == true){
 
-            // check which marker the mouse is clicking on
-            for(let i=0; i<markers.length; i++){
-                if (ctx.isPointInPath(markers[i].path, mousePos.x, mousePos.y)){
+            // retrieve markers/halos eligible for selection
+            const _scoring_options = get_scoring_options();
+            const _mk_sel = _scoring_options.map(option => option.mk_sel);
 
-                    // check that index of marker is among ones in mk_sel_array (selectable markers)
-                    if (score_handling_var.mk_sel_array.includes(markers[i].loc.index) == true){
+            // retrieve markers
+            const _markers = yinsh.objs.markers;
 
-                        // create and dispatch event, send location index for matching marker
-                        const mk_sel_click_event = new CustomEvent("mk_sel_clicked", { detail: markers[i].loc.index});
-                        game_state_target.dispatchEvent(mk_sel_click_event);
-                        
-                        break; // no need to keep cycling
-
-                    };
-                };
+            // check which marker is being clicked on
+            const picked_marker = _markers.find((mk) => (ctx.isPointInPath(mk.path, mousePos.x, mousePos.y) && _mk_sel.includes(mk.loc.index)));
+            if (typeof picked_marker !== 'undefined') {
+                core_et.dispatchEvent(new CustomEvent('mk_sel_picked', { detail: picked_marker.loc.index }));
             };
         };
-        */
+        
     };
 };
 
@@ -98,8 +96,8 @@ function mouseMove_handler (event) {
         //console.log("move");
 
         // retrieve variable used to asses if move or score handling is underway
-        const move_in_progress = yinsh.objs.current_move.in_progress;
-        const score_handling_in_progress = yinsh.objs.score_handling_var.in_progress;
+        const move_in_progress = get_move_status();
+        const score_handling_in_progress = get_scoring_status(); 
 
             
         // if a move is underway, dispatch event for moving ring
@@ -110,47 +108,31 @@ function mouseMove_handler (event) {
             
         };
 
-        //////////////////////////////////////////////////////////////////////////////// <-- refactoring progress
-        /*
         // if a scoring action is in progress, check on markers and dispatch events to turn on/off highlighting if hovering on the right one(s)
-        if (score_handling_var.on == true){
+        if (score_handling_in_progress == true){
 
-            let on_sel_marker = false;
+            // retrieve markers/halos eligible for selection
+            const _scoring_options = get_scoring_options();
+            const _mk_sel = _scoring_options.map(option => option.mk_sel);
 
-            // check which markers the mouse is passing on
-            for(let i=0; i<markers.length; i++){
-                if (ctx.isPointInPath(markers[i].path, mousePos.x, mousePos.y)){
+            // retrieve markers
+            const _markers = yinsh.objs.markers;
 
-                    // check that index of marker is among ones in mk_sel_array (selectable markers)
-                    if (score_handling_var.mk_sel_array.includes(markers[i].loc.index) == true){
-
-                        // create and dispatch event, send location index for matching marker
-                        const mk_sel_hover_event_ON = new CustomEvent("mk_sel_hover_ON", { detail: markers[i].loc.index});
-                        game_state_target.dispatchEvent(mk_sel_hover_event_ON);
-
-                        on_sel_marker = true; // -> to inform default behavior
-                        
-                        break; // as you get the one
-
-                    };
-                };
-            };
-
-            if (on_sel_marker == false){
-
-                // score handling underway but not on mk_sel_array, only original mk_sel should stay highlighted until handling is over
-                const mk_sel_hover_event_OFF = new CustomEvent("mk_sel_hover_OFF");
-                game_state_target.dispatchEvent(mk_sel_hover_event_OFF);
-
-            };
+            // check which marker is being hovered on
+            const hovered_marker = _markers.find((mk) => (ctx.isPointInPath(mk.path, mousePos.x, mousePos.y) && _mk_sel.includes(mk.loc.index)));
             
+            // dispatch event accordingly
+            if (typeof hovered_marker !== 'undefined') {
+                core_et.dispatchEvent(new CustomEvent('mk_sel_hover_ON', { detail: hovered_marker.loc.index }));
+            } else {
+
+                core_et.dispatchEvent(new CustomEvent('mk_sel_hover_OFF'));
+            };
+
         };
 
-        */
     };
 };
-
-
 
 
 
@@ -174,7 +156,7 @@ function drop_snap(xp, yp){
     // test which drop zone the mouse is closest to -> return loc of drop_zone
     const snap_d_zone = yinsh.objs.drop_zones.find((d_zone) => (ctx.isPointInPath(d_zone.path, xp, yp)));
     
-    if (typeof snap_d_zone !== "undefined") {
+    if (typeof snap_d_zone !== 'undefined') {
         return structuredClone(snap_d_zone.loc);
     } else {
         throw new Error("LOG - Close snap not found");

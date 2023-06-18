@@ -395,28 +395,38 @@ function draw_markers_halos(){
     // const painting_start_time = Date.now()
     
     // retrieve mk halos data (local copy) + other constants
-    let _markers_halos = yinsh.objs.markers_halos;
+    const _mk_halos = yinsh.objs.mk_halos;
 
     const S = yinsh.drawing_params.S;
+
+    const hot_color = "#96ce96";
+    const cold_color = "#98C1D6";
+
     
     ctx.save();
 
         // to be checked only if any markers halos have been created
         // the whole function is called anyway at each refresh
-        let hot = false;
-        if (_markers_halos.length > 0) {hot = _markers_halos[0].hot_flag;}; // I forgot why I built it this way :(
 
         ctx.globalAlpha = 0.8; 
-        ctx.strokeStyle = hot ? "#96ce96" : "#98C1D6";
         ctx.lineWidth = S/10; 
 
-        for(const mk_halo of _markers_halos){
-            ctx.stroke(mk_halo.path); 
+        // can paint hot/cold dynamically, for each specific halo's properties
+        for(const mk_halo of _mk_halos){
+
+            if (mk_halo.hot == true) {
+                ctx.strokeStyle = hot_color;
+                ctx.stroke(mk_halo.path); 
+            } else {
+                ctx.strokeStyle = cold_color;
+                ctx.stroke(mk_halo.path); 
+            };
+            
         };        
     
     ctx.restore();
 
-    // console.log(`LOG - ${_markers_halos.length} Markers halos painted on canvas: ${Date.now() - painting_start_time}ms`);
+    // console.log(`LOG - ${_mk_halos.length} Markers halos painted on canvas: ${Date.now() - painting_start_time}ms`);
     
 };
 
