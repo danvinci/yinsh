@@ -244,9 +244,16 @@ export function get_scoring_options(){
     return structuredClone(yinsh.objs.current_score_handling.task_ref.task_data);
 };
 
-export function complete_score_handling_task(){
+export function complete_score_handling_task(success = true){
 
-    yinsh.objs.current_score_handling.task_ref.resolve();
+    if (success == true) {
+        yinsh.objs.current_score_handling.task_ref.task_success();
+
+    } else {
+
+        yinsh.objs.current_score_handling.task_ref.task_failure();
+    };
+    
 };
 
 export function update_objects_next_turn(){

@@ -145,7 +145,7 @@ class Task {
         this.task_data = task_data;
         this.promise = new Promise((resolve, reject)=> {
             this.task_success = resolve
-            this.task_fail = reject
+            this.task_failure = reject
         })
     }
 };
@@ -482,7 +482,7 @@ function scoring_options_handler(event){
     // CASE: marker was picked -> score handling is completed
     } else if (event.type === "mk_sel_picked") {
 
-        console.log("LOG - Scoring option selected");
+        console.log("LOG - Scoring option selected!");
 
         // retrieve index of marker being clicked on
         const mk_sel_picked_id = event.detail;
@@ -501,8 +501,8 @@ function scoring_options_handler(event){
         // play sound
         markersRemoved_play_sound();
 
-        // complete score handling task
-        complete_score_handling_task();
+        // complete score handling task (success)
+        complete_score_handling_task(true);
 
         // wipe score handling data
         update_scoring_data();
