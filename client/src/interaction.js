@@ -2,7 +2,7 @@
 // handle mouse events and relays events to core logic
 // https://bencentra.com/code/2014/12/05/html5-canvas-touch-events.html
 
-import { get_player_id, get_move_status, get_scoring_status, get_scoring_options } from './data.js'
+import { get_player_id, get_move_status, get_task_status, get_scoring_options } from './data.js'
 
 
 //////////////////////////////////////// ADD EVENT LISTENERS TO CANVAS
@@ -21,7 +21,6 @@ export const enableInteraction = () => {canvas_interaction_flag = true};
 export const disableInteraction = () => {canvas_interaction_flag = false};
 
 
-
 function mouseDown_handler (event) {
 
     if (canvas_interaction_flag) { // works only if interaction is allowed
@@ -34,11 +33,15 @@ function mouseDown_handler (event) {
 
         // retrieve variable used to asses if move or score handling is underway
         const move_in_progress = get_move_status();
-        const score_handling_in_progress = get_scoring_status(); 
+        
+        // check if scoring is underway
+        const mk_scoring_in_progress = get_task_status('mk_scoring_task'); 
+        const ring_scoring_in_progress = get_task_status('ring_scoring_task'); 
+            const any_scoring_in_progress = mk_scoring_in_progress || ring_scoring_in_progress;
 
         // check if move currently underway
         // If not, check which ring is being picked and send event to core_et
-        if (move_in_progress == false){
+        if (move_in_progress == false && any_scoring_in_progress == false ){
 
             // retrieve array of rings
             const _rings = yinsh.objs.rings;
@@ -65,8 +68,8 @@ function mouseDown_handler (event) {
         };
 
 
-        // scoring action is in progress 
-        if (score_handling_in_progress == true){
+        // mk scoring action is in progress 
+        if (mk_scoring_in_progress == true){
 
             // retrieve markers/halos eligible for selection
             const _scoring_options = get_scoring_options();
@@ -79,6 +82,18 @@ function mouseDown_handler (event) {
             const picked_marker = _markers.find((mk) => (ctx.isPointInPath(mk.path, mousePos.x, mousePos.y) && _mk_sel.includes(mk.loc.index)));
             if (typeof picked_marker !== 'undefined') {
                 core_et.dispatchEvent(new CustomEvent('mk_sel_picked', { detail: picked_marker.loc.index }));
+            };
+        
+        // mk scoring action is completed but ring scoring is in progress
+        } else if (mk_scoring_in_progress == false && ring_scoring_in_progress == true){
+
+            // retrieve array of rings
+            const _rings = yinsh.objs.rings;
+
+            // check all the rings and dispatch event to core logic if match found for local player
+            const picked_ring = _rings.find((ring) => (ring.player == player_id && ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)));
+            if (typeof picked_ring !== 'undefined') {
+                core_et.dispatchEvent(new CustomEvent('ring_picked_scoring', { detail: picked_ring.loc.index }));
             };
         };
         
@@ -97,7 +112,11 @@ function mouseMove_handler (event) {
 
         // retrieve variable used to asses if move or score handling is underway
         const move_in_progress = get_move_status();
-        const score_handling_in_progress = get_scoring_status(); 
+        
+        // check if scoring is underway
+        const mk_scoring_in_progress = get_task_status('mk_scoring_task'); 
+        const ring_scoring_in_progress = get_task_status('ring_scoring_task'); 
+            const any_scoring_in_progress = mk_scoring_in_progress || ring_scoring_in_progress;
 
             
         // if a move is underway, dispatch event for moving ring
@@ -108,8 +127,8 @@ function mouseMove_handler (event) {
             
         };
 
-        // if a scoring action is in progress, check on markers and dispatch events to turn on/off highlighting if hovering on the right one(s)
-        if (score_handling_in_progress == true){
+        // if a mk scoring action is in progress, check on markers and dispatch events to turn on/off highlighting if hovering on the right one(s)
+        if (mk_scoring_in_progress == true){
 
             // retrieve markers/halos eligible for selection
             const _scoring_options = get_scoring_options();

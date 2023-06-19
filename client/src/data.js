@@ -124,9 +124,12 @@ export function init_empty_game_objects(){
         _game_objects.current_move = {in_progress: false, start_index: 0, legal_drops: []}; // -> details for move currently in progress 
         _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal drops ids)
         
-        _game_objects.current_score_handling = {in_progress: false, task_ref: {}}; // tracking if score handling is in progress
-        _game_objects.scoring_options = []; // keeping info on scoring options
+        _game_objects.current_mk_scoring = {in_progress: false, task_ref: {}}; // referencing task of general score handling
+        _game_objects.current_ring_scoring = {in_progress: false, task_ref: {}}; // referencing task of ring picking within score handling
         _game_objects.mk_halos = []; // -> halos objects
+
+        _game_objects.player_score = 0; // -> player score and number of rings removed
+        _game_objects.opponent_score = 0; // -> opponent score and number of rings removed
 
 
     // save to global obj and log
@@ -213,48 +216,73 @@ export function swap_data_next_turn() {
 
 };
 
-export function update_scoring_data(scoring_task = undefined){
-    
-    if (typeof scoring_task === 'undefined') { // we don't pass anything -> wipe all 
-
-        yinsh.objs.current_score_handling.in_progress = false; 
-        yinsh.objs.current_score_handling.task_ref = {};
-
-    } else { // log progress
-
-        yinsh.objs.current_score_handling.in_progress = true; // score handling is in progress
-        yinsh.objs.current_score_handling.task_ref = scoring_task;
-    };
-
-};
-
-
 export function get_move_status(){
-
     return yinsh.objs.current_move.in_progress;
 };
 
-export function get_scoring_status(){
+export function activate_task(task){
 
-    return yinsh.objs.current_score_handling.in_progress;
+    if (task.name == 'mk_scoring_task') {
+
+        yinsh.objs.current_mk_scoring.in_progress = true;
+        yinsh.objs.current_mk_scoring.task_ref = task;
+
+    } else if (task.name == 'ring_scoring_task') {
+
+        yinsh.objs.current_ring_scoring.in_progress = true;
+        yinsh.objs.current_ring_scoring.task_ref = task;
+
+    };
+};
+
+
+export function reset_scoring_tasks(){
+    
+    // overall scoring
+    yinsh.objs.current_mk_scoring.in_progress = false;
+    yinsh.objs.current_mk_scoring.task_ref = {};
+
+    // ring scoring
+    yinsh.objs.current_ring_scoring.in_progress = false;
+    yinsh.objs.current_ring_scoring.task_ref = {};
+
+};
+
+export function get_task_status(task_name){
+
+    if (task_name == 'mk_scoring_task') {
+
+        return yinsh.objs.current_mk_scoring.in_progress;
+
+    } else if (task_name == 'ring_scoring_task') {
+
+        return yinsh.objs.current_ring_scoring.in_progress;
+
+    };
+
 };
 
 export function get_scoring_options(){
 
-    return structuredClone(yinsh.objs.current_score_handling.task_ref.task_data);
+    return structuredClone(yinsh.objs.current_mk_scoring.task_ref.data);
 };
 
-export function complete_score_handling_task(success = true){
+export function complete_task(task_name, success_msg){
 
-    if (success == true) {
-        yinsh.objs.current_score_handling.task_ref.task_success();
+    if (task_name == 'mk_scoring_task') {
 
-    } else {
+        yinsh.objs.current_mk_scoring.in_progress = false;
+        yinsh.objs.current_mk_scoring.task_ref.task_success(success_msg);
 
-        yinsh.objs.current_score_handling.task_ref.task_failure();
+    } else if (task_name == 'ring_scoring_task') {
+
+        yinsh.objs.current_ring_scoring.in_progress = false;
+        yinsh.objs.current_ring_scoring.task_ref.task_success(success_msg);
+
     };
-    
+
 };
+
 
 export function update_objects_next_turn(){
 
