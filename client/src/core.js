@@ -7,7 +7,7 @@ import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNew
 import { init_global_obj_params, init_empty_game_objects, init_new_game_data, get_player_id, save_next_server_response } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end} from './data.js' 
-import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks} from './data.js' 
+import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
 import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
@@ -187,9 +187,10 @@ async function replay_opponent_move(){
                 refresh_canvas_state();
             };
             
+        // opponent's scoring
 
-        // removed markers (scoring)
-        // removed ring (scoring)
+            // removed markers (scoring)
+            // removed ring (scoring)
 
         // total sleep time
         const _tot_sleep_time = array_sum([_marker_add_wait, _ring_move_wait, _flip_wait])
@@ -430,8 +431,8 @@ async function ringDrop_handler (event) {
 
             // CASE: scoring was made -> score handling is triggered
                 // values to send back to server
-                let scoring_mk_sel_picked = 0;
-                let scoring_ring_picked = 0;
+                let scoring_mk_sel_picked = -1;
+                let scoring_ring_picked = -1;
 
             if (move_scenario.score_flag == true){
 
@@ -454,8 +455,8 @@ async function ringDrop_handler (event) {
 
                     // turn will be ended by score handling function 
                     core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
-                    scoring_mk_sel_picked = await mk_scoring.promise // wait for mk to be picked -> return value of id
-                    scoring_ring_picked = await ring_scoring.promise // wait for ring to be picked -> return value of id
+                    scoring_mk_sel_picked = await mk_scoring.promise // wait for mk to be picked -> return value of loc_id
+                    scoring_ring_picked = await ring_scoring.promise // wait for ring to be picked -> return value of loc_id
                     
                     // wipe tasks data from global refs
                     reset_scoring_tasks();
@@ -469,8 +470,8 @@ async function ringDrop_handler (event) {
             // flipping and scoring done -> wrap up info to send back on actions taken by player
             const scenario_info = { start: start_move_index, 
                                     end: drop_loc_index,
-                                    mk_sel_pick: scoring_mk_sel_picked, // default to 0
-                                    ring_removed: scoring_ring_picked // defaults to 0
+                                    mk_sel_pick: scoring_mk_sel_picked, // default to -1
+                                    ring_removed: scoring_ring_picked // defaults to -1
                                 }; 
 
             // turn completed -> notify server with info on scenario
@@ -593,9 +594,15 @@ function ring_scoring_handler (event) {
     // retrieve index of marker
     const picked_ring_id = event.detail;
 
-    // remove rings -> moves it to special spot
+    // remove ring and redraw
+    remove_ring_scoring(picked_ring_id);
+    refresh_canvas_state();
+    
+    // -> draw ring to scoring spot
 
     // increases player's score by one
+    const new_player_score = increase_player_score();
+    console.log(`LOG - New player score: ${new_player_score}`);
 
     // completes ring scoring task
     const success_msg = picked_ring_id; // value to be returned by completed task

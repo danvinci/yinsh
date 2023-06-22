@@ -1014,15 +1014,15 @@ function reshape_in(input_array::AbstractVector)
 # LinearIndex -> CartesianIndex reshaping for incoming calls from the client
 # assumes vector of INTs
 
-	return_array = CartesianIndex[]
+	_return_array = CartesianIndex[]
 
 	for i in input_array
 
-		push!(return_array, return_IN_lookup[i])
+		push!(_return_array, return_IN_lookup[i])
 
 	end
 
-	return return_array
+	return _return_array
 
 
 end
@@ -1033,7 +1033,6 @@ function reshape_in(input_linear::Int64)
 # assumes single INTs
 
 	return return_IN_lookup[input_linear]
-
 
 end
 
@@ -1218,81 +1217,6 @@ end
 # ╔═╡ 6075f560-e190-409b-8435-a7cf08ec1bc6
 games_log_dict
 
-# ╔═╡ aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
-function gen_New_gameState(ex_game_state, start_move, end_move)
-# generates new game state, starting from an existing one + start/end moves
-# assumes start/end are valid moves AND in cartesian indexes
-# works with game state in server-side format (matrix)
-
-	new_gs = deepcopy(ex_game_state)
-	
-	if start_move == end_move # ring dropped where picked
-
-		return ex_game_state
-
-	else # ring moved elsewhere -> game state changed
-
-		# get ring details
-		picked_ring = ex_game_state[start_move]
-		picked_ring_color = picked_ring[end] # RW, RB -> should work with identifiers
-
-		added_marker = Dict(:cli_index => reshape_out(start_move), 
-							:player_id => picked_ring_color)
-
-		moved_ring = Dict(:cli_index_start => reshape_out(start_move),
-							:cli_index_end => reshape_out(end_move),
-							:player_id => picked_ring_color)
-
-		# marker placed in start_move (same color as picked ring)
-		new_gs[start_move] = "M"*picked_ring_color # should work with identifiers
-		
-		# ring placed in end_move # -> assumes valid move
-		new_gs[end_move] = picked_ring
-
-		# markers flipped (if any)
-
-			# retrieve search space for the starting point
-			search_space = locs_searchSpace[start_move]
-		
-			direction = 0
-		
-			# spot direction/array that contains the ring 
-			for (i, range) in enumerate(search_space)
-		
-				# check if search_temp contains end_index
-				if (end_move in range)
-					 direction = i
-					break
-				end
-			end
-		
-			# return flag + ids of markers to flip in direction of movement
-			flip_flag, markers_toFlip = markers_toFlip_search(new_gs, search_space[direction])
-
-			if flip_flag
-				# actually flip markers in game state
-				for m_id in markers_toFlip
-					if contains(new_gs[m_id], 'M')
-	
-						new_gs[m_id] = (new_gs[m_id] == "MW") ? "MB" : "MW" 
-					end
-				end
-			end
-
-	end
-
-
-	_return = Dict(:new_game_state_srv => new_gs, 
-					:flip_flag => flip_flag,
-					:markers_toFlip_srv => markers_toFlip,
-					:markers_toFlip_cli => reshape_out(markers_toFlip),
-					:added_marker_cli => added_marker,
-					:moved_ring_cli => moved_ring)
-
-	return _return
-
-end
-
 # ╔═╡ 5da79176-7005-4afe-91b7-accaac0bd7b5
 function static_score_lookup(state)
 	# look at the game state to check if there are scoring opportunities
@@ -1409,6 +1333,126 @@ function static_score_lookup(state)
 	end
 
 	return num_scoring_rows, scoring_details
+
+end
+
+# ╔═╡ aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
+function gen_New_gameState(ex_game_state, start_move, end_move, mk_sel = CartesianIndex(0,0), score_ring_index = CartesianIndex(0,0))
+# generates new game state, starting from an existing one + start/end moves
+# assumes start/end are valid moves AND in cartesian indexes
+# works with game state in server-side format (matrix)
+
+_no_scoring_def_server = CartesianIndex(0,0)
+	
+
+	new_gs = deepcopy(ex_game_state)
+	_scoring_handled = (mk_sel != _no_scoring_def_server && 
+						score_ring_index != _no_scoring_def_server) ? true : false
+
+	
+	if start_move == end_move # ring dropped where picked
+
+		return ex_game_state
+
+	else # ring moved elsewhere -> game state changed
+
+		# get ring details
+		picked_ring = ex_game_state[start_move]
+		picked_ring_color = picked_ring[end] # RW, RB -> should work with identifiers
+
+		added_marker = Dict(:cli_index => reshape_out(start_move), 
+							:player_id => picked_ring_color)
+
+		moved_ring = Dict(:cli_index_start => reshape_out(start_move),
+							:cli_index_end => reshape_out(end_move),
+							:player_id => picked_ring_color)
+
+		# marker placed in start_move (same color as picked ring)
+		new_gs[start_move] = "M"*picked_ring_color # should work with identifiers
+		
+		# ring placed in end_move # -> assumes valid move
+		new_gs[end_move] = picked_ring
+
+		# markers flipped (if any)
+
+			# retrieve search space for the starting point
+			search_space = locs_searchSpace[start_move]
+		
+			direction = 0
+		
+			# spot direction/array that contains the ring 
+			for (i, range) in enumerate(search_space)
+		
+				# check if search_temp contains end_index
+				if (end_move in range)
+					 direction = i
+					break
+				end
+			end
+		
+			# return flag + ids of markers to flip in direction of movement
+			flip_flag, markers_toFlip = markers_toFlip_search(new_gs, search_space[direction])
+
+			if flip_flag
+				# actually flip markers in game state
+				for m_id in markers_toFlip
+					if contains(new_gs[m_id], 'M')
+	
+						new_gs[m_id] = (new_gs[m_id] == "MW") ? "MB" : "MW" 
+					end
+				end
+			end
+
+			# checks scoring opportunities
+			scoring_rows, scores_toHandle = static_score_lookup(new_gs)
+			score_flag = (scoring_rows[:tot] >= 1) ? true : false	
+
+			_mk_to_remove = []
+			# if score -> replay mk selection, mk row removal, scoring ring removal
+			if score_flag && _scoring_handled
+
+				# markers to remove
+				_mk_to_remove = first(filter(s -> s[:mk_sel] == mk_sel, scores_toHandle))[:mk_locs]
+
+				# clean game state for markers ids
+				foreach(mk -> new_gs[mk] = "", _mk_to_remove)
+
+				# remove ring
+				new_gs[score_ring_index] = ""
+			
+			end
+	end
+
+	# return game state delta (used later to replay moves)
+	_return = Dict()
+
+
+	if _scoring_handled
+		_return = Dict(:new_game_state_srv => new_gs, 
+						:flip_flag => flip_flag,
+						:markers_toFlip_srv => markers_toFlip,
+						:markers_toFlip_cli => reshape_out(markers_toFlip),
+						:added_marker_cli => added_marker,
+						:moved_ring_cli => moved_ring,
+						:score_handled => true,
+						:markers_toRemove_srv => _mk_to_remove,
+						:markers_toRemove_cli => reshape_out(_mk_to_remove),
+						:scoring_ring_srv => score_ring_index,
+						:scoring_ring_cli => reshape_out(score_ring_index)
+						)
+	else
+		_return = Dict(:new_game_state_srv => new_gs, 
+						:flip_flag => flip_flag,
+						:markers_toFlip_srv => markers_toFlip,
+						:markers_toFlip_cli => reshape_out(markers_toFlip),
+						:added_marker_cli => added_marker,
+						:moved_ring_cli => moved_ring,
+						:score_handled => false
+						)
+
+	end
+
+	return _return
 
 end
 
@@ -1607,6 +1651,12 @@ function gen_newGame(vs_ai=false)
 	return game_id
 	
 end
+
+# ╔═╡ 8eab6d11-6d28-411d-bd82-7bec59b3f496
+# ╠═╡ disabled = true
+#=╠═╡
+gen_newGame()
+  ╠═╡ =#
 
 # ╔═╡ 761fb8d7-0c7d-4428-ad48-707d219582c0
 ## NEED FUNCTION TO HANDLE MESSAGES FROM CLIENT (NEXT MOVES), UPDATE STATE, SEND CHANGERS BACK TO OTHER PLAYER -> AND IDENTIFY OTHER PLAYER (HOW?)
@@ -1841,38 +1891,77 @@ end
 # ╔═╡ f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 function update_serverStates(_game_code, _player_id, _scenario_pick)
 
+	## extract info payload 
 	# convert moves to server indexes
 	_start_index = reshape_in(_scenario_pick[:start])
 	_end_index =  reshape_in(_scenario_pick[:end])
+
+	_no_scoring_def_client = -1
+
+	_has_keys = haskey(_scenario_pick, :mk_sel_pick) && haskey(_scenario_pick, :ring_removed) 
+	_scoring_handled = false
+
+	if _has_keys
+		_mk_sel_pick_cli = _scenario_pick[:mk_sel_pick]
+		_ring_removed_cli = _scenario_pick[:ring_removed]
+		
+		_scoring_handled = (_mk_sel_pick_cli != _no_scoring_def_client && 
+							_ring_removed_cli != _no_scoring_def_client) ? true : false
+	end
+
+	# neutral value
+	_no_scoring_def_server = CartesianIndex(0,0)
+
+	_mk_sel_index = _no_scoring_def_server
+	_score_ring_index = _no_scoring_def_server
+	
+		# overwrite data on scoring choices (if made)
+		if _has_keys && _scoring_handled 
+	
+			_mk_sel_index = reshape_in(_scenario_pick[:mk_sel_pick])
+			_score_ring_index = reshape_in(_scenario_pick[:ring_removed])
+			
+		end
 
 	# retrieve old game state and last moving
 	ex_game_state = get_last_srv_gameState(_game_code)
 
 	# get new game state
-	_new_gs_delta = gen_New_gameState(ex_game_state, _start_index, _end_index)
+	_new_gs_delta = gen_New_gameState(ex_game_state, _start_index, _end_index, _mk_sel_index, _score_ring_index)
 
+	# save new game state to log
 	push!(games_log_dict[_game_code][:server_states], _new_gs_delta[:new_game_state_srv])
 
-	
 
 	# extract delta to be logged and passed onto client
-	_delta_client = Dict(:flip_flag => _new_gs_delta[:flip_flag],
-						:markers_toFlip => _new_gs_delta[:markers_toFlip_cli],
-						:added_marker => _new_gs_delta[:added_marker_cli],
-						:moved_ring => _new_gs_delta[:moved_ring_cli])
+	_delta_client = Dict()
+
+	# differentiate response based on scoring being handled (sucks > to be cleaned)
+	if _scoring_handled
+		_delta_client = Dict(:flip_flag => _new_gs_delta[:flip_flag],
+							:markers_toFlip => _new_gs_delta[:markers_toFlip_cli],
+							:added_marker => _new_gs_delta[:added_marker_cli],
+							:moved_ring => _new_gs_delta[:moved_ring_cli],
+							:score_handled => _new_gs_delta[:score_handled],
+							:markers_toRemove => _new_gs_delta[:markers_toRemove_cli],
+							:scoring_ring => _new_gs_delta[:scoring_ring_cli]
+							)
+
+	else
+		_delta_client = Dict(:flip_flag => _new_gs_delta[:flip_flag],
+							:markers_toFlip => _new_gs_delta[:markers_toFlip_cli],
+							:added_marker => _new_gs_delta[:added_marker_cli],
+							:moved_ring => _new_gs_delta[:moved_ring_cli],
+							:score_handled => _new_gs_delta[:score_handled]
+							)
+		
+	end
 
 
+	# save delta for client
 	push!(games_log_dict[_game_code][:client_delta], _delta_client)
 	
 	
-	#=
-	added marker index and color
-	moved ring
-	flipped markers
-	removed markers (later, scoring)
-	removed rings (later, scoring)
-
-	=#
 
 	println("LOG - Server game state and delta updated")
 
@@ -1885,27 +1974,6 @@ function get_last_moving_player(game_code)
 	return games_log_dict[game_code][:turns][:data][end][:moving_player]
 
 end
-
-# ╔═╡ 2bf729f5-d918-4965-b514-2a247fc9c760
-games_log_dict["sBb2kb"]
-
-# ╔═╡ 123398e8-a4ab-4cc5-8347-72e9c8ac7051
-print_gameState(games_log_dict["sBb2kb"][:server_states][1])
-
-# ╔═╡ 7c0ea928-2cfc-472b-8320-e9420a498da8
-print_gameState(games_log_dict["sBb2kb"][:server_states][2])
-
-# ╔═╡ c9b59bd2-3703-4f26-a53f-bb2e8336e120
-print_gameState(games_log_dict["sBb2kb"][:server_states][3])
-
-# ╔═╡ f5ca3d2b-6486-4a10-b09b-5cac60144afa
-print_gameState(games_log_dict["sBb2kb"][:server_states][4])
-
-# ╔═╡ 8bcb902a-d540-4718-a4c5-1db66d82601f
-print_gameState(games_log_dict["sBb2kb"][:server_states][5])
-
-# ╔═╡ b7904c00-035c-44cb-b258-10c5c2e6cee0
- gen_scenarioTree(games_log_dict["sBb2kb"][:server_states][4], "B")
 
 # ╔═╡ 14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 function scenario_choice(_tree::Dict, ai_moving_player_id::String)
@@ -1956,9 +2024,6 @@ function play_turn_AI(game_code::String, ai_moving_player_id::String)
 	return _pick
 
 end
-
-# ╔═╡ 8dfd18a5-4127-40d2-819c-f17da2d6453d
-play_turn_AI("sBb2kb", "B")
 
 # ╔═╡ 3539b21d-4082-4b84-84dd-b736ea24978e
 function update_player_status!(game_code, player_id)
@@ -3553,19 +3618,11 @@ version = "1.4.1+0"
 # ╟─a2d0d733-345d-46a7-959b-69c3fac3eabe
 # ╟─b85d9d1c-213c-4330-9f1d-95823c3a9491
 # ╠═f479f1f8-d6fd-4e48-a0f3-447997bc0416
-# ╟─ebd8e962-2150-4ada-8ebd-3eba6e29c12e
+# ╠═ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 # ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
-# ╠═2bf729f5-d918-4965-b514-2a247fc9c760
-# ╠═123398e8-a4ab-4cc5-8347-72e9c8ac7051
-# ╠═7c0ea928-2cfc-472b-8320-e9420a498da8
-# ╠═c9b59bd2-3703-4f26-a53f-bb2e8336e120
-# ╠═f5ca3d2b-6486-4a10-b09b-5cac60144afa
-# ╠═8bcb902a-d540-4718-a4c5-1db66d82601f
-# ╠═b7904c00-035c-44cb-b258-10c5c2e6cee0
-# ╠═8dfd18a5-4127-40d2-819c-f17da2d6453d
 # ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 # ╠═14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 # ╠═3539b21d-4082-4b84-84dd-b736ea24978e

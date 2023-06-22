@@ -128,8 +128,8 @@ export function init_empty_game_objects(){
         _game_objects.current_ring_scoring = {in_progress: false, task_ref: {}}; // referencing task of ring picking within score handling
         _game_objects.mk_halos = []; // -> halos objects
 
-        _game_objects.player_score = 0; // -> player score and number of rings removed
-        _game_objects.opponent_score = 0; // -> opponent score and number of rings removed
+        _game_objects.player_score = 0; // -> player score 
+        _game_objects.opponent_score = 0; // -> opponent score 
 
 
     // save to global obj and log
@@ -268,6 +268,20 @@ export function get_scoring_options(){
     return structuredClone(yinsh.objs.current_mk_scoring.task_ref.data);
 };
 
+
+export function increase_player_score(){
+
+    yinsh.objs.player_score += 1;
+    return yinsh.objs.player_score;
+};
+
+export function increase_opponent_score(){
+
+    yinsh.objs.opponent_score += 1;
+    return yinsh.objs.opponent_score;
+};
+
+// resolves task-promises so that they can return a value to the task initiator
 export function complete_task(task_name, success_msg){
 
     if (task_name == 'mk_scoring_task') {
@@ -620,6 +634,31 @@ export function remove_markers(mk_indexes_array){ // input is array of loc index
     yinsh.objs.game_state = _game_state
     
     console.log(`LOG - Marker(s) removed from indexes: ${mk_indexes_array}`);
+    
+};
+
+// removes ring -> called when scoring and picking ring to be removed
+export function remove_ring_scoring(ring_loc_index){
+
+    // retrieve array of markers and latest game_state
+    const _rings = yinsh.objs.rings;
+    const _ring_id = yinsh.constant_params.ring_id;
+
+    let _game_state = structuredClone(yinsh.objs.game_state);
+
+    // updates global object -> remove picked ring
+    yinsh.objs.rings = _rings.filter(r => r.loc.index != ring_loc_index);
+
+    // cleans game_state copy at selected indexes
+    if (_game_state[ring_loc_index].includes(_ring_id)) {
+        
+        _game_state[ring_loc_index]= ''; // cleans state only if a ring is there 
+    };
+        
+    // updates global object
+    yinsh.objs.game_state = _game_state
+    
+    console.log(`LOG - Ring removed from index: ${ring_loc_index}`);
     
 };
     
