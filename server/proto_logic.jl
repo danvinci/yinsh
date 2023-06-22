@@ -1608,12 +1608,6 @@ function gen_newGame(vs_ai=false)
 	
 end
 
-# ╔═╡ 8eab6d11-6d28-411d-bd82-7bec59b3f496
-# ╠═╡ disabled = true
-#=╠═╡
-gen_newGame()
-  ╠═╡ =#
-
 # ╔═╡ 761fb8d7-0c7d-4428-ad48-707d219582c0
 ## NEED FUNCTION TO HANDLE MESSAGES FROM CLIENT (NEXT MOVES), UPDATE STATE, SEND CHANGERS BACK TO OTHER PLAYER -> AND IDENTIFY OTHER PLAYER (HOW?)
 # FROM THE ID OF THE PLAYER/SOCKET, WE SHOULD ALSO BE ABLE TO HANDLE RECONNECTS (UPDATING IDS)
@@ -3508,7 +3502,7 @@ version = "1.4.1+0"
 # ╟─a3ae2bfe-41ea-4fe1-870b-2ac35153da5d
 # ╠═1d811aa5-940b-4ddd-908d-e94fe3635a6a
 # ╟─003f670b-d3b1-4905-b105-67504f16ba19
-# ╠═2cee3e2b-5061-40f4-a205-94d80cfdc20b
+# ╟─2cee3e2b-5061-40f4-a205-94d80cfdc20b
 # ╟─a96a9a78-0aeb-4b00-8f3c-db61839deb5c
 # ╠═f0e9e077-f435-4f4b-bd69-f495dfccec27
 # ╠═bf2dce8c-f026-40e3-89db-d72edb0b041c

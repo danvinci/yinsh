@@ -528,7 +528,7 @@ export function update_legal_cues(){
 
     // retrieves info on active move
     const move_in_progress = yinsh.objs.current_move.in_progress; // -> true/false
-    const _legal_moves_ids = yinsh.objs.current_move.legal_drops; // -> [1,2,3,4,etc]
+    const _legal_moves_ids = yinsh.objs.current_move.legal_drops; // -> [11,23,90,etc]
 
     // retrieves array of visual cues (to be modified)
     let _legal_cues = yinsh.objs.legal_moves_cues
@@ -537,16 +537,13 @@ export function update_legal_cues(){
     if (move_in_progress) {
 
         for (let cue of _legal_cues) {
-                
-            if (_legal_moves_ids.includes(cue.loc.index)) { cue.on = true };
-                
+    
+            if (_legal_moves_ids.includes(cue.loc.index)) { cue.on = true };      
         };
         
     // otherwise turn everything off
     } else {
-
         for (let cue of _legal_cues) { cue.on = false };
-
     };
    
     // saves/overwrites updated array of visual cues
@@ -677,6 +674,7 @@ export function getIndex_last_ring(){
 
 
 // update loc information for last ring in the array (picked one)
+// returns loc.index of such ring
 export function updateLoc_last_ring(new_loc){
 
     // retrieve index of last ring in array (about to drop)

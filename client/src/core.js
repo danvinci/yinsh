@@ -370,23 +370,27 @@ async function ringDrop_handler (event) {
     // retrieves ids of legal drops for the ring that was picked up
     const _current_legal_drops = yinsh.objs.current_move.legal_drops;
 
-    // check if drop coordinates are valid -> drop rings
-    if (_current_legal_drops.includes(snap_drop_loc.index)){
+    // save move starting index
+    const start_move_index = yinsh.objs.current_move.start_index;
 
-        // update ring loc information (last)
-        updateLoc_last_ring(snap_drop_loc);
-
-        // retrieve ring and its index details (last)
-        const dropping_ring = yinsh.objs.rings.at(-1);
-        const dropping_ring_loc_index = dropping_ring.loc.index;
+    // retrieve ring and its index details (last)
+    const dropping_ring = yinsh.objs.rings.at(-1);
+    const gs_value = dropping_ring.type.concat(dropping_ring.player); // -> RB, RW
     
+    // retrieve index of drop location
+    const drop_loc_index = snap_drop_loc.index
+
+    // check if drop coordinates belong to possible moves or dropped in-place
+    if (_current_legal_drops.includes(drop_loc_index) || drop_loc_index == start_move_index){
+
+        // drops ring -> update ring loc information 
+        updateLoc_last_ring(snap_drop_loc);
+        
         // update game state
         // if ring is dropped in same location, this automatically overrides the existing marker (MB/MW)
-        const gs_value = dropping_ring.type.concat(dropping_ring.player); // -> RB, RW
-        update_game_state(dropping_ring_loc_index, gs_value);
+        update_game_state(drop_loc_index, gs_value);
 
-        // resets data for current move (move is complete/off), but let's save starting index first
-        const start_move_index = yinsh.objs.current_move.start_index;
+        // resets data for current move (move is complete/off)
         update_current_move(); // -> important to close the move to prevent side effects
         
         // updates legal cues (all will be turned off as move is no longer in progress)
@@ -397,26 +401,23 @@ async function ringDrop_handler (event) {
         ringDrop_play_sound(); 
 
         // logging
-        console.log(`LOG - Ring ${dropping_ring.player} moved to index ${dropping_ring_loc_index}`);
+        console.log(`LOG - Ring ${dropping_ring.player} moved to index ${drop_loc_index}`);
 
-        // values to send back to server
-        let scoring_mk_sel_picked = 0;
-        let scoring_ring_picked = 0;
-
-        ////// handle markers removal, flipping, and trigger score handling
         // CASE: same location drop, nothing to flip, remove added marker
-        if (dropping_ring_loc_index == start_move_index){
-             
-            remove_markers([dropping_ring_loc_index]); // removes markers from their array and game state
-        
-            // TO HANDLE
-            console.log(`LOG TO HANDLE -> TURN SHOULD CONTINUE FOR USER`)
+        if (drop_loc_index == start_move_index){
 
-        // CASE: ring moved -> something happens -> look at scenarioTree to check
+            // remove marker (only touches marker if in location, doesn't touch ring data)
+            remove_markers([drop_loc_index]);
+            refresh_canvas_state(); 
+
+            // log
+            console.log(`LOG - Ring dropped in-place. Turn still on.`)
+
         } else {
 
+            // CASE: ring moved to a legal destination -> look at scenarioTree to see what happens
             // retrieve scenario as scenarioTree.index_start_move.index_end_move
-            const move_scenario = yinsh.server_data.scenarioTree[start_move_index][dropping_ring_loc_index];
+            const move_scenario = yinsh.server_data.scenarioTree[start_move_index][drop_loc_index];
             console.log(move_scenario);
 
             // CASE: some markers must be flipped
@@ -427,7 +428,13 @@ async function ringDrop_handler (event) {
             };
 
             // CASE: scoring was made -> score handling is triggered
+                // values to send back to server
+                let scoring_mk_sel_picked = 0;
+                let scoring_ring_picked = 0;
+
             if (move_scenario.score_flag == true){
+
+                // check who the scores belongs to
 
                 console.log("LOG - Score!");
 
@@ -443,27 +450,29 @@ async function ringDrop_handler (event) {
                 core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
                 scoring_mk_sel_picked = await mk_scoring.promise // wait for mk to be picked -> return value of id
                 scoring_ring_picked = await ring_scoring.promise // wait for ring to be picked -> return value of id
-               
+                
                 // wipe tasks data from global refs
                 reset_scoring_tasks();
             }
-        };
-                
-        // info to send back on scenario pick  
-        const scenario_info = { start: start_move_index, 
-                                end: dropping_ring_loc_index,
-                                mk_sel_pick: scoring_mk_sel_picked, // default to 0
-                                ring_removed: scoring_ring_picked // defaults to 0
-                            }; 
+                    
+            // flipping and scoring done -> wrap up info to send back on actions taken by player
+            const scenario_info = { start: start_move_index, 
+                                    end: drop_loc_index,
+                                    mk_sel_pick: scoring_mk_sel_picked, // default to 0
+                                    ring_removed: scoring_ring_picked // defaults to 0
+                                }; 
+
+            // turn completed -> notify server with info on scenario
+            await end_turn_wait_opponent(scenario_info);
         
+        };
 
-        // turn completed -> notify server with info on scenario
-        await end_turn_wait_opponent(scenario_info);
-
-    } else{ // invalid location for drop attempt
+    // CASE: invalid location for drop attempt
+    } else { 
 
         console.log("LOG - Invalid drop location");
-        // NOTE: we could play specific sound 
+        // NOTE: we could play specific sound 'err'
+
     };
 };
 

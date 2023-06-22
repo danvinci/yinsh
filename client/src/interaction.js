@@ -78,8 +78,8 @@ function mouseDown_handler (event) {
             // retrieve markers
             const _markers = yinsh.objs.markers;
 
-            // check which marker is being clicked on
-            const picked_marker = _markers.find((mk) => (ctx.isPointInPath(mk.path, mousePos.x, mousePos.y) && _mk_sel.includes(mk.loc.index)));
+            // check which marker is being clicked on, among ones that belong to current player
+            const picked_marker = _markers.find((mk) => (mk.player == player_id && ctx.isPointInPath(mk.path, mousePos.x, mousePos.y) && _mk_sel.includes(mk.loc.index)));
             if (typeof picked_marker !== 'undefined') {
                 core_et.dispatchEvent(new CustomEvent('mk_sel_picked', { detail: picked_marker.loc.index }));
             };
