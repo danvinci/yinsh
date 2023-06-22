@@ -262,6 +262,7 @@ export function get_task_status(task_name){
 
 };
 
+// returns scoring options in the task (should be for current player only)
 export function get_scoring_options(){
 
     return structuredClone(yinsh.objs.current_mk_scoring.task_ref.data);

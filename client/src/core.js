@@ -4,7 +4,7 @@
 
 //////////// IMPORTS
 import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_whatNow} from './server.js'
-import { init_global_obj_params, init_empty_game_objects, init_new_game_data, save_next_server_response } from './data.js'
+import { init_global_obj_params, init_empty_game_objects, init_new_game_data, get_player_id, save_next_server_response } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end} from './data.js' 
 import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks} from './data.js' 
@@ -369,6 +369,7 @@ async function ringDrop_handler (event) {
 
     // retrieves ids of legal drops for the ring that was picked up
     const _current_legal_drops = yinsh.objs.current_move.legal_drops;
+    const player_id = get_player_id();
 
     // save move starting index
     const start_move_index = yinsh.objs.current_move.start_index;
@@ -411,7 +412,7 @@ async function ringDrop_handler (event) {
             refresh_canvas_state(); 
 
             // log
-            console.log(`LOG - Ring dropped in-place. Turn still on.`)
+            console.log(`LOG - Ring dropped in-place. Turn is still on.`)
 
         } else {
 
@@ -434,26 +435,36 @@ async function ringDrop_handler (event) {
 
             if (move_scenario.score_flag == true){
 
-                // check who the scores belongs to
+                // check if the scoring is for the current player or not
+                const _all_scores = structuredClone(move_scenario.scores_toHandle);
+                const _player_scores = _all_scores.filter(s => s.player == player_id);
 
-                console.log("LOG - Score!");
+                // handle only scoring for current player
+                if (_player_scores.length > 0) {
 
-                // create task for markers scoring
-                const mk_scoring = new Task('mk_scoring_task', move_scenario.scores_toHandle);
-                activate_task(mk_scoring); // save scoring options and activate task
+                    console.log("LOG - Score!");
 
-                // create task for ring scoring
-                const ring_scoring = new Task('ring_scoring_task');
-                activate_task(ring_scoring); 
+                    // create task for markers scoring (options only for current player)
+                    const mk_scoring = new Task('mk_scoring_task', _player_scores);
+                    activate_task(mk_scoring); // save scoring options and activate task
 
-                // turn will be ended by score handling function 
-                core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
-                scoring_mk_sel_picked = await mk_scoring.promise // wait for mk to be picked -> return value of id
-                scoring_ring_picked = await ring_scoring.promise // wait for ring to be picked -> return value of id
-                
-                // wipe tasks data from global refs
-                reset_scoring_tasks();
-            }
+                    // create task for ring scoring
+                    const ring_scoring = new Task('ring_scoring_task');
+                    activate_task(ring_scoring); 
+
+                    // turn will be ended by score handling function 
+                    core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
+                    scoring_mk_sel_picked = await mk_scoring.promise // wait for mk to be picked -> return value of id
+                    scoring_ring_picked = await ring_scoring.promise // wait for ring to be picked -> return value of id
+                    
+                    // wipe tasks data from global refs
+                    reset_scoring_tasks();
+
+                } else {
+                    console.log("LOG - Oh no, you scored for your opponent!");
+
+                };  
+            };
                     
             // flipping and scoring done -> wrap up info to send back on actions taken by player
             const scenario_info = { start: start_move_index, 
