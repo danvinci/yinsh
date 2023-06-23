@@ -12,7 +12,7 @@ const ip_address = "127.0.0.1"
 
 // custom class for managing the lifecycle of messages
 class MessagePromise {
-    constructor(payload, msg_id, msg_time, timeout = 100000) {
+    constructor(payload, msg_id, msg_time, timeout = 120000) {
         this.payload = payload;
         this.msg_id = msg_id;
         this.msg_time = msg_time;
@@ -20,7 +20,7 @@ class MessagePromise {
         this.promise = new Promise((resolve, reject)=> {
             this.resolve = resolve
 
-            // automatic rejection 100s after creation
+            // automatic rejection 120s after creation if not resolved 
             setTimeout(()=> {reject(new Error("LOG - Request timed out - ID: msg_id"))}, timeout);
         })
     }

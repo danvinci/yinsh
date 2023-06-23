@@ -188,12 +188,28 @@ async function replay_opponent_move(){
             };
             
         // opponent's scoring
+        let _score_mk_wait = 0;
+        let _score_ring_wait = 0;
+        if (yinsh.delta.score_handled){
+            
+            _score_mk_wait = 350;
+            await sleep(_score_mk_wait);
+            remove_markers(yinsh.delta.markers_toRemove); 
+            markersRemoved_play_sound(); // play sound
 
-            // removed markers (scoring)
-            // removed ring (scoring)
+            _score_ring_wait = 650;
+            await sleep(_score_ring_wait);
+            remove_ring_scoring(yinsh.delta.scoring_ring); 
+
+            const new_opponent_score = increase_opponent_score();
+            console.log(`LOG - New opponent score: ${new_opponent_score}`);
+
+        };
+            
+        // TODO: add animation + sound + UI text for scoring replay
 
         // total sleep time
-        const _tot_sleep_time = array_sum([_marker_add_wait, _ring_move_wait, _flip_wait])
+        const _tot_sleep_time = array_sum([_marker_add_wait, _ring_move_wait, _flip_wait, _score_mk_wait, _score_ring_wait])
         const _tot_time = Date.now() - replay_start_time;
         const _net_time = _tot_time - _tot_sleep_time
 
@@ -467,7 +483,7 @@ async function ringDrop_handler (event) {
                 };  
             };
                     
-            // flipping and scoring done -> wrap up info to send back on actions taken by player
+            // move done -> wrap up info to send back on actions taken by player
             const scenario_info = { start: start_move_index, 
                                     end: drop_loc_index,
                                     mk_sel_pick: scoring_mk_sel_picked, // default to -1
@@ -599,6 +615,7 @@ function ring_scoring_handler (event) {
     refresh_canvas_state();
     
     // -> draw ring to scoring spot
+    // play specific sound
 
     // increases player's score by one
     const new_player_score = increase_player_score();

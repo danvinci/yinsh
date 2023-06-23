@@ -1701,9 +1701,6 @@ end
 # ╔═╡ 9a08682a-6406-45d2-b655-9fe24a9158e5
 games_log_dict["oOSYvY"]
 
-# ╔═╡ 1344591a-7da8-4ed9-925e-b0a797924c11
-
-
 # ╔═╡ d9077e87-df02-43c8-ae5c-0df75eeee846
 getLast_clientDelta("Ij6AV")
 
@@ -1893,21 +1890,21 @@ function update_serverStates(_game_code, _player_id, _scenario_pick)
 
 	## extract info payload 
 	# convert moves to server indexes
+	println("incoming scenario pick for server state update")
+	println(_scenario_pick)
+	
 	_start_index = reshape_in(_scenario_pick[:start])
 	_end_index =  reshape_in(_scenario_pick[:end])
 
-	_no_scoring_def_client = -1
+	_no_scoring_default = -1
 
-	_has_keys = haskey(_scenario_pick, :mk_sel_pick) && haskey(_scenario_pick, :ring_removed) 
-	_scoring_handled = false
+	_mk_sel_pick_cli = get(_scenario_pick, :mk_sel_pick, _no_scoring_default)
+	_ring_removed_cli = get(_scenario_pick, :ring_removed, _no_scoring_default) 
 
-	if _has_keys
-		_mk_sel_pick_cli = _scenario_pick[:mk_sel_pick]
-		_ring_removed_cli = _scenario_pick[:ring_removed]
-		
-		_scoring_handled = (_mk_sel_pick_cli != _no_scoring_def_client && 
-							_ring_removed_cli != _no_scoring_def_client) ? true : false
-	end
+	# false if either the keys are missing (AI -> -1) or returned as -1 by the client
+	_scoring_handled = (_mk_sel_pick_cli != _no_scoring_default && 
+						_ring_removed_cli != _no_scoring_default) ? true : false
+
 
 	# neutral value
 	_no_scoring_def_server = CartesianIndex(0,0)
@@ -1915,8 +1912,8 @@ function update_serverStates(_game_code, _player_id, _scenario_pick)
 	_mk_sel_index = _no_scoring_def_server
 	_score_ring_index = _no_scoring_def_server
 	
-		# overwrite data on scoring choices (if made)
-		if _has_keys && _scoring_handled 
+		# overwrite data on scoring choices
+		if _scoring_handled 
 	
 			_mk_sel_index = reshape_in(_scenario_pick[:mk_sel_pick])
 			_score_ring_index = reshape_in(_scenario_pick[:ring_removed])
@@ -1975,36 +1972,164 @@ function get_last_moving_player(game_code)
 
 end
 
+# ╔═╡ fccab961-4adc-4140-9237-b7febeb98141
+games_log_dict["DUvod4"]
+
+# ╔═╡ 4976c9c5-d60d-4b19-aa72-0e135ad37361
+function pick_flipping_move(_ex_game_state, _tree::Dict, _player_id::String)
+## filter flipping options for specific player
+## pick first flipping opportunity that results in something flipping to the player's color
+
+	_pick_found = false
+	_picked_start = 0
+	_picked_end = 0
+	
+	# possible flipping moves
+	_f_moves = _tree[:summary][:flipping_moves]
+
+	for move in _f_moves
+
+		start_m = move[:start] 
+		end_m = move[:end] 	
+		
+		# which leads to a marker flipping to black?
+		_possible_flips = _tree[start_m][end_m][:markers_toFlip]
+		for _mk_flip_id in _possible_flips
+
+			_mk_state::String = _ex_game_state[reshape_in(_mk_flip_id)] # need to reshape
+			if !contains(_mk_state, _player_id) # -> ! as it's yet to flip
+
+				# we need at least one marker flipping to the player's color
+				_pick_found = true
+
+				_picked_start = start_m
+				_picked_end = end_m
+
+				break
+				
+			end
+		end
+	end
+
+	return Dict(:pick_found => _pick_found, 
+				:start => _picked_start,
+				:end => _picked_end)
+
+
+end
+
+# ╔═╡ 1c970cc9-de1f-48cf-aa81-684d209689e0
+function pick_scoring_move(_tree::Dict, _player_id::String)
+## filter scoring options for specific player
+## pick first scoring opportunity
+
+	_pick_found = false
+	_picked_start = 0
+	_picked_end = 0
+	_mk_sel = []
+	_scoring_ring = 0
+
+	# the tree only has keys for the player's rings 
+	_rings = filter(k -> typeof(k) == Int, collect(keys(_tree)))
+	
+	# possible scoring moves
+	_s_moves = _tree[:summary][:scoring_moves]
+
+	for move in _s_moves
+
+		start_m = move[:start] 
+		end_m = move[:end] 	
+		
+		# which leads to a score for the player?
+
+		_possible_scores = _tree[start_m][end_m][:scores_toHandle]
+		for _score in  _possible_scores
+			if _score[:player] == _player_id
+				
+				_pick_found = true
+
+				_picked_start = start_m
+				_picked_end = end_m
+				_mk_sel = _score[:mk_sel]
+				_scoring_ring = rand(_rings)
+
+				break
+				
+			end
+		end
+	end
+
+	return Dict(:pick_found => _pick_found, 
+				:start => _picked_start,
+				:end => _picked_end,
+				:mk_sel_pick => _mk_sel, 
+				:ring_removed => _scoring_ring)
+
+
+end
+
 # ╔═╡ 14aa5b7c-9065-4ca3-b0e9-19c104b1854d
-function scenario_choice(_tree::Dict, ai_moving_player_id::String)
+function scenario_choice(_ex_game_state, _tree::Dict, ai_moving_player_id::String)
 	# value function for picking moves
 	# works with depth-1 game scenario trees
 	# important to pass id of player so that it picks with more context
+	# returned values/ids are in client-format
+	# it should return a move as long as at least one is listed in the tree
+
+	# track if choice made
+	_choice_made = false
+	_return_pick = Dict() # to be returned
 
 	# retrieve summary function
 	global_score_flag = _tree[:summary][:global_score_flag]
 	global_flip_flag = _tree[:summary][:global_flip_flag]
 
-	# pick random scoring option if available
-	if global_score_flag && !isempty(_tree[:summary][:scoring_moves])
-		
-		_pick = rand(_tree[:summary][:scoring_moves])
+	# pick scoring option for current player if available
+	if global_score_flag
 
-	# if none, pick random that leads to flipped markers
-	elseif global_flip_flag && !isempty(_tree[:summary][:flipping_moves])
+		# check which ones result in a score for current player
+		_score_pick = pick_scoring_move(_tree, ai_moving_player_id)
 
-		_pick = rand(_tree[:summary][:flipping_moves])
+		if get(_score_pick, :pick_found, false)
+			_choice_made = true
+			_return_pick = _score_pick
+			println("LOG - Scoring move picked")
 
-	# otherwise, pick a random move
-	else
-		_first_k = rand(filter(k -> k != :summary, collect(keys(_tree))))
-		_second_k = rand(collect(keys(_tree[_first_k])))
-
-		_pick = Dict(:start => _first_k, :end => _second_k)
-
+			return _score_pick
+		end
 	end
 
-	return _pick::Dict{Symbol, Int}
+
+	# if none, pick something that leads to markers being flipped to black
+	if global_flip_flag && !_choice_made
+
+		# check which ones result in a score for current player
+		_flip_pick = pick_flipping_move(_ex_game_state, _tree, ai_moving_player_id)
+		
+		if get(_flip_pick, :pick_found, false)
+			_choice_made = true
+			_return_pick = _flip_pick
+			println("LOG - Flip move picked")
+
+			return _flip_pick
+		end
+	end
+			
+	
+	# otherwise, make a random move
+	if !_choice_made
+		
+		_start_k = filter(k -> typeof(k) == Int, collect(keys(_tree))) |> rand
+		_end_k = collect(keys(_tree[_start_k])) |> rand
+
+		_random_pick = Dict(:start => _start_k, 
+							:end => _end_k)
+
+		println("LOG - Random move picked")
+
+		return _random_pick
+
+	end
 
 end
 
@@ -2019,7 +2144,7 @@ function play_turn_AI(game_code::String, ai_moving_player_id::String)
 	_scenarios = gen_scenarioTree(_ex_game_state, ai_moving_player_id)
 
 	# make choice
-	_pick = scenario_choice(_scenarios, ai_moving_player_id)
+	_pick = scenario_choice(_ex_game_state, _scenarios, ai_moving_player_id)
 
 	return _pick
 
@@ -3602,7 +3727,6 @@ version = "1.4.1+0"
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
 # ╠═9a08682a-6406-45d2-b655-9fe24a9158e5
-# ╠═1344591a-7da8-4ed9-925e-b0a797924c11
 # ╠═d9077e87-df02-43c8-ae5c-0df75eeee846
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╟─466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
@@ -3624,7 +3748,10 @@ version = "1.4.1+0"
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
 # ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
+# ╠═fccab961-4adc-4140-9237-b7febeb98141
 # ╠═14aa5b7c-9065-4ca3-b0e9-19c104b1854d
+# ╠═4976c9c5-d60d-4b19-aa72-0e135ad37361
+# ╟─1c970cc9-de1f-48cf-aa81-684d209689e0
 # ╠═3539b21d-4082-4b84-84dd-b736ea24978e
 # ╠═5b4f9b35-0246-4813-9eb4-be8d28726f3f
 # ╠═903e103c-ec53-423f-9fe1-99abea55c28d
