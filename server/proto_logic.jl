@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.26
+# v0.19.27
 
 using Markdown
 using InteractiveUtils
@@ -35,18 +35,8 @@ using HTTP, JSON3
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
 
-# ╔═╡ 1f9da483-6b05-4867-a509-2c24b41cd5d6
-mm_yinsh = zeros(Int64, 19, 11)
-
-# ╔═╡ d41d8f2c-16f2-4e41-bf81-fccc761b62cc
-row_m, col_m = size(mm_yinsh)
-
-# ╔═╡ fddf20d4-15e4-4ac8-99b1-98860f991297
-#mm_yinsh
-
-# 0 -> not part of the board
-# 1 -> mid-point
-# 2 -> active point
+# ╔═╡ cd36abda-0f4e-431a-a4d1-bd5366c83b9b
+row_m = 19; col_m = 11;
 
 # ╔═╡ 2d69b45e-d8e4-4505-87ed-382e45bebae7
 function partOfBoard(row_id::Int64, col_id::Int64)
@@ -88,45 +78,54 @@ function partOfBoard(row_id::Int64, col_id::Int64)
 
 end
 
-# ╔═╡ 1b8f5256-7433-405b-8419-cd00fceb4ccf
-begin
-	for i in 1:row_m
-	for j in 1:col_m
-		if partOfBoard(i,j) == true 
-			mm_yinsh[i,j] = 1
+# ╔═╡ 48bbc7c2-ba53-41cd-9b3c-ab3faedfc6b0
+function prep_base_matrix()
+
+	# 0 -> not part of the board
+	# 1 -> mid-point
+	# 2 -> active point
+
+	rows = 19
+	cols = 11
+
+	base_m = zeros(Int64, rows, cols)
+
+	# populate 1s
+	for i in 1:rows
+		for j in 1:cols
+			if partOfBoard(i,j) == true 
+				base_m[i,j] = 1
+			end
 		end
 	end
-	end
 
-end
+	# checks if point is active (can be used for placing rings/markers)
+	# for each column, valid points are found each 2nd one
 
-# ╔═╡ 58e4dbd8-61c6-473f-95e1-826822884895
-begin
-# checks if point is active (can be used for placing rings/markers)
-# for each column, valid points are found each 2nd one
-
-	for j in 1:col_m
+	for j in 1:cols
 
 		# extract column array
-		temp_array = view(mm_yinsh,:,j)
+		temp_array = view(base_m,:,j)
 
 		# get index of first and last non-zero element
 		start_index = findfirst(x -> x != 0, temp_array)
 		end_index = findlast(x -> x != 0, temp_array)
 
-		#every second element is the active one
+		# every second element is the active one
 		for k in start_index:2:end_index
-			mm_yinsh[k,j] = 2
+			base_m[k,j] = 2
 		end
 		
 	
 	end
+	
 
-
+	return base_m
+	
 end
 
 # ╔═╡ c96e1ee9-6d78-42d2-bfd6-2e8f88913b37
-mm_yinsh
+mm_yinsh = prep_base_matrix();
 
 # ╔═╡ 55987f3e-aaf7-4d85-a6cf-11eda59cd066
 function draw_board()
@@ -160,8 +159,9 @@ end
 # ╔═╡ b6292e1f-a3a8-46d7-be15-05a74a5736de
 draw_board()
 
-# ╔═╡ 00468008-0cbc-4f68-832b-2a5b46431fb7
-begin
+# ╔═╡ d996152e-e9e6-412f-b4db-3eacf5b7a5a6
+function printable_base_m()
+
 	# print matrix easy copying in js code
 	mm_print_01 = ""
 	
@@ -186,6 +186,11 @@ begin
 print(mm_print_01)
 
 end
+
+
+# ╔═╡ 00468008-0cbc-4f68-832b-2a5b46431fb7
+# call printing function
+#printable_base_m()
 
 # ╔═╡ ff94655f-3603-4553-9ca3-e1dec83361b8
 #=
@@ -1698,12 +1703,6 @@ function getLast_clientDelta(game_id)
 
 end
 
-# ╔═╡ 9a08682a-6406-45d2-b655-9fe24a9158e5
-games_log_dict["oOSYvY"]
-
-# ╔═╡ d9077e87-df02-43c8-ae5c-0df75eeee846
-getLast_clientDelta("Ij6AV")
-
 # ╔═╡ f86b195e-06a9-493d-8536-16bdcaadd60e
 function print_gameState(server_game_state)
 	# print matrix easy copying in js code
@@ -1758,6 +1757,33 @@ ws_messages_log = []; # test log for all received messages
 # ╔═╡ c9c4129f-b507-4c92-899b-bc31087b63f4
 ws_servers_ref = []; # array of server handles
 
+# ╔═╡ f9949a92-f4f8-4bbb-81d0-650ff218dd1c
+#HTTP.forceclose(ws_servers_ref[end])
+
+# ╔═╡ 369b3c62-bfdd-424b-b3e9-b4bbb0db674e
+function check_srv_status(ws_ref)
+
+	while true
+
+		if !isempty(ws_ref) 
+		
+			server_status = ws_ref[end].listener.server.status # 4 open, 6 closed
+
+			if server_status == 6
+				println("WS server closed")
+			elseif server_status == 4
+				println("WS server active")
+			else
+				println("WS server other")
+			end
+
+		end
+
+		sleep(1)
+	end
+
+end
+
 # ╔═╡ 0bb77295-be29-4b50-bff8-f712ebe08197
 begin
 	
@@ -1775,6 +1801,13 @@ CODE_what_now = "what_now"
 CODE_OK = "_OK"
 CODE_ERR = "_ERR"
 
+
+end
+
+# ╔═╡ 7a191c6f-d3e8-4fc8-9f32-8fb8b3710b96
+function print_srv_shutdown_notice()
+
+	println("WS server shutdown $(now())")
 
 end
 
@@ -1971,9 +2004,6 @@ function get_last_moving_player(game_code)
 	return games_log_dict[game_code][:turns][:data][end][:moving_player]
 
 end
-
-# ╔═╡ fccab961-4adc-4140-9237-b7febeb98141
-games_log_dict["DUvod4"]
 
 # ╔═╡ 4976c9c5-d60d-4b19-aa72-0e135ad37361
 function pick_flipping_move(_ex_game_state, _tree::Dict, _player_id::String)
@@ -2470,8 +2500,13 @@ end
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 function init_ws_server()
 
+	println("WS server start $(now())")
+
 	# starts new websockets server 
-	ws_server = WebSockets.listen!(ws_test_ip, ws_test_port) do ws
+	ws_server = WebSockets.listen!(ws_test_ip, ws_test_port; 
+									idle_timeout_enabled = false,
+									on_shutdown = print_srv_shutdown_notice
+								) do ws
 
 		# iterate over incoming messages
 		for msg in ws
@@ -2490,24 +2525,25 @@ function init_ws_server()
 
 end
 
-# ╔═╡ a89ad247-bde8-4912-a5c3-65a361e6942c
-function respawn_ws_server()
+# ╔═╡ 91c35ba0-729e-4ea9-8848-3887936a8a21
+function ws_server_up(ws_ref)
 
-	# forces closure of last server (if existing) and starts a new one
-	if length(ws_servers_ref) > 0
+	# start server if there's none
+	if isempty(ws_ref)
+
+		init_ws_server()
 		
-		HTTP.forceclose(ws_servers_ref[end])
-		init_ws_server()
-
 	else
+		
+		HTTP.forceclose(ws_ref[end])
 		init_ws_server()
+		
 	end
-	
 
 end
 
 # ╔═╡ 31bea118-f628-4f98-bd25-4f0077f06538
-respawn_ws_server()
+ws_server_up(ws_servers_ref)
 
 # ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 function test_ws_client()
@@ -2616,8 +2652,10 @@ S -> .... (cycle repeats)
 
 =#
 
-# ╔═╡ 26ce8f2c-efc2-4ff0-84c6-54c75dc887f1
 
+# ╔═╡ 24185d12-d29c-4e72-a1de-a28319b4d369
+# make it wait forever
+wait(Condition())
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2644,7 +2682,7 @@ StatsBase = "~0.33.21"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.1"
+julia_version = "1.9.3"
 manifest_format = "2.0"
 project_hash = "3e07a06d64e538a955daef45d305f17ecaae42b8"
 
@@ -2724,7 +2762,7 @@ weakdeps = ["Dates", "LinearAlgebra"]
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.0.2+0"
+version = "1.0.5+0"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
@@ -3190,7 +3228,7 @@ version = "0.40.1+0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.9.0"
+version = "1.9.2"
 
 [[deps.PlotThemes]]
 deps = ["PlotUtils", "Statistics"]
@@ -3660,15 +3698,13 @@ version = "1.4.1+0"
 # ╔═╡ Cell order:
 # ╠═43f89626-8583-11ed-2b3d-b118ff996f37
 # ╠═9505b0f0-91a2-46a8-90a5-d615c2acdbc1
-# ╠═1f9da483-6b05-4867-a509-2c24b41cd5d6
-# ╠═d41d8f2c-16f2-4e41-bf81-fccc761b62cc
-# ╠═fddf20d4-15e4-4ac8-99b1-98860f991297
-# ╠═1b8f5256-7433-405b-8419-cd00fceb4ccf
-# ╠═2d69b45e-d8e4-4505-87ed-382e45bebae7
-# ╠═58e4dbd8-61c6-473f-95e1-826822884895
+# ╠═cd36abda-0f4e-431a-a4d1-bd5366c83b9b
+# ╟─2d69b45e-d8e4-4505-87ed-382e45bebae7
+# ╟─48bbc7c2-ba53-41cd-9b3c-ab3faedfc6b0
 # ╠═c96e1ee9-6d78-42d2-bfd6-2e8f88913b37
 # ╠═b6292e1f-a3a8-46d7-be15-05a74a5736de
 # ╟─55987f3e-aaf7-4d85-a6cf-11eda59cd066
+# ╠═d996152e-e9e6-412f-b4db-3eacf5b7a5a6
 # ╠═00468008-0cbc-4f68-832b-2a5b46431fb7
 # ╠═ff94655f-3603-4553-9ca3-e1dec83361b8
 # ╠═dffecc3d-4737-4bf3-b109-882687b2e361
@@ -3726,8 +3762,6 @@ version = "1.4.1+0"
 # ╠═761fb8d7-0c7d-4428-ad48-707d219582c0
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
-# ╠═9a08682a-6406-45d2-b655-9fe24a9158e5
-# ╠═d9077e87-df02-43c8-ae5c-0df75eeee846
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╟─466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
@@ -3735,10 +3769,13 @@ version = "1.4.1+0"
 # ╠═bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 # ╠═1450c9e4-4080-476c-90d2-87b19c00cfdf
 # ╠═c9c4129f-b507-4c92-899b-bc31087b63f4
+# ╠═91c35ba0-729e-4ea9-8848-3887936a8a21
 # ╠═31bea118-f628-4f98-bd25-4f0077f06538
+# ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
+# ╠═369b3c62-bfdd-424b-b3e9-b4bbb0db674e
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
-# ╟─1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
-# ╟─a89ad247-bde8-4912-a5c3-65a361e6942c
+# ╠═7a191c6f-d3e8-4fc8-9f32-8fb8b3710b96
+# ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 # ╟─a2d0d733-345d-46a7-959b-69c3fac3eabe
 # ╟─b85d9d1c-213c-4330-9f1d-95823c3a9491
 # ╠═f479f1f8-d6fd-4e48-a0f3-447997bc0416
@@ -3748,7 +3785,6 @@ version = "1.4.1+0"
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
 # ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
-# ╠═fccab961-4adc-4140-9237-b7febeb98141
 # ╠═14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 # ╠═4976c9c5-d60d-4b19-aa72-0e135ad37361
 # ╟─1c970cc9-de1f-48cf-aa81-684d209689e0
@@ -3760,6 +3796,6 @@ version = "1.4.1+0"
 # ╠═bd16c53e-bd3e-4328-988d-857bab42f0e6
 # ╟─972d60e0-ed99-465e-a6fa-aefca286c2cb
 # ╠═e7de85fc-e51e-47a3-98e8-ddc0fab782ba
-# ╠═26ce8f2c-efc2-4ff0-84c6-54c75dc887f1
+# ╠═24185d12-d29c-4e72-a1de-a28319b4d369
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
