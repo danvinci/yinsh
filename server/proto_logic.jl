@@ -1788,7 +1788,7 @@ end
 begin
 	
 # ip and port to use for the server
-ws_test_ip = "127.0.0.1"
+ws_test_ip = "0.0.0.0"
 ws_test_port = 8090
 
 # codes used with client
