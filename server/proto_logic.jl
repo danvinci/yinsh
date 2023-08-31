@@ -1191,6 +1191,17 @@ function gen_random_gameState(white_ring, black_ring)
 	return server_game_state
 end
 
+# ╔═╡ 29a93299-f577-4114-b77f-dbc079392090
+begin
+# global parameters for identifying rings and markers
+
+	white_id = "W"
+	black_id = "B"
+	ring_id = "R"
+	marker_id = "M"
+
+end
+
 # ╔═╡ 61a0e2bf-2fed-4141-afc0-c8b5507679d1
 md"#### Server-side storage of game data"
 
@@ -1567,12 +1578,6 @@ end
 function gen_newGame(vs_ai=false)
 # initializes new game, saves data server-side and returns object for client
 
-	# constants for players and game objects
-	white_id = "W"
-	black_id = "B"
-	ring_id = "R"
-	marker_id = "M"
-
 	white_ring = ring_id * white_id
 	black_ring = ring_id * black_id
 
@@ -1751,68 +1756,113 @@ end
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
 md"### Running websocket server"
 
-# ╔═╡ 1450c9e4-4080-476c-90d2-87b19c00cfdf
-ws_messages_log = []; # test log for all received messages
-
-# ╔═╡ c9c4129f-b507-4c92-899b-bc31087b63f4
-ws_servers_ref = []; # array of server handles
-
-# ╔═╡ f9949a92-f4f8-4bbb-81d0-650ff218dd1c
-#HTTP.forceclose(ws_servers_ref[end])
-
-# ╔═╡ 369b3c62-bfdd-424b-b3e9-b4bbb0db674e
-function check_srv_status(ws_ref)
-
-	while true
-
-		if !isempty(ws_ref) 
-		
-			server_status = ws_ref[end].listener.server.status # 4 open, 6 closed
-
-			if server_status == 6
-				println("WS server closed")
-			elseif server_status == 4
-				println("WS server active")
-			else
-				println("WS server other")
-			end
-
-		end
-
-		sleep(1)
-	end
-
+# ╔═╡ c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
+begin
+	ws_servers_array = []; # array of server handles
+	ws_messages_log = []; # log for all received messages
 end
 
 # ╔═╡ 0bb77295-be29-4b50-bff8-f712ebe08197
 begin
 	
-# ip and port to use for the server
-ws_test_ip = "0.0.0.0"
-ws_test_port = 8090
+	# ip and port to use for the server
+	ws_ip = "0.0.0.0" # listen on every ip
+	ws_port = 6090
+	
+	# suffixes for response type
+	sfx_CODE_OK = "_OK"
+	sfx_CODE_ERR = "_ERROR"
 
-# codes used with client
-CODE_ask_new_game = "ask_new_game"
-CODE_ask_join_game = "ask_join_game"
-CODE_ask_new_game_AI = "ask_new_game_AI"
-CODE_what_now = "what_now"
+end
 
-# positive response
-CODE_OK = "_OK"
-CODE_ERR = "_ERR"
+# ╔═╡ f9949a92-f4f8-4bbb-81d0-650ff218dd1c
+#HTTP.forceclose(ws_servers_ref[end])
+
+# ╔═╡ 28ee9310-9b7d-4169-bae4-615e4b2c386e
+function msg_dispatcher(ws, msg_id, msg_code, payload = Dict(), _status::Bool = true)
+
+	# copy response payload
+	_response::Dict{Symbol, Any} = deepcopy(payload)
+
+	# prepare response code
+	_sfx_msg_code = msg_code * (_status ? sfx_CODE_OK : sfx_CODE_ERR)
+	
+	# append original msg id and updated response_code
+	setindex!(_response, msg_id, :msg_id)
+	setindex!(_response, _sfx_msg_code, :msg_code)
+
+	# send response
+	send(ws, JSON3.write(_response))
+
+	# log
+	println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
+
+	# save response (TO BE REMOVED)
+	push!(ws_messages_log, _response)
 
 
 end
 
-# ╔═╡ 7a191c6f-d3e8-4fc8-9f32-8fb8b3710b96
-function print_srv_shutdown_notice()
+# ╔═╡ befb251e-563e-4927-b504-40f22b9470f4
+ws_messages_log
 
-	println("WS server shutdown $(now())")
+# ╔═╡ a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
+function fn_new_game_vs_human(msg)
+# game originator is asking for new game details - to play against human
+
+	# msg is now ignored, but in the future it could contain game options
+
+	# generate and store new game data
+	_new_game_id = gen_newGame()
+	
+	# retrieve payload in client format 
+	new_game_data = getLast_clientPkg(_new_game_id)
+
+	# return payload - requester, other
+	return new_game_data, nothing
+
+end
+
+# ╔═╡ 32307f96-6503-4dbc-bf5e-49cf253fbfb2
+function fn_new_game_vs_server(msg)
+# game originator is asking for new game details - to play against server/AI
+
+	# msg is now ignored, but in the future it could contain game options
+	
+
+	# generate and store new game data
+	_new_game_id = gen_newGame(true) 
+
+	# retrieve payload
+	new_game_data = getLast_clientPkg(_new_game_id)
+
+	# return payload - requester, other
+	return new_game_data, nothing
+
+
+end
+
+# ╔═╡ ac87a771-1d91-4ade-ad39-271205c1e16e
+function fn_join_game(msg)
+
+	# retrieve existing game data (otherwise error is handled by calling function)
+	_existing_game_data = getLast_clientPkg(msg[:game_id])
+
+	# return payload - requester, other
+	return _existing_game_data, nothing
+
+end
+
+# ╔═╡ 1e0b575f-ff01-4879-b02d-7b9b258e280f
+function fn_end_game()
+
 
 end
 
 # ╔═╡ b85d9d1c-213c-4330-9f1d-95823c3a9491
-function fwd_outbound(ws, msg_id, msg_code, resp_payload = Dict(), ok_response = true)
+# to be deleted
+
+function fwd_outbound(ws, msg_id, msg_code, resp_payload::Dict{Symbol, Any} = Dict(), ok_response = true)
 
 	# copy response payload
 	response_msg = deepcopy(resp_payload)
@@ -2419,7 +2469,156 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 
 end
 
+# ╔═╡ ca346015-b2c9-45da-8c1e-17493274aca2
+function fn_next_move(msg)
+
+	# orchestrator
+	_resp = wannabe_orchestrator(msg[:msg_id], msg[:msg_code], msg)
+
+	return _resp, nothing
+	
+end
+
+# ╔═╡ 5e5366a9-3086-4210-a037-c56e1374a686
+begin
+	
+	# codes used for different client requests
+	CODE_new_game_human = "new_game_vs_human"
+	CODE_new_game_server = "new_game_vs_server"
+	CODE_join_game = "join_game"
+	CODE_next_move = "next_move"
+	CODE_end_game = "end_game"
+
+
+	# matching each code to a function call
+	codes_toFun_match::Dict{String, Function} = Dict(
+										CODE_new_game_human => fn_new_game_vs_human,
+										CODE_new_game_server => fn_new_game_vs_server,
+										CODE_join_game => fn_join_game,
+										CODE_next_move => fn_next_move,
+										CODE_end_game => fn_end_game
+										)
+
+
+	# array of codes
+	allowed_CODES = collect(keys(codes_toFun_match))
+
+end
+
+# ╔═╡ 064496dc-4e23-4242-9e25-a41ddbaf59d1
+function msg_handler(ws, msg, msg_log)
+
+# handles messages depending on their code
+# every incoming message should have an id and code - if they're missing, throw error
+
+	# save incoming message
+	push!(msg_log, msg)
+
+	# try retrieving specific values
+	_msg_id = get(msg, :msg_id, nothing)
+	_msg_code = get(msg, :msg_code, nothing)
+
+	# if they're present and valid, do something
+	if !isnothing(_msg_id) && (_msg_code in allowed_CODES)
+
+		try
+
+			# logic to understand who should be replied to
+			# ? (could be handled by case handler)
+			# we could use flag to see if we have to reply:
+			# same (always) - also other
+			# compute and return payload
+			# decide who should be replied to
+			# calling function is responsible for dispatch
+			# we should understand who needs to receive payload (other than a 'oki' response)
+
+			_pld_requester, _pld_other = codes_toFun_match[_msg_code](msg)
+
+			# add logic to act on flag and ping correct player
+			# TODO -> game server should also be behind websocket (?)
+			
+
+			# reply to client with code-specific response
+			msg_dispatcher(ws, _msg_id, _msg_code, _pld_requester)
+			
+
+		catch e
+
+			# reply to client with error
+			msg_dispatcher(ws, _msg_id, _msg_code, Dict(:server_msg => "Error, something went wrong when handling request, $e"), false)
+
+		end
+
+
+	else
+
+		# if fields are missing, also give error
+		msg_dispatcher(ws, _msg_id, _msg_code, Dict(:server_msg => "Error, missing msg_id and/or incorrect msg_code"), false)
+
+		
+	end
+
+
+end
+
+# ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+function start_ws_server(ws_array, _log)
+
+	println("WebSocket server start $(now())")
+
+	# start new server 
+	ws_server = WebSockets.listen!(ws_ip, ws_port; idle_timeout_enabled = false) do ws
+
+		# iterate over incoming messages
+		for msg in ws
+
+			# parse incoming msg as json
+			msg_parsed = Dict(JSON3.read(msg))
+			
+			# dispatch parsed message to message handler
+			# handler takes care of generating response payload and replying,
+			# as well as handling potential errors
+			msg_handler(ws, msg_parsed, _log)
+
+		end
+    end
+
+	# saves server handler in array
+	push!(ws_array, ws_server)
+
+end
+
+# ╔═╡ 91c35ba0-729e-4ea9-8848-3887936a8a21
+# this function is mostly needed because due to the reactive nature of Pluto,
+# anytime we change something in the child functions (parameters) the ws server is initiated again
+# so we're killing the previous one to avoid errors (listening on same ip/port)
+	
+function reactive_start_server(ws_array, _msg_log)
+
+	# start websocket server if there's none
+	if isempty(ws_array)
+
+		start_ws_server(ws_array, _msg_log)
+
+	# otherwise, close existing and start new one
+	else
+		
+		HTTP.forceclose(ws_array[end])
+		println("WebSocket server stop $(now())")
+		
+		sleep(0.025)
+		start_ws_server(ws_array, _msg_log)
+		
+	end
+
+end
+
+# ╔═╡ 8b6264b0-f7ea-4177-9700-30072d4c5826
+reactive_start_server(ws_servers_array, ws_messages_log)
+
 # ╔═╡ a2d0d733-345d-46a7-959b-69c3fac3eabe
+## to be deleted
+
 function ws_msg_handler(ws, msg_parsed)
 
 	# retrieve id and message code
@@ -2496,54 +2695,6 @@ function ws_msg_handler(ws, msg_parsed)
 
 
 end
-
-# ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
-function init_ws_server()
-
-	println("WS server start $(now())")
-
-	# starts new websockets server 
-	ws_server = WebSockets.listen!(ws_test_ip, ws_test_port; 
-									idle_timeout_enabled = false,
-									on_shutdown = print_srv_shutdown_notice
-								) do ws
-
-		# iterate over incoming messages
-		for msg in ws
-
-			# parse incoming msg as json
-			msg_parsed = Dict(JSON3.read(msg))
-			
-			# dispatch parsed message to message handler
-			ws_msg_handler(ws, msg_parsed)
-
-		end
-    end
-
-	# saves websocket server handler
-	push!(ws_servers_ref, ws_server)
-
-end
-
-# ╔═╡ 91c35ba0-729e-4ea9-8848-3887936a8a21
-function ws_server_up(ws_ref)
-
-	# start server if there's none
-	if isempty(ws_ref)
-
-		init_ws_server()
-		
-	else
-		
-		HTTP.forceclose(ws_ref[end])
-		init_ws_server()
-		
-	end
-
-end
-
-# ╔═╡ 31bea118-f628-4f98-bd25-4f0077f06538
-ws_server_up(ws_servers_ref)
 
 # ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 function test_ws_client()
@@ -2655,7 +2806,7 @@ S -> .... (cycle repeats)
 
 # ╔═╡ 24185d12-d29c-4e72-a1de-a28319b4d369
 # make it wait forever
-wait(Condition())
+#wait(Condition())
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -3748,6 +3899,7 @@ version = "1.4.1+0"
 # ╠═6f0ad323-1776-4efd-bf1e-667e8a834f41
 # ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 # ╠═c334b67e-594f-49fc-8c11-be4ea11c33b5
+# ╠═29a93299-f577-4114-b77f-dbc079392090
 # ╠═f1949d12-86eb-4236-b887-b750916d3493
 # ╠═e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╟─61a0e2bf-2fed-4141-afc0-c8b5507679d1
@@ -3767,17 +3919,23 @@ version = "1.4.1+0"
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═70ecd4ed-cbb1-4ebd-85a8-42f7b072bee3
 # ╠═bd7e7cdd-878e-475e-b2bb-b00c636ff26a
-# ╠═1450c9e4-4080-476c-90d2-87b19c00cfdf
-# ╠═c9c4129f-b507-4c92-899b-bc31087b63f4
+# ╠═c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
 # ╠═91c35ba0-729e-4ea9-8848-3887936a8a21
-# ╠═31bea118-f628-4f98-bd25-4f0077f06538
-# ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
-# ╠═369b3c62-bfdd-424b-b3e9-b4bbb0db674e
-# ╠═0bb77295-be29-4b50-bff8-f712ebe08197
-# ╠═7a191c6f-d3e8-4fc8-9f32-8fb8b3710b96
 # ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
-# ╟─a2d0d733-345d-46a7-959b-69c3fac3eabe
-# ╟─b85d9d1c-213c-4330-9f1d-95823c3a9491
+# ╠═0bb77295-be29-4b50-bff8-f712ebe08197
+# ╠═8b6264b0-f7ea-4177-9700-30072d4c5826
+# ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
+# ╠═5e5366a9-3086-4210-a037-c56e1374a686
+# ╠═064496dc-4e23-4242-9e25-a41ddbaf59d1
+# ╠═28ee9310-9b7d-4169-bae4-615e4b2c386e
+# ╠═befb251e-563e-4927-b504-40f22b9470f4
+# ╠═a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
+# ╠═32307f96-6503-4dbc-bf5e-49cf253fbfb2
+# ╠═ac87a771-1d91-4ade-ad39-271205c1e16e
+# ╠═ca346015-b2c9-45da-8c1e-17493274aca2
+# ╠═1e0b575f-ff01-4879-b02d-7b9b258e280f
+# ╠═b85d9d1c-213c-4330-9f1d-95823c3a9491
+# ╠═a2d0d733-345d-46a7-959b-69c3fac3eabe
 # ╠═f479f1f8-d6fd-4e48-a0f3-447997bc0416
 # ╠═ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 # ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e

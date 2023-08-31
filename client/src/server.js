@@ -7,7 +7,7 @@
 
 import { save_first_server_response, save_next_server_response, get_game_id, get_player_id } from './data.js'
 
-const ws_port = 900;
+const ws_port = 6090;
 const ip_address = "localhost"
 
 // custom class for managing the lifecycle of messages
@@ -168,7 +168,7 @@ export async function server_ws_genNewGame(){
     try {
 
         // prepare message payload
-        const msg_code = 'ask_new_game';
+        const msg_code = 'new_game_vs_human';
         const payload = {msg_code: msg_code};
 
         // package message, log it, send it
@@ -205,7 +205,7 @@ export async function server_ws_joinWithCode(input_game_id){
     try {
 
         // prepare message payload
-        const msg_code = 'ask_join_game';
+        const msg_code = 'join_game';
         const payload = {msg_code: msg_code, game_id: input_game_id};
 
         // package message, log it, send it
@@ -244,7 +244,7 @@ export async function server_ws_genNewGame_AI(){
     try {
 
         // prepare message payload
-        const msg_code = 'ask_new_game_AI';
+        const msg_code = 'new_game_vs_server';
         const payload = {msg_code: msg_code};
 
         // package message, log it, send it
@@ -280,7 +280,7 @@ export async function server_ws_whatNow(scenario_pick = false){
     try {
 
         // prepare message payload
-        const msg_code = 'what_now';
+        const msg_code = 'next_move';
         const payload = {msg_code: msg_code, game_id: get_game_id(), player_id: get_player_id(), scenario_pick: scenario_pick};
 
         // package message, log it, send it
