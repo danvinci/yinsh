@@ -1859,29 +1859,6 @@ function fn_end_game()
 
 end
 
-# ╔═╡ b85d9d1c-213c-4330-9f1d-95823c3a9491
-# to be deleted
-
-function fwd_outbound(ws, msg_id, msg_code, resp_payload::Dict{Symbol, Any} = Dict(), ok_response = true)
-
-	# copy response payload
-	response_msg = deepcopy(resp_payload)
-
-	# prepare response code
-	resp_msg_code = msg_code * (ok_response ? CODE_OK : CODE_ERR)
-	
-	# append original request id and response_code
-	setindex!(response_msg, msg_id, :msg_id)
-	setindex!(response_msg, resp_msg_code, :msg_code)
-
-	# send response
-	send(ws, JSON3.write(response_msg))
-
-	# log
-	println("LOG - $resp_msg_code - msg ID: $msg_id")
-
-end
-
 # ╔═╡ ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 function whos_player(game_code, player_id)
 	
@@ -2234,21 +2211,26 @@ end
 function update_player_status!(game_code, player_id)
 
 	# reads last comunication from player and updates its status
+	# error : should be given input from calling function
 	# player status can be: not_available OR ready
 
 	# which log to look at?
 	which_log = (whos_player(game_code, player_id) == :originator) ? :orig_player_comms : :join_player_comms
 
+println("up_player status 1")
+	
 	# which status to update? (in case)
 	which_status = (whos_player(game_code, player_id) == :originator) ? :orig_player_status : :join_player_status
 	_player_status = games_log_dict[game_code][:players][which_status]
+
+println("up_player status 2")
 
 	# retrieve last communication
 	last_player_comm = games_log_dict[game_code][:players][which_log][end]
 	last_msg_code = last_player_comm[:msg_code]
 
 	# if player is asking what to do and wasn't logged as ready -> mark as ready
-	if last_msg_code == CODE_what_now && _player_status == :not_available
+	if (last_msg_code == "next_move") && (_player_status == :not_available)
 
 		_new_player_status = :ready
 		games_log_dict[game_code][:players][which_status] = _new_player_status
@@ -2259,6 +2241,12 @@ function update_player_status!(game_code, player_id)
 	# we should use this function to handle clients going offline and later handle re-connections
 
 end
+
+# ╔═╡ f60ff7ef-ec0f-47a8-9f21-8c30082d2bca
+games_log_dict["zZfvg5"][:players][:orig_player_comms][end]
+
+# ╔═╡ 86046b43-890b-4eba-9c68-6390626ade81
+games_log_dict["zZfvg5"]
 
 # ╔═╡ 5b4f9b35-0246-4813-9eb4-be8d28726f3f
 function activate_next_turn!(game_code)
@@ -2339,6 +2327,11 @@ end
 # ╔═╡ f479f1f8-d6fd-4e48-a0f3-447997bc0416
 function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 
+	# printing calling arguments
+	println(msg_id)
+	println(msg_code)
+	println(msg_parsed)
+
 	# get info from payload
 	_game_code = msg_parsed[:game_id]
 	_player_id = msg_parsed[:player_id]
@@ -2356,18 +2349,27 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 	# log save action
 	println("LOG - Client msg logged - msg ID: $msg_id")
 
+	println("-- orch here 1")
+
 	###### -> this should run as a separate service with websockets pings
 		# update player status
+
 		update_player_status!(_game_code, _player_id)
 	
 		# update player turn data -> should set turn to completed
 		# TODO
+
+	println("-- orch here 1a")
 	
 		# everyone ready? -> check turns
 		_status_orig = games_log_dict[_game_code][:players][:orig_player_status]
 		_status_join = games_log_dict[_game_code][:players][:join_player_status]
 
+	println("-- orch here 1b")
+
 	######
+
+	println("-- orch here 2")
 
 
 	## understand what's going on in the game
@@ -2388,6 +2390,7 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 	
 			if who_msg == who_moves
 
+				# codes should be defined up
 				_cli_response = Dict(:next_action_code => "move",
 									:turn_no => turn_no)
 				
@@ -2408,6 +2411,7 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 		end
 	end
 
+	println("-- orch here 3")
 
 	## handling following turns
 	if _pointer >= 1 && _status == :in_progress
@@ -2458,6 +2462,8 @@ function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
 					# add info on turn_no
 					setindex!(_client_pkg, turn_no, :turn_no)
 				
+
+println("-- orch here 4")
 				
 				return _client_pkg
 			end
@@ -2504,6 +2510,9 @@ begin
 	allowed_CODES = collect(keys(codes_toFun_match))
 
 end
+
+# ╔═╡ ef033905-da54-4ef6-a23a-86c5aa7c76aa
+codes_toFun_match
 
 # ╔═╡ 064496dc-4e23-4242-9e25-a41ddbaf59d1
 function msg_handler(ws, msg, msg_log)
@@ -2615,86 +2624,6 @@ end
 
 # ╔═╡ 8b6264b0-f7ea-4177-9700-30072d4c5826
 reactive_start_server(ws_servers_array, ws_messages_log)
-
-# ╔═╡ a2d0d733-345d-46a7-959b-69c3fac3eabe
-## to be deleted
-
-function ws_msg_handler(ws, msg_parsed)
-
-	# retrieve id and message code
-	msg_id = msg_parsed[:msg_id]
-	msg_code = msg_parsed[:msg_code]
-
-	# save incoming message
-	push!(ws_messages_log, msg_parsed)
-
-####################################
-	
-	# handle request for a new game
-	if msg_code == CODE_ask_new_game
-
-		# generate new game
-		new_game_id = gen_newGame() # <- will generate and save game data
-		new_game_data = getLast_clientPkg(new_game_id)
-
-		# reply to client
-		fwd_outbound(ws, msg_id, msg_code, new_game_data)
-	
-	end
-
-####################################
-	
-	# handle request to join existing game
-	if msg_code == CODE_ask_join_game
-
-		# try retrieving and sending game data
-		try 
-
-			# retrieve existing game data
-			ex_game_id = msg_parsed[:game_id]
-			ex_game_data = getLast_clientPkg(ex_game_id)
-
-			# reply to client
-			fwd_outbound(ws, msg_id, msg_code, ex_game_data)
-
-		# handle errors
-		catch 
-			
-			# reply to client
-			fwd_outbound(ws, msg_id, msg_code, ok_response = false)
-			
-		end
-	end
-
-####################################
-
-	# handle request to play with AI
-	if msg_code == CODE_ask_new_game_AI
-
-		# generate new game
-		new_game_id = gen_newGame(true) # <- generate and save game data vs AI
-		new_game_data = getLast_clientPkg(new_game_id)
-
-		# reply to client
-		fwd_outbound(ws, msg_id, msg_code, new_game_data)
-	
-	end
-
-####################################
-
-	# handle players asking for what to do next (turns)
-	if msg_code == CODE_what_now
-
-		# orchestrator
-		_resp = wannabe_orchestrator(msg_id, msg_code, msg_parsed)
-
-		# reply to client
-		fwd_outbound(ws, msg_id, msg_code, _resp)
-
-	end
-
-
-end
 
 # ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 function test_ws_client()
@@ -3926,6 +3855,7 @@ version = "1.4.1+0"
 # ╠═8b6264b0-f7ea-4177-9700-30072d4c5826
 # ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
 # ╠═5e5366a9-3086-4210-a037-c56e1374a686
+# ╠═ef033905-da54-4ef6-a23a-86c5aa7c76aa
 # ╠═064496dc-4e23-4242-9e25-a41ddbaf59d1
 # ╠═28ee9310-9b7d-4169-bae4-615e4b2c386e
 # ╠═befb251e-563e-4927-b504-40f22b9470f4
@@ -3934,8 +3864,6 @@ version = "1.4.1+0"
 # ╠═ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╠═ca346015-b2c9-45da-8c1e-17493274aca2
 # ╠═1e0b575f-ff01-4879-b02d-7b9b258e280f
-# ╠═b85d9d1c-213c-4330-9f1d-95823c3a9491
-# ╠═a2d0d733-345d-46a7-959b-69c3fac3eabe
 # ╠═f479f1f8-d6fd-4e48-a0f3-447997bc0416
 # ╠═ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 # ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
@@ -3947,6 +3875,8 @@ version = "1.4.1+0"
 # ╠═4976c9c5-d60d-4b19-aa72-0e135ad37361
 # ╟─1c970cc9-de1f-48cf-aa81-684d209689e0
 # ╠═3539b21d-4082-4b84-84dd-b736ea24978e
+# ╠═f60ff7ef-ec0f-47a8-9f21-8c30082d2bca
+# ╠═86046b43-890b-4eba-9c68-6390626ade81
 # ╠═5b4f9b35-0246-4813-9eb4-be8d28726f3f
 # ╠═903e103c-ec53-423f-9fe1-99abea55c28d
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
