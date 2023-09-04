@@ -1779,7 +1779,7 @@ end
 ws_messages_log
 
 # ╔═╡ 612a1121-b672-4bc7-9eee-f7989ac27346
-function update_ws_handler(game_id::String, ws, is_orig_player::Bool)
+function update_ws_handler!(game_id::String, ws, is_orig_player::Bool)
 
 # updates WS handler for a specific player within a game
 # if the game is not found, it will throw an error
@@ -1805,9 +1805,6 @@ function update_ws_handler(game_id::String, ws, is_orig_player::Bool)
 
 end
 
-# ╔═╡ 8d76494f-7722-425f-89d4-cd7548451738
-games_log_dict["tm3DzQ"]
-
 # ╔═╡ a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
 function fn_new_game_vs_human(ws, msg)
 # game originator is asking for new game details - to play against human
@@ -1818,7 +1815,7 @@ function fn_new_game_vs_human(ws, msg)
 	_new_game_id = gen_newGame()
 
 	# save ws handler for originating player
-	update_ws_handler(_new_game_id, ws, true)
+	update_ws_handler!(_new_game_id, ws, true)
 	
 	# retrieve payload in client format 
 	new_game_data = getLast_clientPkg(_new_game_id)
@@ -1839,7 +1836,7 @@ function fn_new_game_vs_server(ws, msg)
 	_new_game_id = gen_newGame(true) 
 
 	# save ws handler for originating player
-	update_ws_handler(_new_game_id, ws, true)
+	update_ws_handler!(_new_game_id, ws, true)
 
 	# retrieve payload
 	new_game_data = getLast_clientPkg(_new_game_id)
@@ -1857,7 +1854,7 @@ function fn_join_game(ws, msg)
 	_existing_game_data = getLast_clientPkg(msg[:game_id])
 
 	# save ws handler for joining player
-	update_ws_handler(msg[:game_id], ws, false)
+	update_ws_handler!(msg[:game_id], ws, false)
 
 	# return payload - requester, other
 	return _existing_game_data, nothing
@@ -1887,14 +1884,21 @@ orchestrator/runner recipe
 
 =#
 
-# ╔═╡ 88616e0f-6c85-4bb2-a856-ea7cee1b187d
-function game_runner(ws, msg)
+# ╔═╡ 88e183c5-e791-4142-bc5a-d1a6207fa64e
+# I could map all the possible cases from above, and call specialized functions from a Dict ??
 
-# a game has been created and both players have joined
-# this function takes care of orchestrating messages and running the game
+# ╔═╡ 13eb72c7-ac24-4b93-8fd9-260b49940370
+function are_players_ready()
+
+# checks if both players are ready or not
+
+
 
 
 end
+
+# ╔═╡ 0035ebcf-d7f7-4ac6-9f68-9ca16c1498d6
+games_log_dict["tm3DzQ"]
 
 # ╔═╡ ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 function whos_player(game_code, player_id)
@@ -2251,7 +2255,70 @@ function play_turn_AI(game_code::String, ai_moving_player_id::String)
 
 end
 
+# ╔═╡ e6cc0cf6-617a-4231-826d-63f36d6136a5
+function mark_player_ready!(game_code::String, who::Symbol)
+
+# marks player as ready
+
+	
+	# which status to update? 
+	_which_status = (who == :originator) ? :orig_player_status : :join_player_status
+		
+	# update status
+	games_log_dict[game_code][:players][_which_status] = :ready
+	
+	
+
+end
+
+# ╔═╡ 88616e0f-6c85-4bb2-a856-ea7cee1b187d
+function game_runner(ws, msg)
+
+# a game has been created and both players have joined
+# this function takes care of orchestrating messages and running the game
+
+
+	# retrieve game and caller move details
+	_game_code = msg[:game_id]
+	_player_id = msg[:player_id]
+	_who = whos_player(_game_code, _player_id) # :originator || :joiner
+	_game_type = games_log_dict[_game_code][:identity][:game_type]
+
+	_scenario_pick = msg[:scenario_pick] # false || start/end/mk_sel/ring_pick
+
+
+	# mark requesting player as ready
+	mark_player_ready!(_game_code, _who)
+
+
+	# how do we determine game status?
+		# game status : new / activated / in_progress / stuck / completed
+		# players' status : ready, not_ready
+		# last turn (and who) : 1,2,3,... / W,B
+		# turn status : activated / in_progress / completed 
+	
+
+	# human games
+
+		## only one ready (s_pick false)
+		## both ready (s_pick false)
+		## business as usual (say req to wait, prepare package for other)
+		## winning move (say req they won, say other they lost)
+
+
+	# server games
+	
+		## business as usual (compute move, prepare package for requester)
+		## winning move (say player they won/lost)
+
+
+	# return to requester, other_player
+
+end
+
 # ╔═╡ 3539b21d-4082-4b84-84dd-b736ea24978e
+### TO BE DELETED ONCE NEW RUNNER IS UP
+
 function update_player_status!(game_code, player_id)
 
 	# reads last comunication from player and updates its status
@@ -2524,7 +2591,7 @@ function fn_next_move(ws, msg)
 	_is_originator = (_who == :originator) ? true : false
 
 	# save ws handler for originating vs joining player
-	update_ws_handler(msg[:game_id], ws, _is_originator)
+	update_ws_handler!(msg[:game_id], ws, _is_originator)
 
 	return _resp, nothing
 	
@@ -2777,6 +2844,7 @@ md"#### Open issues "
 - game doesn't end when 3 rings are taken
 - AI doesn't always pick a ring after scoring
 - AI is too annoying in the beginning -> could add rule about placing something first, or experiment with RL and self-play ??
+- clients disconnecting / non-responsive are not handled
 
 
 =#
@@ -3971,13 +4039,15 @@ version = "1.4.1+0"
 # ╟─28ee9310-9b7d-4169-bae4-615e4b2c386e
 # ╠═befb251e-563e-4927-b504-40f22b9470f4
 # ╠═612a1121-b672-4bc7-9eee-f7989ac27346
-# ╠═8d76494f-7722-425f-89d4-cd7548451738
 # ╠═a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
 # ╠═32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╠═ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╠═ca346015-b2c9-45da-8c1e-17493274aca2
 # ╠═de882dba-4a96-4af7-af3c-b338a09f5a10
 # ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
+# ╠═88e183c5-e791-4142-bc5a-d1a6207fa64e
+# ╠═13eb72c7-ac24-4b93-8fd9-260b49940370
+# ╠═0035ebcf-d7f7-4ac6-9f68-9ca16c1498d6
 # ╠═f479f1f8-d6fd-4e48-a0f3-447997bc0416
 # ╠═ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 # ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
@@ -3988,6 +4058,7 @@ version = "1.4.1+0"
 # ╟─14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 # ╟─4976c9c5-d60d-4b19-aa72-0e135ad37361
 # ╟─1c970cc9-de1f-48cf-aa81-684d209689e0
+# ╠═e6cc0cf6-617a-4231-826d-63f36d6136a5
 # ╠═3539b21d-4082-4b84-84dd-b736ea24978e
 # ╠═5b4f9b35-0246-4813-9eb4-be8d28726f3f
 # ╠═903e103c-ec53-423f-9fe1-99abea55c28d
