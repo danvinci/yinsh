@@ -1762,66 +1762,12 @@ begin
 	
 	# ip and port to use for the server
 	ws_ip = "0.0.0.0" # listen on every ip
-	ws_port = 6091
+	ws_port = 6090
 
 end
 
 # ╔═╡ f9949a92-f4f8-4bbb-81d0-650ff218dd1c
 #HTTP.forceclose(ws_servers_ref[end])
-
-# ╔═╡ 5e5366a9-3086-4210-a037-c56e1374a686
-begin
-	
-	# client codes codes - used for different requests
-	# server responds with these + _OK or _ERROR
-	CODE_new_game_human = "new_game_vs_human"
-	CODE_new_game_server = "new_game_vs_server"
-	CODE_join_game = "join_game"
- 	CODE_advance_game = "advance_game" # clients asking to progress the game
-
-	
-	# server codes (only the server can use these)
-	# client responds with these + _OK or _ERROR
-	CODE_play = "play" # the other player has joined -> move
-	CODE_wait = "wait" # the other player has yet to join -> wait 
-	CODE_end_game = "end_game" # someone won
-
-
-	# suffixes for code response type
-	sfx_CODE_OK = "_OK"
-	sfx_CODE_ERR = "_ERROR"
-
-	# keys to access specific values
-	key_nextActionCode = :next_action_code
-
-	
-
-end
-
-# ╔═╡ 28ee9310-9b7d-4169-bae4-615e4b2c386e
-function msg_dispatcher(ws, msg_id, msg_code, payload = Dict(), _status::Bool = true)
-
-	# copy response payload
-	_response::Dict{Symbol, Any} = deepcopy(payload)
-
-	# prepare response code
-	_sfx_msg_code = msg_code * (_status ? sfx_CODE_OK : sfx_CODE_ERR)
-	
-	# append original msg id and updated response_code
-	setindex!(_response, msg_id, :msg_id)
-	setindex!(_response, _sfx_msg_code, :msg_code)
-
-	# send response
-	send(ws, JSON3.write(_response))
-
-	# log
-	println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
-
-	# save response (TO BE REMOVED)
-	push!(ws_messages_log, _response)
-
-
-end
 
 # ╔═╡ befb251e-563e-4927-b504-40f22b9470f4
 ws_messages_log
@@ -1955,9 +1901,6 @@ function _is_playing_next(game_id::String, _player_id::String)
 	end
 
 end
-
-# ╔═╡ 599dbd41-06ff-4c51-9ee2-96c5285491f7
-msg_dispatcher
 
 # ╔═╡ 17b3ce4f-91be-4d01-8772-38981e5a0c99
 _is_playing_next("ojvHDO", "W")
@@ -2503,20 +2446,20 @@ function game_runner(msg)
 		if _is_playing_next(_game_code, _player_id)
 
 			# caller playing next -> caller "play" -> other "wait"
-			setindex!(_caller_pld, CODE_play, key_nextActionCode)
-			setindex!(_other_pld, CODE_wait, key_nextActionCode)
+			setindex!(_caller_pld, "play, you're $_player_id", :server_message)
+			setindex!(_other_pld, "wait", :server_message)
 
 		else
 
 			# other playing next -> caller "play" -> other "wait"
-			setindex!(_caller_pld, CODE_wait, key_nextActionCode)
-			setindex!(_other_pld, CODE_play, key_nextActionCode)
+			setindex!(_caller_pld, "wait, you're $_player_id", :server_message)
+			setindex!(_other_pld, "play", :server_message)
 
 		end
 	
 	else # both players not ready, tell the caller to wait
 
-		setindex!(_caller_pld, CODE_wait, key_nextActionCode)	
+		setindex!(_caller_pld, "wait, $_player_id", :server_message)	
 	
 	end
 
@@ -2550,45 +2493,83 @@ end
 function fn_advance_game(ws, msg)
 # human client asking to advance the game status (either ready or just made a move)
 
-	try 
-		# orchestrator
-		#_resp = wannabe_orchestrator(msg[:msg_id], msg[:msg_code], msg)
-	
-		# NOTE -> to be replaced by new game runner function
-	
-		# is this orig or joiner ?
-		_who = whos_player(msg[:game_id], msg[:player_id])
-		_is_originator = (_who == :originator) ? true : false
-	
-		# save ws handler for originating vs joining player
-		update_ws_handler!(msg[:game_id], ws, _is_originator)
-	
-		_resp_caller, _resp_other = game_runner(msg)
-	
-		return _resp_caller, _resp_other
+	# orchestrator
+	#_resp = wannabe_orchestrator(msg[:msg_id], msg[:msg_code], msg)
 
+	# NOTE -> to be replaced by new game runner function
 
-	catch e
+	# is this orig or joiner ?
+	_who = whos_player(msg[:game_id], msg[:player_id])
+	_is_originator = (_who == :originator) ? true : false
 
-		println("ERROR in fn_advance_game - $e")
-	end
+	# save ws handler for originating vs joining player
+	update_ws_handler!(msg[:game_id], ws, _is_originator)
+
+	_resp_caller, _resp_other = game_runner(msg)
+
+	return _resp_caller, _resp_other
+	
 end
 
-# ╔═╡ 7316a125-3bfe-4bac-babf-4e3db953078b
+# ╔═╡ 5e5366a9-3086-4210-a037-c56e1374a686
 begin
+	
+	# client codes codes - used for different requests
+	# server responds with these + _OK or _ERROR
+	CODE_new_game_human = "new_game_vs_human"
+	CODE_new_game_server = "new_game_vs_server"
+	CODE_join_game = "join_game"
+ 	CODE_advance_game = "advance_game" # clients asking to progress the game
+
+	
+	# server codes (only the server can use these)
+	# client responds with these + _OK or _ERROR
+	CODE_play_move = "play_move" # the other player has yet to join
+	CODE_wait_player = "wait_other_player" # the other player has yet to join
+	CODE_end_game = "end_game" # someone won
+
+
+	# suffixes for code response type
+	sfx_CODE_OK = "_OK"
+	sfx_CODE_ERR = "_ERROR"
 
 	# matching each code to a function call
 	codes_toFun_match::Dict{String, Function} = Dict(
-									CODE_new_game_human => fn_new_game_vs_human,
-									CODE_new_game_server => fn_new_game_vs_server,
-									CODE_join_game => fn_join_game,
-									CODE_advance_game => fn_advance_game
-									)
+										CODE_new_game_human => fn_new_game_vs_human,
+										CODE_new_game_server => fn_new_game_vs_server,
+										CODE_join_game => fn_join_game,
+										CODE_advance_game => fn_advance_game
+										)
 
 
 
 	# array of codes
 	allowed_CODES = collect(keys(codes_toFun_match))
+
+end
+
+# ╔═╡ 28ee9310-9b7d-4169-bae4-615e4b2c386e
+function msg_dispatcher(ws, msg_id, msg_code, payload = Dict(), _status::Bool = true)
+
+	# copy response payload
+	_response::Dict{Symbol, Any} = deepcopy(payload)
+
+	# prepare response code
+	_sfx_msg_code = msg_code * (_status ? sfx_CODE_OK : sfx_CODE_ERR)
+	
+	# append original msg id and updated response_code
+	setindex!(_response, msg_id, :msg_id)
+	setindex!(_response, _sfx_msg_code, :msg_code)
+
+	# send response
+	send(ws, JSON3.write(_response))
+
+	# log
+	println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
+
+	# save response (TO BE REMOVED)
+	push!(ws_messages_log, _response)
+
 
 end
 
@@ -2621,10 +2602,6 @@ function msg_handler(ws, msg, msg_log)
 			# reply to other, if payload is not empty, assumes game already exists
 			if !isempty(_pld_other)
 
-				# game and player id are in the original msg as game exists
-				_game_id = msg[:game_id]
-				_player_id = msg[:player_id]
-
 				# identify caller
 				_who = whos_player(_game_id, _player_id)
 				_is_caller_originator = (_who == :originator) ? true : false
@@ -2634,7 +2611,6 @@ function msg_handler(ws, msg, msg_log)
 				_ws_other = get_ws_handler(_game_id, _other_identity_flag)
 
 				msg_dispatcher(_ws_other, _msg_id, _msg_code, _pld_other)
-
 			
 			end
 
@@ -2642,8 +2618,6 @@ function msg_handler(ws, msg, msg_log)
 
 			# reply to client with error
 			msg_dispatcher(ws, _msg_id, _msg_code, Dict(:server_msg => "Error, something went wrong when handling request, $e"), false)
-
-			println("ERROR in msg_handler - $e")
 
 		end
 
@@ -2713,6 +2687,9 @@ end
 
 # ╔═╡ 8b6264b0-f7ea-4177-9700-30072d4c5826
 reactive_start_server(ws_servers_array, ws_messages_log)
+
+# ╔═╡ 599dbd41-06ff-4c51-9ee2-96c5285491f7
+msg_dispatcher
 
 # ╔═╡ f479f1f8-d6fd-4e48-a0f3-447997bc0416
 function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
@@ -4113,6 +4090,7 @@ version = "1.4.1+0"
 # ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
 # ╠═aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
+# ╠═8eab6d11-6d28-411d-bd82-7bec59b3f496
 # ╠═761fb8d7-0c7d-4428-ad48-707d219582c0
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
@@ -4128,14 +4106,13 @@ version = "1.4.1+0"
 # ╠═8b6264b0-f7ea-4177-9700-30072d4c5826
 # ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
 # ╠═5e5366a9-3086-4210-a037-c56e1374a686
-# ╠═7316a125-3bfe-4bac-babf-4e3db953078b
-# ╟─064496dc-4e23-4242-9e25-a41ddbaf59d1
+# ╠═064496dc-4e23-4242-9e25-a41ddbaf59d1
 # ╟─28ee9310-9b7d-4169-bae4-615e4b2c386e
 # ╠═befb251e-563e-4927-b504-40f22b9470f4
 # ╟─612a1121-b672-4bc7-9eee-f7989ac27346
-# ╟─a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
-# ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
-# ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
+# ╠═a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
+# ╠═32307f96-6503-4dbc-bf5e-49cf253fbfb2
+# ╠═ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╠═ca346015-b2c9-45da-8c1e-17493274aca2
 # ╠═de882dba-4a96-4af7-af3c-b338a09f5a10
 # ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d

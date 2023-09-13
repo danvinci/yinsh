@@ -3,7 +3,7 @@
 
 
 //////////// IMPORTS
-import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_whatNow} from './server.js'
+import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_advance_game} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_new_game_data, get_player_id, save_next_server_response } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end} from './data.js' 
@@ -11,6 +11,7 @@ import { activate_task, get_scoring_options, update_mk_halos, complete_task, res
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
 import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
+
 
 //////////// GLOBAL DEFINITIONS
 
@@ -33,6 +34,11 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
     
     // ring scoring
     core_et.addEventListener('ring_picked_scoring', ring_scoring_handler, false);
+
+    // action codes
+    const CODE_action_play = 'play'
+    const CODE_action_wait = 'wait'
+
 
 
 //////////// FUNCTIONS FOR INITIALIZING GAMES (NEW or JOIN)
@@ -87,10 +93,10 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         console.log(`LOG - Game setup time: ${Date.now() - request_start_time}ms`);
 
         // log game code (later should be in the UI)
-        console.log(`LOG - Your game code is: ${yinsh.server_data.game_id}`);
+        console.log(`LOG - Your GAME CODE is: ${yinsh.server_data.game_id}`);
 
         // ask server what to do -> it will emit event on response
-        await server_ws_whatNow();
+        await server_ws_advance_game();
 
     } catch (err){
 
@@ -111,7 +117,7 @@ async function server_actions_handler (event) {
 
     const _next_action = event.detail.next_action_code;
 
-    if (_next_action == 'move') {
+    if (_next_action == CODE_action_play) {
 
         // replay move by opponent (if we have delta data)
         await replay_opponent_move();
@@ -129,7 +135,7 @@ async function server_actions_handler (event) {
         enableInteraction();
         console.log(`LOG - It's yout turn, make a move! - # ${event.detail.turn_no}`); // -> this should go to the UI
 
-    } else if (_next_action == 'wait') {
+    } else if (_next_action == CODE_action_wait) {
 
         disableInteraction(); // a bit redundant, is disabled by default
         console.log(`LOG - Wait for your opponent.`); // -> this should bubble up to a UI component
@@ -513,7 +519,7 @@ async function end_turn_wait_opponent(srv_payload) {
     disableInteraction();
 
     // -> notify server about completed move (next turn)
-    await server_ws_whatNow(srv_payload); 
+    await server_ws_advance_game(srv_payload); 
 
 };
 
