@@ -76,6 +76,9 @@ export function init_new_game_data(){
     // setups drop zones
     init_drop_zones();
 
+    // inits slots for placing scoring rings
+    init_scoring_slots();
+
     // inits visual cues for legal moves (all off by default)
     init_legal_moves_cues();
 
@@ -117,6 +120,7 @@ export function init_empty_game_objects(){
         _game_objects.rings = []; // -> array for rings
         _game_objects.markers = []; // -> array for markers
         _game_objects.drop_zones = []; // -> array for drop zones (markers and rings are placed at their coordinates only)
+        _game_objects.scoring_slots = []; // -> array for drop zones used for scoring rings
 
         // turns, moves, score handling
         _game_objects.current_turn = {in_progress: false}; // to track if this is the client's turn 
@@ -278,18 +282,55 @@ export function get_scoring_options(){
     return structuredClone(yinsh.objs.current_mk_scoring.task_ref.data);
 };
 
+export function get_player_score(){
 
-export function increase_player_score(){
-
-    yinsh.objs.player_score += 1;
     return yinsh.objs.player_score;
 };
 
-export function increase_opponent_score(){
+export function get_opponent_score(){
 
-    yinsh.objs.opponent_score += 1;
     return yinsh.objs.opponent_score;
 };
+
+// increate player score and mark first available scoring slot as filled
+export function increase_player_score(){
+
+    const _current_player_id = get_player_id();
+
+    // increase player score
+    yinsh.objs.player_score += 1;
+    const _player_score = get_player_score(); // 1,2,3
+
+    // find scoring slot for the score and mark it as filled, otherwise leave it unaltered
+    yinsh.objs.scoring_slots.map(s => (s.slot_no == _player_score && s.player == _current_player_id) ? fill_scoring_slot(s) : s)
+
+    return yinsh.objs.player_score;
+};
+
+function fill_scoring_slot(s) {
+
+    let _filled_s = s
+
+    _filled_s.filled = true;
+
+    return _filled_s
+};
+
+
+export function increase_opponent_score(){
+
+    const _opponent_player_id = get_opponent_id();
+
+    // increase player score
+    yinsh.objs.opponent_score += 1;
+    const _opponent_score = get_opponent_score(); // 1,2,3
+
+    // find scoring slot for the score and mark it as filled, otherwise leave it unaltered
+    yinsh.objs.scoring_slots.map(s => (s.slot_no == _opponent_score && s.player == _opponent_player_id) ? fill_scoring_slot(s) : s)
+
+    return yinsh.objs.opponent_score;
+};
+
 
 // resolves task-promises so that they can return a value to the task initiator
 export function complete_task(task_name, success_msg){
@@ -333,6 +374,10 @@ export function get_player_id() {
     return yinsh.server_data.client_player_id;
 };
 
+export function get_opponent_id() {
+    return yinsh.server_data.opponent_player_id;
+};
+
 export function get_game_id() {
     return yinsh.server_data.game_id;
 };
@@ -354,6 +399,14 @@ function init_drop_zones(){
     const S = yinsh.drawing_params.S;
     const H = yinsh.drawing_params.H;
 
+    // canvas parameters
+    const _width = canvas.width;
+    const _height = canvas.height;
+
+    // offset for starting to draw (centering board and zones)
+    const _offset_x = _width/2 -6*H;
+    const _offset_y = 0;
+
     // init temp empty array for drop zones
     let _drop_zones = [];
 
@@ -371,8 +424,8 @@ function init_drop_zones(){
                 // we move by x = (H * k) & y = H for each new column
                 // we also move by y = S/2 in between each row (active and non-active points)
                 
-                const apoint_x = H * k - H/3; // H/3 adj factor to slim margin left to canvas
-                const apoint_y = H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
+                const apoint_x = _offset_x + H * k; // H/3 adj factor to slim margin left to canvas
+                const apoint_y = _offset_y + H + S/2 * (j-1); // S/2 shift kicks in only from 2nd row
                 
                 // create paths and add them to the global array
                 let d_zone_path = new Path2D();
@@ -400,6 +453,84 @@ function init_drop_zones(){
     // save to global obj and log (for some reason structuredClone fails)
     yinsh.objs.drop_zones = _drop_zones;
     console.log('LOG - Drop zones initialized')
+    
+};
+
+// initialize scoring slots (for rings)
+function init_scoring_slots(){
+
+    // recovering S & H constants for drawing
+    const S = yinsh.drawing_params.S;
+    const H = yinsh.drawing_params.H;
+
+    // canvas parameters
+    const _width = canvas.width;
+    const _height = canvas.height;
+
+    // init temp empty array for drop zones
+    let _scoring_slots = [];
+
+    /* RECIPE
+    - check canvas size
+    - pick top/right point and draw 3 in a row, leftward (other player)
+    - pick bottom/left point and draw 3 in a row, rightward (this player)
+    */
+
+    const _start_BL_point = {x: S/2, y: _height - S/1.5}
+    const _start_TR_point = {x: _width - S/2, y: S/1.5}
+
+    const _this_player_id = get_player_id(); // get id of this player
+    const _other_player_id = get_opponent_id(); // get other id 
+   
+    // bottom left slots
+    for (let k = 1; k <=3; k++){
+
+        const s_point_x = _start_BL_point.x + k*S; // goes rightward
+        const s_point_y = _start_BL_point.y; // doesn't change
+
+        // create paths and add them to the global array
+        let slot_path = new Path2D();
+            slot_path.arc(s_point_x, s_point_y, S*0.35, 0, 2*Math.PI);
+
+        const _bl_slot = {  x: s_point_x, 
+                            y: s_point_y,  
+                            path: slot_path,
+                            slot_no: k,
+                            player: _this_player_id,
+                            filled: false
+                        }
+
+        // push object to temp array
+        _scoring_slots.push(_bl_slot);
+
+    };
+
+     // top right slots
+     for (let k = 1; k <=3; k++){
+
+        const s_point_x = _start_TR_point.x - k*S; // goes leftward
+        const s_point_y = _start_TR_point.y; // doesn't change
+
+        // create paths and add them to the global array
+        let slot_path = new Path2D();
+            slot_path.arc(s_point_x, s_point_y, S*0.35, 0, 2*Math.PI);
+
+        const _tr_slot = {  x: s_point_x, 
+                            y: s_point_y, 
+                            path: slot_path,
+                            slot_no: k,
+                            player: _other_player_id,
+                            filled: false
+                        }
+
+        // push object to temp array
+        _scoring_slots.push(_tr_slot);
+
+    };
+
+    // save to global obj and log (for some reason structuredClone fails)
+    yinsh.objs.scoring_slots = _scoring_slots;
+    console.log('LOG - Scoring slots initialized')
     
 };
 

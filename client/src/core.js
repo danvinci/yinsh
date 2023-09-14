@@ -74,14 +74,14 @@ export async function init_game_fromServer(originator = false, joiner = false, g
             await server_ws_genNewGame_AI();
         };
         
-        // maps data from server to game objects
-        // sets up drop zones and rings
-        init_new_game_data();
-
         // Bind canvas
         // IDs different than 'canvas' seem not to work :|
         globalThis.canvas = document.getElementById('canvas');
-        globalThis.ctx = canvas.getContext('2d', { alpha: true });        
+        globalThis.ctx = canvas.getContext('2d', { alpha: true });  
+        
+            // maps data from server to game objects
+            // sets up drop zones and rings
+            init_new_game_data();
         
             // draw everything
             refresh_canvas_state();
@@ -216,7 +216,8 @@ async function replay_opponent_move(){
             await sleep(_score_ring_wait);
             remove_ring_scoring(yinsh.delta.scoring_ring); // remove ring
 
-            const new_opponent_score = increase_opponent_score();
+            const new_opponent_score = increase_opponent_score(); // increase opponent score and fill scoring slot
+            refresh_canvas_state();
             console.log(`LOG - New opponent score: ${new_opponent_score}`);
 
         };
@@ -224,7 +225,7 @@ async function replay_opponent_move(){
         // TODO: add animation + sound + UI text for scoring replay
 
         // total sleep time
-        const _tot_sleep_time = array_sum([_marker_add_wait, _ring_move_wait, _flip_wait, _score_mk_wait, _score_ring_wait])
+        const _tot_sleep_time = array_sum([_marker_add_wait, _ring_move_wait, _flip_wait, _score_mk_wait, _score_mk_wait, _score_ring_wait])
         const _tot_time = Date.now() - replay_start_time;
         const _net_time = _tot_time - _tot_sleep_time
 
@@ -351,7 +352,7 @@ function ringPicked_handler (event) {
         // logging
         console.log(`LOG - Ring ${picked_ring.player} picked from index ${picked_ring_loc_index}`);
 
-    // remove the element and put it back at the end of the array, so it's always drawn last => appear on top
+    // remove the element and put it back at the end of the array, so it's always drawn last => appears on top of all other rings, useful when moving it
     // we could also move ring to dedicated structure that is drawn last and then put back in, but roughly same copying work
     reorder_rings(index_picked_ring_in_array);
     
@@ -633,13 +634,13 @@ function ring_scoring_handler (event) {
     // remove ring and redraw
     remove_ring_scoring(picked_ring_id);
     refresh_canvas_state();
-    
-    // -> draw ring to scoring spot
-    // play specific sound
 
-    // increases player's score by one
+    // increases player's score by one and fill scoring slot
     const new_player_score = increase_player_score();
     console.log(`LOG - New player score: ${new_player_score}`);
+
+    refresh_canvas_state();
+    // play specific sound ??
 
     // completes ring scoring task
     const success_msg = picked_ring_id; // value to be returned by completed task

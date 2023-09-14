@@ -17,6 +17,9 @@ export function refresh_canvas_state(){
         // keep drop zones up
         draw_drop_zones();
 
+        // scoring slots (TEST ONLY)
+        draw_scoring_slots();
+
         // draw cues for legal moves
         draw_legal_moves_cues();
 
@@ -78,8 +81,16 @@ function draw_board(){
     const S = yinsh.drawing_params.S;
     const H = yinsh.drawing_params.H;
 
+    // canvas parameters
+    const _width = canvas.width;
+    const _height = canvas.height;
+
+    // offset for starting to draw (centering board and zones)
+    const _offset_x = _width/2 -6*H;
+    const _offset_y = 0;
+
     // hardcoding triangles to be drawn for each column (fn call results in silent error)
-    const triangles_toPaint_byCol = {0:3, 1:6, 2:7, 3:8, 4:9, 5:8, 6:9, 7:8, 8:7, 9:6, 10:3 };
+    const triangles_toPaint_byCol = {0:3, 1:6, 2:7, 3:8, 4:9, 5:8, 6:9, 7:8, 8:7, 9:6, 10:3};
 
     // save current canvas drawing settings
     // this points to globalThis.ctx
@@ -90,7 +101,6 @@ function draw_board(){
         ctx.strokeStyle = '#1e52b7';
         ctx.lineWidth = 2;
         ctx.globalAlpha = 0.35;
-
 
         /* RECIPE
         - get to first starting point for column
@@ -113,7 +123,7 @@ function draw_board(){
             let t_Painted = 0;
 
             // move right for each new column (-H/3 reduces left canvas border)
-            ctx.translate(H*k - H/3, H);
+            ctx.translate(_offset_x + H*k,_offset_y + H);
 
             // going down the individual columns
             for (let j = 1; j <= mm_points_rows; j++) {
@@ -199,12 +209,12 @@ function draw_board(){
                 // move down (considering last active point when drawing)
                 ctx.translate(0,S/2);
 
-            
                 } // stop going down the column and drawing if you're done 
                 else if ( t_Painted == t_toPaint ) {
                     break;
                 };
             };
+
             // reset canvas transformations before moving to next column
             ctx.setTransform(1, 0, 0, 1, 0, 0);
         };
@@ -222,7 +232,7 @@ function draw_drop_zones(){
     // const painting_start_time = Date.now()
     
     // retrieve drop_zones data
-    const _drop_zones = yinsh.objs.drop_zones
+    const _drop_zones = yinsh.objs.drop_zones;
 
     // drawing
     ctx.save();
@@ -239,6 +249,41 @@ function draw_drop_zones(){
     
     ctx.restore();
     // console.log(`LOG - Drop zones painted on canvas: ${Date.now() - painting_start_time}ms`);
+};
+
+// drop zones for scoring rings // TESTING-ONLY, to see how to define boundary with rings
+function draw_scoring_slots(){
+
+    // retrieve scoring slots data
+    const _scoring_slots = yinsh.objs.scoring_slots;
+
+    const _empty_score_color = "#666";
+    const _filled_score_color = "#00008b";
+
+    // drawing
+    ctx.save();
+
+        for(const slot of _scoring_slots){
+
+            if (slot.filled == false) {
+
+                ctx.globalAlpha = 0.1; 
+                ctx.fillStyle = _empty_score_color;
+
+                ctx.fill(slot.path);
+
+            } else {
+
+                ctx.globalAlpha = 0.35; 
+                ctx.fillStyle = _filled_score_color;
+
+                ctx.fill(slot.path);
+
+            };
+        };
+
+    ctx.restore();
+
 };
 
 // rings
