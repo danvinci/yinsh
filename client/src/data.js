@@ -161,9 +161,13 @@ export function save_first_server_response(srv_response_input, joiner=false){
 
         // pre-computed scenario tree for each possible move (except pick/drop in same location)
         _server_response.scenarioTree = srv_response_input.scenarioTree;
+
+        // turn number that should be played by client
+        _server_response.turn_no = srv_response_input.turn_no; // should be 1 on first
     
     // save to global obj and log
     yinsh.server_data = structuredClone(_server_response);
+
     console.log('LOG - Server response saved');
     
     console.log(`LOG - You're player ${_server_response.client_player_id}`);
@@ -185,6 +189,9 @@ export function save_next_server_response(srv_response_input){
 
         // pre-computed scenario tree for each possible move (except pick/drop in same location)
         _server_response.scenarioTree = srv_response_input.scenarioTree;
+
+        // turn number that should be played by client
+        _server_response.turn_no = srv_response_input.turn_no;
     
     // save to global obj and log
     yinsh.next_server_data = structuredClone(_server_response);
@@ -210,6 +217,9 @@ export function swap_data_next_turn() {
 
     // tree
     yinsh.server_data.scenarioTree = structuredClone(yinsh.next_server_data.scenarioTree);
+
+    // turn number
+    yinsh.server_data.turn_no = yinsh.next_server_data.turn_no;
 
 
     console.log('LOG - Data ready for next turn');
@@ -305,6 +315,9 @@ export function update_objects_next_turn(){
     init_markers();
 };
 
+export function get_current_turn_no(){
+    return yinsh.server_data.turn_no;
+}
 
 export function turn_start(){
    yinsh.objs.current_turn.in_progress = true;
@@ -316,11 +329,11 @@ export function turn_end(){
    console.log(`LOG - Turn completed`);
 };
 
-export function get_player_id () {
+export function get_player_id() {
     return yinsh.server_data.client_player_id;
 };
 
-export function get_game_id () {
+export function get_game_id() {
     return yinsh.server_data.game_id;
 };
 

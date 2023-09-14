@@ -13,7 +13,7 @@
 
 */
 
-import { save_first_server_response, save_next_server_response, get_game_id, get_player_id } from './data.js'
+import { save_first_server_response, save_next_server_response, get_game_id, get_player_id, get_current_turn_no } from './data.js'
 
 // how to reach endpoint
 const ws_port = 6091;
@@ -57,7 +57,7 @@ function push_messages_handler(event){
             console.log('TEST - push event triggered')
 
              // save data + trigger event towards core
-            _handle_next_action_data(event.detail);
+            _handler_next_action_data(event.detail);
 
         };
 
@@ -373,7 +373,7 @@ export async function server_ws_advance_game(scenario_pick = false){
             console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
 
             // handle response (save + emit event)
-            _handle_next_action_data(srv_response);
+            _handler_next_action_data(srv_response);
 
 
         } else {
@@ -392,10 +392,18 @@ export async function server_ws_advance_game(scenario_pick = false){
 
 ///// UNIFY CALLS TO SERVER INTO SINGLE FUNCTION - WORK WITH CODES/DATA FROM CORE (?)
 
-function _handle_next_action_data(server_response_data) {
+function _handler_next_action_data(server_response_data) {
 
-    // save server response data
-    save_next_server_response(server_response_data);
+    // save/overwrite data only if we have turn information data (eg. turn_no key)
+    if ("turn_no" in server_response_data) {
+
+        // save server response data, but only if not push
+        save_next_server_response(server_response_data);
+
+    };
+    
+    console.log(`TEST - server response data`, server_response_data);
+    console.log(`TEST - current turn number`, get_current_turn_no());
 
      // dispatch event for core game logic
      core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: server_response_data }));

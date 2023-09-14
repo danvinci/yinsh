@@ -1202,6 +1202,9 @@ begin
 
 end
 
+# ╔═╡ 8a195634-8ccf-4f7b-9a6d-4a8152832be5
+randstring(4)
+
 # ╔═╡ 61a0e2bf-2fed-4141-afc0-c8b5507679d1
 md"#### Server-side storage of game data"
 
@@ -1637,16 +1640,18 @@ function gen_newGame(vs_ai=false)
 							:join_player_id => JOIN_player_id,
 							:rings => rings,
 							# no markers yet
-							:scenarioTree => scenario_tree)
+							:scenarioTree => scenario_tree,
+							:turn_no => 1) # first game turn
 
-		_first_turn = Dict(:status => :not_started,
+		_first_turn = Dict(:turn_no => 1,
+							:status => :open,
 							:moving_player => next_movingPlayer)
 
 	
 		## package new game data for storage
 		new_game_data = Dict(:identity => _identity,
 							:players => _players, 
-							:turns => Dict(:pointer => 1, :data => [_first_turn]),
+							:turns => Dict(:current => 1, :data => [_first_turn]),
 							:server_states => _srv_states,
 							:client_delta => [],
 							:client_pkgs => [_cli_pkg],
@@ -1818,6 +1823,7 @@ function msg_dispatcher(ws, msg_id, msg_code, payload = Dict(), _status::Bool = 
 	println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
 
 	# save response (TO BE REMOVED)
+	setindex!(_response, "sent", :type)
 	push!(ws_messages_log, _response)
 
 
@@ -1914,31 +1920,11 @@ function fn_join_game(ws, msg)
 
 end
 
-# ╔═╡ de882dba-4a96-4af7-af3c-b338a09f5a10
-#=
-orchestrator/runner recipe
+# ╔═╡ 3294f66d-359c-4aea-a41e-611c01c4dc7e
+ws_messages_log
 
-- get game details and scenario pick
-- who did last move?
-- log/save
-- update server-side status of player as ready / not-available
-
-- if both ready & 1st turn (human game)
--- log/save
--- activate next turn
--- tell one to wait and the other to move -> return
-
-- if game in progress 
--- if scenario pick false?
--- log/save
--- activate turn
--- play AI turn
--- prepare client pkg -> return
-
-=#
-
-# ╔═╡ 527e9394-26a4-4423-b70d-b2a9f3497948
-games_log_dict["1M4o4z"]
+# ╔═╡ 6cc8be77-a911-4119-a709-fd1ad3e2f667
+ws_messages_log
 
 # ╔═╡ 384e2313-e1c7-4221-8bcf-142b0a49bff2
 function _is_playing_next(game_id::String, _player_id::String)
@@ -1948,22 +1934,17 @@ function _is_playing_next(game_id::String, _player_id::String)
 
 	if !isnothing(_game_data)
 
-		_moving_player = _game_data[:turns][:data][end][:moving_player]
+		_current_turn = _game_data[:turns][:current]
+		_moving_player = _game_data[:turns][:data][_current_turn][:moving_player]
 
 		return _moving_player == _player_id
 
+	else
+
+		return false
 	end
 
 end
-
-# ╔═╡ 599dbd41-06ff-4c51-9ee2-96c5285491f7
-msg_dispatcher
-
-# ╔═╡ 17b3ce4f-91be-4d01-8772-38981e5a0c99
-_is_playing_next("ojvHDO", "W")
-
-# ╔═╡ 88e183c5-e791-4142-bc5a-d1a6207fa64e
-# I could map all the possible cases from above, and call specialized functions from a Dict ??
 
 # ╔═╡ c77607ad-c11b-4fd3-bac9-6c43d71ae932
 function get_ws_handler(game_id::String, _is_originator::Bool)
@@ -1974,32 +1955,62 @@ function get_ws_handler(game_id::String, _is_originator::Bool)
 
 end
 
-# ╔═╡ 6fb75345-0bf6-4e43-ad2c-a615c8db3283
-get_ws_handler("ojvHDO", true)
+# ╔═╡ b5c7295e-c464-4f57-8556-c36b9a5df6ca
+function set_turn_closed!(game_code::String, turn_no::Int)
 
-# ╔═╡ 458f9f2e-b739-4944-a137-0d3719a560f4
-games_log_dict["ojvHDO"]
+	try 
+		setindex!(games_log_dict[game_code][:turns][:data][turn_no], :closed, :status)
 
-# ╔═╡ 96f17f93-d6a5-42d9-979d-79c691e1b1e0
-#=
+	catch e
+		throw(error("ERROR while setting turn $turn_no as closed - $e"))
+	end
 
-turns_data
+end
 
-array[Dict()]
-
-turn_no::Int
-status::Symbol
-moving_player::String
-created::DateTime
-
-
-=#
-
-# ╔═╡ 228179b5-f7d6-4e3f-b4f7-34e60b6f2974
+# ╔═╡ 92a20829-9f0a-4ed2-9fd3-2d6560514e03
+function advance_turn!(game_code::String, completed_turn_no::Int)
+# this function manages turns across :open -> :closed
+# closes indicated turn and creates new one
+# returns dict of new turn data
 
 
-# ╔═╡ ee409339-140e-4d87-b296-84aefdc9b8a4
-games_log_dict["w6zpz1"]
+	# current vars
+	_game = games_log_dict[game_code]
+
+	_turns = _game[:turns]
+	_current_turn_no = _turns[:current]
+	_current_status = _turns[:data][_current_turn_no][:status]
+	_current_moving_player = _turns[:data][_current_turn_no][:moving_player]
+	
+
+	if _current_turn_no != completed_turn_no
+
+		throw(error("ERROR - current and completed turn don't match"))
+
+	else
+
+		# close current turn
+		set_turn_closed!(game_code, completed_turn_no)
+
+		# create new one
+		_next_moving = (_current_moving_player == "W") ? "B" : "W"
+		_next_status = :open
+		_next_turn_no = _current_turn_no + 1
+		
+		_new_turn_data = Dict(:turn_no => _next_turn_no,
+								:status => _next_status, 
+								:moving_player =>_next_moving)
+
+		# save turn data
+		push!(games_log_dict[game_code][:turns][:data], _new_turn_data)
+		games_log_dict[game_code][:turns][:current] = _next_turn_no
+		
+		# return new turn data
+		return _new_turn_data
+
+	end
+		
+end
 
 # ╔═╡ 13eb72c7-ac24-4b93-8fd9-260b49940370
 function check_both_players_ready(game_id)
@@ -2026,57 +2037,8 @@ function check_both_players_ready(game_id)
 
 end
 
-# ╔═╡ 5b4f9b35-0246-4813-9eb4-be8d28726f3f
-function activate_next_turn!(game_code)
-
-	# get more comfy handlers
-	_game = games_log_dict[game_code]
-	_turns = games_log_dict[game_code][:turns]
-	_pointer = games_log_dict[game_code][:turns][:pointer]
-	_status = games_log_dict[game_code][:turns][:data][_pointer][:status]
-	_player = games_log_dict[game_code][:turns][:data][_pointer][:moving_player]
-
-
-	#=
-	# check if there was a previous turn
-	_ex_pointer = (_pointer > 1) ? _pointer-1 : 0
-	_ex_status = (_ex_pointer >= 1) ? _turns[:data][_ex_pointer][:status] : missing
-	=#
-	
-	# case: turn not started -> goes to in_progress
-	if _status == :not_started 
-
-		_new_status = :in_progress
-		_turns[:data][_pointer][:status] = _new_status
-
-		return _pointer, _turns[:data][_pointer][:moving_player], _new_status
-
-	# case: turn still in progress -> throw error 
-	elseif _status == :in_progress 
-		
-		throw(error("ERROR: turn $_pointer in progress"))
-
-	# case: turn completed -> create new one as not_started
-	elseif _status == :completed 
-
-		_next_moving = (_player == "W") ? "B" : "W"
-		_new_status = :not_started
-		_new_pointer = _pointer + 1
-		
-		_new_turn = Dict(:status => _new_status, :moving_player =>_next_moving)
-
-		# write turns data
-		push!(games_log_dict[game_code][:turns][:data], _new_turn)
-		games_log_dict[game_code][:turns][:pointer] = _new_pointer
-
-		return _new_pointer, _next_moving, _new_status
-		
-	end
-		
-end
-
 # ╔═╡ 903e103c-ec53-423f-9fe1-99abea55c28d
-function complete_turn!(game_code)
+function complete_turn!(game_code) # TO BE DELETED
 
 	# get more comfy handlers
 	_game = games_log_dict[game_code]
@@ -2181,8 +2143,7 @@ function gen_new_clientPkg(game_id, moving_client_id)
 	_cli_pkg = Dict(:game_id => game_id,
 					:rings => rings,
 					:markers => markers,
-					:scenarioTree => scenario_tree,
-					:next_action_code => "move") # client is next moving
+					:scenarioTree => scenario_tree)
 					# later we should address cases of double scoring
 	
 	
@@ -2196,13 +2157,9 @@ function gen_new_clientPkg(game_id, moving_client_id)
 end
 
 # ╔═╡ f55bb88f-ecce-4c14-b9ac-4fc975c3592e
-function update_serverStates(_game_code, _player_id, _scenario_pick)
+function update_serverStates!(_game_code, _player_id, _scenario_pick)
 
-	## extract info payload 
-	# convert moves to server indexes
-	println("incoming scenario pick for server state update")
-	println(_scenario_pick)
-	
+	## extract info payload, convert moves to server indexes
 	_start_index = reshape_in(_scenario_pick[:start])
 	_end_index =  reshape_in(_scenario_pick[:end])
 
@@ -2278,7 +2235,50 @@ end
 # ╔═╡ c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
 function get_last_moving_player(game_code)
 
-	return games_log_dict[game_code][:turns][:data][end][:moving_player]
+	_current_turn = games_log_dict[game_code][:turns][:current]
+
+	return games_log_dict[game_code][:turns][:data][_current_turn][:moving_player]
+
+end
+
+# ╔═╡ a7b92ca8-8a39-4332-bab9-ed612bf24c17
+function fn_nextPlaying_payload(game_code::String)
+# generate payload for next playing player
+# assumes at least one move took place
+
+	try 
+
+		_next_player_id = get_last_moving_player(game_code)
+	
+		# gen new game data for client
+		gen_new_clientPkg(game_code, _next_player_id)
+	
+		# retrieve last client package (just generated)
+		_pkg = getLast_clientPkg(game_code)
+	
+		# retrieve states delta
+		_client_delta = getLast_clientDelta(game_code)
+	
+			# append delta to package for client
+			setindex!(_pkg, _client_delta, :delta)
+	
+	
+		return _pkg::Dict
+
+	catch e
+
+		throw(error("ERROR generating payload for next move, $e"))
+
+	end
+
+end
+
+# ╔═╡ 8b830eee-ae0a-4c9f-a16b-34045b4bef6f
+function get_last_turn_details(game_code::String)
+
+	_current_turn = games_log_dict[game_code][:turns][:current]
+
+	return games_log_dict[game_code][:turns][:data][_current_turn]::Dict
 
 end
 
@@ -2475,10 +2475,9 @@ end
 
 # ╔═╡ 88616e0f-6c85-4bb2-a856-ea7cee1b187d
 function game_runner(msg)
-
-# a game has been created and both players have joined
 # this function takes care of orchestrating messages and running the game
-
+# scenario: a game has been created and one or both players have joined
+# players may have made or not a move, and asking to advance the game
 
 	# retrieve game and caller move details
 	_game_code = msg[:game_id]
@@ -2486,62 +2485,66 @@ function game_runner(msg)
 	_who = whos_player(_game_code, _player_id) # :originator || :joiner
 	_game_type = games_log_dict[_game_code][:identity][:game_type]
 
-	_scenario_pick = msg[:scenario_pick] # false || start/end/mk_sel/ring_pick
-
 	# update player status -> marked as ready anytime they ping
 	# should be a continuous thing to handle disconnections ?
 	mark_player_ready!(_game_code, _who)
 
-	# empty response payloads
+	_scenario_pick = msg[:scenario_pick] # false || start/end/mk_sel/ring_pick
+
+	println("Scenario pick: ", _scenario_pick)
+
+	println("TEST RUNNER _ 0")
+
+	# empty payload for playing player (+ turn info)
+	_PLAY_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_play)
+	# empty payload for waiting player
+	_WAIT_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_wait)
+
+
+	println("TEST RUNNER _ 1")
+		
+		# reflect scenario choice into server data
+		if _scenario_pick != false
+	
+			# update server state & generates delta for move replay
+			update_serverStates!(_game_code, _player_id, _scenario_pick)
+			
+			# move turn due to scenario being picked
+			advance_turn!(_game_code, _scenario_pick[:completed_turn_no])
+
+			merge!(_PLAY_payload, fn_nextPlaying_payload(_game_code))
+
+			# add turn information
+			setindex!(_PLAY_payload, get_last_turn_details(_game_code)[:turn_no], :turn_no)
+
+		end
+
+	println("TEST RUNNER _ 2")
+		
+	# empty responses for CALLER / OTHER
 	_caller_pld = Dict()
 	_other_pld = Dict()
 
+
 	# if both players ready -> who starts ? -> reply accordingly
 	if check_both_players_ready(_game_code)
+
+		# check if the caller is who plays next
+		_caller_plays = _is_playing_next(_game_code, _player_id)
+
+		# assigns payloads accordingly
+		_caller_pld = _caller_plays ? _PLAY_payload : _WAIT_payload
+		_other_pld = _caller_plays ? _WAIT_payload : _PLAY_payload 
 	
-		# check who starts
-		if _is_playing_next(_game_code, _player_id)
-
-			# caller playing next -> caller "play" -> other "wait"
-			setindex!(_caller_pld, CODE_play, key_nextActionCode)
-			setindex!(_other_pld, CODE_wait, key_nextActionCode)
-
-		else
-
-			# other playing next -> caller "play" -> other "wait"
-			setindex!(_caller_pld, CODE_wait, key_nextActionCode)
-			setindex!(_other_pld, CODE_play, key_nextActionCode)
-
-		end
 	
 	else # both players not ready, tell the caller to wait
 
-		setindex!(_caller_pld, CODE_wait, key_nextActionCode)	
+		_caller_pld = _WAIT_payload
 	
 	end
 
-	
-	# how do we determine game status?
-		# game status : new / activated / in_progress / stuck / completed
-		# players' status : ready, not_ready
-		# last turn (and who) : 1,2,3,... / W,B
-		# turn status : activated / in_progress / completed 
-	
 
-	# human games
-
-		## only one ready (s_pick false)
-		## both ready (s_pick false)
-		## business as usual (say req to wait, prepare package for other)
-		## winning move (say req they won, say other they lost)
-
-
-	# server games
-	
-		## business as usual (compute move, prepare package for requester)
-		## winning move (say player they won/lost)
-
-
+	# return CALLER and OTHER payload
 	return _caller_pld, _other_pld
 
 end
@@ -2551,18 +2554,15 @@ function fn_advance_game(ws, msg)
 # human client asking to advance the game status (either ready or just made a move)
 
 	try 
-		# orchestrator
-		#_resp = wannabe_orchestrator(msg[:msg_id], msg[:msg_code], msg)
-	
-		# NOTE -> to be replaced by new game runner function
-	
+
 		# is this orig or joiner ?
 		_who = whos_player(msg[:game_id], msg[:player_id])
 		_is_originator = (_who == :originator) ? true : false
 	
 		# save ws handler for originating vs joining player
 		update_ws_handler!(msg[:game_id], ws, _is_originator)
-	
+
+		# generate responses for caller & other
 		_resp_caller, _resp_other = game_runner(msg)
 	
 		return _resp_caller, _resp_other
@@ -2598,7 +2598,9 @@ function msg_handler(ws, msg, msg_log)
 # handles messages depending on their code
 # every incoming message should have an id and code - if they're missing, throw error
 
+	
 	# save incoming message
+	setindex!(msg, "received", :type)
 	push!(msg_log, msg)
 
 	# try retrieving specific values
@@ -2715,7 +2717,7 @@ end
 reactive_start_server(ws_servers_array, ws_messages_log)
 
 # ╔═╡ f479f1f8-d6fd-4e48-a0f3-447997bc0416
-function wannabe_orchestrator(msg_id, msg_code, msg_parsed)
+function wannabe_orchestrator(msg_id, msg_code, msg_parsed)# TO BE DELETED
 
 	# printing calling arguments
 	println(msg_id)
@@ -2932,10 +2934,16 @@ md"#### Open issues "
 #=
 
 - DONE - ws not saved
-- dual player is not handled // revisit turns handling
-- uniform handling/naming of originator vs joiner
+- DONE - dual player is not handled // revisit turns handling
+- DONE - improve reply animation post scoring
 - rings don't have reserved place
 - game doesn't end when 3 rings are taken
+- handling of scoring
+- textual cues
+- TEST with ngrok
+- opponent scoring for other
+- uniform handling/naming of originator vs joiner
+- way too many hardcoded values everywhere
 - AI doesn't always pick a ring after scoring
 - AI is too annoying in the beginning -> could add rule about placing something first, or experiment with RL and self-play ??
 - clients disconnecting / non-responsive are not handled
@@ -2943,53 +2951,9 @@ md"#### Open issues "
 
 =#
 
-# ╔═╡ 972d60e0-ed99-465e-a6fa-aefca286c2cb
-md"#### Handling turns logic "
-
-# ╔═╡ e7de85fc-e51e-47a3-98e8-ddc0fab782ba
-#=
-
-event chain
-
-new game handling
-
-A = originating player
-S = server
-B = joiner
-
-
---
-A -> requests new game
-S -> sends data
-A -> sets up game -> notifies server of ready state (10s to reply)
-S -> logs game as ready for originator
---
-A -> (shares code with B)
-B -> requests server for game data 
-S -> sends data
-B -> sets up game -> notifies server of ready state
-S -> logs game as ready for joiner
---
-S -> both players ready -> game can start
-S -> checks who is the first moving player -> notifies player
---
-B -> receives message -> acknowledge msg to server (10s to reply)
-B -> interaction enabled -> player completes turn -> notifies server
-S -> server replies acknowledge
-B -> waits for other players' turn (timed ?)
-S -> server handles turn -> presimulates next moves -> notifies other player
-S -> .... (cycle repeats)
-
-
-=#
-
-
 # ╔═╡ 24185d12-d29c-4e72-a1de-a28319b4d369
 # make it wait forever
 #wait(Condition())
-
-# ╔═╡ 41bcc03e-7f7a-4979-9640-2f73ea93c0a1
-
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -4103,6 +4067,7 @@ version = "1.4.1+0"
 # ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 # ╠═c334b67e-594f-49fc-8c11-be4ea11c33b5
 # ╠═29a93299-f577-4114-b77f-dbc079392090
+# ╠═8a195634-8ccf-4f7b-9a6d-4a8152832be5
 # ╠═f1949d12-86eb-4236-b887-b750916d3493
 # ╠═e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╟─61a0e2bf-2fed-4141-afc0-c8b5507679d1
@@ -4111,11 +4076,11 @@ version = "1.4.1+0"
 # ╠═1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╠═6075f560-e190-409b-8435-a7cf08ec1bc6
 # ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
-# ╠═aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
+# ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╠═761fb8d7-0c7d-4428-ad48-707d219582c0
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
-# ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
+# ╠═439903cb-c2d1-49d8-a5ef-59dbff96e792
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╟─466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
@@ -4129,36 +4094,31 @@ version = "1.4.1+0"
 # ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
 # ╠═5e5366a9-3086-4210-a037-c56e1374a686
 # ╠═7316a125-3bfe-4bac-babf-4e3db953078b
-# ╟─064496dc-4e23-4242-9e25-a41ddbaf59d1
-# ╟─28ee9310-9b7d-4169-bae4-615e4b2c386e
+# ╠═064496dc-4e23-4242-9e25-a41ddbaf59d1
+# ╠═28ee9310-9b7d-4169-bae4-615e4b2c386e
 # ╠═befb251e-563e-4927-b504-40f22b9470f4
 # ╟─612a1121-b672-4bc7-9eee-f7989ac27346
 # ╟─a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╠═ca346015-b2c9-45da-8c1e-17493274aca2
-# ╠═de882dba-4a96-4af7-af3c-b338a09f5a10
+# ╠═3294f66d-359c-4aea-a41e-611c01c4dc7e
 # ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
-# ╠═527e9394-26a4-4423-b70d-b2a9f3497948
-# ╠═384e2313-e1c7-4221-8bcf-142b0a49bff2
-# ╠═599dbd41-06ff-4c51-9ee2-96c5285491f7
-# ╠═17b3ce4f-91be-4d01-8772-38981e5a0c99
-# ╠═88e183c5-e791-4142-bc5a-d1a6207fa64e
-# ╠═c77607ad-c11b-4fd3-bac9-6c43d71ae932
-# ╠═6fb75345-0bf6-4e43-ad2c-a615c8db3283
-# ╠═458f9f2e-b739-4944-a137-0d3719a560f4
-# ╠═96f17f93-d6a5-42d9-979d-79c691e1b1e0
-# ╠═228179b5-f7d6-4e3f-b4f7-34e60b6f2974
-# ╠═ee409339-140e-4d87-b296-84aefdc9b8a4
+# ╠═6cc8be77-a911-4119-a709-fd1ad3e2f667
+# ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
+# ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
+# ╟─c77607ad-c11b-4fd3-bac9-6c43d71ae932
+# ╟─b5c7295e-c464-4f57-8556-c36b9a5df6ca
+# ╟─92a20829-9f0a-4ed2-9fd3-2d6560514e03
 # ╟─13eb72c7-ac24-4b93-8fd9-260b49940370
-# ╠═5b4f9b35-0246-4813-9eb4-be8d28726f3f
-# ╠═903e103c-ec53-423f-9fe1-99abea55c28d
-# ╠═f479f1f8-d6fd-4e48-a0f3-447997bc0416
-# ╠═ebd8e962-2150-4ada-8ebd-3eba6e29c12e
+# ╟─903e103c-ec53-423f-9fe1-99abea55c28d
+# ╟─f479f1f8-d6fd-4e48-a0f3-447997bc0416
+# ╟─ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 # ╟─f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
+# ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 # ╟─6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 # ╟─14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 # ╟─4976c9c5-d60d-4b19-aa72-0e135ad37361
@@ -4167,9 +4127,6 @@ version = "1.4.1+0"
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 # ╟─5ce26cae-4604-4ad8-8d15-15f0bfc9a81a
 # ╠═9b8a5995-d8f0-4528-ad62-a2113d5790fd
-# ╟─972d60e0-ed99-465e-a6fa-aefca286c2cb
-# ╠═e7de85fc-e51e-47a3-98e8-ddc0fab782ba
 # ╠═24185d12-d29c-4e72-a1de-a28319b4d369
-# ╠═41bcc03e-7f7a-4979-9640-2f73ea93c0a1
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

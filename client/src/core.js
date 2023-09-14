@@ -6,7 +6,7 @@
 import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_advance_game} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_new_game_data, get_player_id, save_next_server_response } from './data.js'
 import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
-import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end} from './data.js' 
+import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no} from './data.js' 
 import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
@@ -133,7 +133,7 @@ async function server_actions_handler (event) {
 
         // from here on, it should go to the client turn manager
         enableInteraction();
-        console.log(`LOG - It's yout turn, make a move! - # ${event.detail.turn_no}`); // -> this should go to the UI
+        console.log(`LOG - It's yout turn, make a move! - # ${get_current_turn_no()}`); // -> this should go to the UI
 
     } else if (_next_action == CODE_action_wait) {
 
@@ -198,14 +198,23 @@ async function replay_opponent_move(){
         let _score_ring_wait = 0;
         if (yinsh.delta.score_handled){
             
-            _score_mk_wait = 350;
+            _score_mk_wait = 600;
             await sleep(_score_mk_wait);
-            remove_markers(yinsh.delta.markers_toRemove); 
+            
+            update_mk_halos(yinsh.delta.markers_toRemove, true); // highlight markers
+            refresh_canvas_state();
+            
+            await sleep(_score_mk_wait); // wait to let user see visual changes
+
+            remove_markers(yinsh.delta.markers_toRemove); // remove markers
+            update_mk_halos(); // turn off markers highlight
+            refresh_canvas_state(); // materialize changes on canvas
+
             markersRemoved_play_sound(); // play sound
 
-            _score_ring_wait = 650;
+            _score_ring_wait = 1300;
             await sleep(_score_ring_wait);
-            remove_ring_scoring(yinsh.delta.scoring_ring); 
+            remove_ring_scoring(yinsh.delta.scoring_ring); // remove ring
 
             const new_opponent_score = increase_opponent_score();
             console.log(`LOG - New opponent score: ${new_opponent_score}`);
@@ -489,11 +498,16 @@ async function ringDrop_handler (event) {
                 };  
             };
                     
+            const _played_turn_no = get_current_turn_no();
+            console.log(`TEST - Turn no: ${_played_turn_no}`);
+
             // move done -> wrap up info to send back on actions taken by player
             const scenario_info = { start: start_move_index, 
                                     end: drop_loc_index,
                                     mk_sel_pick: scoring_mk_sel_picked, // default to -1
-                                    ring_removed: scoring_ring_picked // defaults to -1
+                                    ring_removed: scoring_ring_picked, // defaults to -1
+                                    completed_turn_no: _played_turn_no,
+                                    random_field_test: "helllo"
                                 }; 
 
             // turn completed -> notify server with info on scenario
