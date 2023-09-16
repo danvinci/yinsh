@@ -274,7 +274,7 @@ function draw_scoring_slots(){
 
             } else {
 
-                ctx.globalAlpha = 0.35; 
+                ctx.globalAlpha = 0.45; 
                 ctx.fillStyle = _filled_score_color;
 
                 ctx.fill(slot.path);
