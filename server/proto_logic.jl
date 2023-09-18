@@ -1233,7 +1233,7 @@ function save_new_clientPkg!(games_log_ref, game_id, _client_pkg)
 	
 end
 
-# ╔═╡ 6075f560-e190-409b-8435-a7cf08ec1bc6
+# ╔═╡ 3f1506ff-525b-4b36-9f16-13d3a7d95d8b
 games_log_dict
 
 # ╔═╡ 5da79176-7005-4afe-91b7-accaac0bd7b5
@@ -2953,7 +2953,7 @@ md"#### Open issues "
 
 # ╔═╡ 24185d12-d29c-4e72-a1de-a28319b4d369
 # make it wait forever
-#wait(Condition())
+wait(Condition())
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2968,7 +2968,7 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
-HTTP = "~1.9.14"
+HTTP = "~1.9.15"
 JSON3 = "~1.13.2"
 PlotThemes = "~3.1.0"
 Plots = "~1.39.0"
@@ -2982,7 +2982,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "7d2f80583a1dd9a3026e9a79d0ec78949a5e3d47"
+project_hash = "080e97779e75944f3d72f4dc5ffd3940bc1fb06f"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -3193,10 +3193,10 @@ uuid = "78b55507-aeef-58d4-861c-77aaff3498b1"
 version = "0.21.0+0"
 
 [[deps.Glib_jll]]
-deps = ["Artifacts", "Gettext_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE2_jll", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "d3b3624125c1474292d0d8ed0f65554ac37ddb23"
+deps = ["Artifacts", "Gettext_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE2_jll", "Zlib_jll"]
+git-tree-sha1 = "e94c92c7bf4819685eb80186d51c43e71d4afa17"
 uuid = "7746bdde-850d-59dc-9ae8-88ece973131d"
-version = "2.74.0+2"
+version = "2.76.5+0"
 
 [[deps.Graphite2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -3211,9 +3211,9 @@ version = "1.0.2"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "cb56ccdd481c0dd7f975ad2b3b62d9eda088f7e2"
+git-tree-sha1 = "19e974eced1768fb46fd6020171f2cec06b1edb5"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.9.14"
+version = "1.9.15"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -4074,7 +4074,7 @@ version = "1.4.1+0"
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╠═1fe8a98e-6dc6-466e-9bc9-406c416d8076
-# ╠═6075f560-e190-409b-8435-a7cf08ec1bc6
+# ╠═3f1506ff-525b-4b36-9f16-13d3a7d95d8b
 # ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
 # ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
