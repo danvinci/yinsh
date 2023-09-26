@@ -17,7 +17,7 @@ import { save_first_server_response, save_next_server_response, get_game_id, get
 
 // how to reach endpoint
 const ws_port = 6091;
-const ip_address = "localhost"
+const ip_address = "api.yinsh.net"
 
 ///// COMMUNICATION CODES
 // client -> server codes
