@@ -5,7 +5,7 @@ if ! [ -x "$(command -v docker compose)" ]; then
   exit 1
 fi
 
-domains=(yinsh.net www.yinsh.net api.yinsh.net)
+domains=(api.yinsh.net)
 rsa_key_size=4096
 data_path="./certbot"
 email="dann.vn@gmail.com" # 
@@ -42,11 +42,14 @@ echo "### Starting nginx ..."
 docker compose -f compose.yaml up --force-recreate -d nginx
 echo
 
-echo "### Deleting dummy certificate for $domains ..."
+echo "### Moving dummy certificate for $domains ..."
 docker compose -f compose.yaml run --rm --entrypoint "\
-  rm -Rf /etc/letsencrypt/live/$domains && \
-  rm -Rf /etc/letsencrypt/archive/$domains && \
-  rm -Rf /etc/letsencrypt/renewal/$domains.conf" certbot
+  mkdir /etc/letsencrypt/live_dummy/$domains && \
+  mv /etc/letsencrypt/live/$domains /etc/letsencrypt/live_dummy/$domains && \
+  mkdir /etc/letsencrypt/archive_dummy/$domains && \
+  mv /etc/letsencrypt/archive/$domains /etc/letsencrypt/archive_dummy/$domains && \
+  mkdir /etc/letsencrypt/renewal_dummy &&\
+  mv /etc/letsencrypt/renewal/$domains.conf /etc/letsencrypt/renewal_dummy/$domains.conf" certbot
 echo
 
 
@@ -73,6 +76,7 @@ docker compose -f compose.yaml run --rm --entrypoint "\
     $domain_args \
     --rsa-key-size $rsa_key_size \
     --agree-tos \
+    --no-eff-email \
     --force-renewal" certbot
 echo
 
