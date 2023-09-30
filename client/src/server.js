@@ -16,8 +16,15 @@
 import { save_first_server_response, save_next_server_response, get_game_id, get_player_id, get_current_turn_no } from './data.js'
 
 // how to reach endpoint
-const ws_port = 6091;
-const ip_address = "api.yinsh.net"
+const ws_port = 5555; 
+const ip_address = "localhost"
+
+const ws_complete_address = `ws://${ip_address}:${ws_port}`;
+
+// const ws_complete_address = "ws://ec2-34-240-88-137.eu-west-1.compute.amazonaws.com:6091/"
+// const ws_complete_address = "wss://lt8g7s1rhi.execute-api.eu-west-1.amazonaws.com/production/"
+// const ws_complete_address = "wss://api.yinsh.net"
+
 
 ///// COMMUNICATION CODES
 // client -> server codes
@@ -62,7 +69,7 @@ function push_messages_handler(event){
         };
 
     } else {
-        console.log("LOG - Action code not found or error");
+        console.log("LOG - Action code not found or other error on incoming msg");
     };
 };
 
@@ -164,7 +171,7 @@ export async function init_ws () {
                 // logging
                 let connection_start = Date.now(); //-> we should throw a timeout error
 
-                globalThis.ws = new WebSocket(`ws://${ip_address}:${ws_port}`);
+                globalThis.ws = new WebSocket(ws_complete_address);
 
                 // adds event listeners 
                 // ws.addEventListener('open', onOpen_handler, false); // -> directly handled here
@@ -433,6 +440,9 @@ function fwd_outbound(payload){
         // add details to message payload -> for the server's consumption
         payload.msg_time = msg_time;
         payload.msg_id = msg_id;
+
+        // add details for AWS API gateway
+        payload.aws_gw = '_r_key';
     
         // log message that is about to be sent -> msg_id/msg_time stored separately for client's consumption
         const local_msg = new MessagePromise(payload, msg_id, msg_time);

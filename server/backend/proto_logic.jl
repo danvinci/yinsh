@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.27
+# v0.19.29
 
 using Markdown
 using InteractiveUtils
@@ -34,6 +34,9 @@ using HTTP, JSON3
 
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
+
+# ╔═╡ 08934729-d835-45e4-a8a8-e1424ce9102d
+using MbedTLS # for SSLConfig function
 
 # ╔═╡ cd36abda-0f4e-431a-a4d1-bd5366c83b9b
 row_m = 19; col_m = 11;
@@ -1766,7 +1769,7 @@ end
 begin
 	
 	# ip and port to use for the server
-	ws_ip = "0.0.0.0" # listen on every ip
+	ws_ip = "0.0.0.0" # listen on every ip / host ip
 	ws_port = 6091
 
 end
@@ -1815,6 +1818,9 @@ function msg_dispatcher(ws, msg_id, msg_code, payload = Dict(), _status::Bool = 
 	# append original msg id and updated response_code
 	setindex!(_response, msg_id, :msg_id)
 	setindex!(_response, _sfx_msg_code, :msg_code)
+
+	# add statusCode 200 (for AWS API Gateway)
+	setindex!(_response, 200, :statusCode)
 
 	# send response
 	send(ws, JSON3.write(_response))
@@ -2664,27 +2670,34 @@ end
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 function start_ws_server(ws_array, _log)
 
-	println("WebSocket server start $(now())")
+	try 
 
-	# start new server 
-	ws_server = WebSockets.listen!(ws_ip, ws_port; idle_timeout_enabled = false) do ws
+		# start new server 
+		ws_server = WebSockets.listen!(ws_ip, ws_port; idle_timeout_enabled = false #=, sslconfig=MbedTLS.SSLConfig(false)=#) do ws
 
-		# iterate over incoming messages
-		for msg in ws
+			# iterate over incoming messages
+			for msg in ws
 
-			# parse incoming msg as json
-			msg_parsed = Dict(JSON3.read(msg))
-			
-			# dispatch parsed message to message handler
-			# handler takes care of generating response payload and replying,
-			# as well as handling potential errors
-			msg_handler(ws, msg_parsed, _log)
+				# parse incoming msg as json
+				msg_parsed = Dict(JSON3.read(msg))
+				
+				# dispatch parsed message to message handler
+				# handler takes care of generating response payload and replying,
+				# as well as handling potential errors
+				msg_handler(ws, msg_parsed, _log)
 
+			end
 		end
-    end
 
-	# saves server handler in array
-	push!(ws_array, ws_server)
+		# saves server handler in array
+		push!(ws_array, ws_server)
+
+		println("WebSocket server started at $(now())")
+
+	catch e
+		println("ERROR starting server - $e")
+		throw(e)
+	end
 
 end
 
@@ -2948,11 +2961,15 @@ md"#### Open issues "
 - AI is too annoying in the beginning -> could add rule about placing something first, or experiment with RL and self-play ??
 - clients disconnecting / non-responsive are not handled
 
+-- auto docker + container start on startup
+-- long container/server startup time
+
 
 =#
 
 # ╔═╡ 24185d12-d29c-4e72-a1de-a28319b4d369
 # make it wait forever
+println("Service running")
 wait(Condition())
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2961,6 +2978,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+MbedTLS = "739be429-bea8-5141-9913-cc70e7f3736d"
 PlotThemes = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
@@ -2970,6 +2988,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 [compat]
 HTTP = "~1.9.15"
 JSON3 = "~1.13.2"
+MbedTLS = "~1.1.7"
 PlotThemes = "~3.1.0"
 Plots = "~1.39.0"
 PlutoUI = "~0.7.52"
@@ -2982,7 +3001,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "080e97779e75944f3d72f4dc5ffd3940bc1fb06f"
+project_hash = "4f59bc036c9f34d017424d0dcc7671d4010fd0f2"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -3110,6 +3129,12 @@ version = "0.9.3"
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 version = "1.6.0"
+
+[[deps.EpollShim_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "8e9441ee83492030ace98f9789a654a6d0b1f643"
+uuid = "2702e6a9-849d-5ed8-8c21-79e8b8f9ee43"
+version = "0.0.20230411+0"
 
 [[deps.ExceptionUnwrapping]]
 deps = ["Test"]
@@ -3777,7 +3802,7 @@ uuid = "41fe7b60-77ed-43a1-b4f0-825fd5a5650d"
 version = "0.2.0"
 
 [[deps.Wayland_jll]]
-deps = ["Artifacts", "Expat_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg", "XML2_jll"]
+deps = ["Artifacts", "EpollShim_jll", "Expat_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg", "XML2_jll"]
 git-tree-sha1 = "ed8d92d9774b077c53e1da50fd81a36af3744c1c"
 uuid = "a2964d1f-97da-50d4-b82a-358c7fce9d89"
 version = "1.21.0+0"
@@ -4088,6 +4113,7 @@ version = "1.4.1+0"
 # ╠═bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 # ╠═c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
 # ╠═91c35ba0-729e-4ea9-8848-3887936a8a21
+# ╠═08934729-d835-45e4-a8a8-e1424ce9102d
 # ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
 # ╠═8b6264b0-f7ea-4177-9700-30072d4c5826
