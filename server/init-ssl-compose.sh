@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# https://stackoverflow.com/questions/57239213/how-to-enable-https-on-aws-ec2-running-an-nginx-docker-container
+
 if ! [ -x "$(command -v docker compose)" ]; then
   echo 'Error: docker compose is not installed.' >&2
   exit 1
