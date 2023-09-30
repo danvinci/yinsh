@@ -8,7 +8,7 @@ fi
 domains=(api.yinsh.net)
 rsa_key_size=4096
 data_path="./certbot"
-email="dann.vn@gmail.com" # 
+email="dann.vn@gmail.com" 
 staging=1 # Set to 1 if you're testing your setup to avoid hitting request limits
 
 if [ -d "$data_path" ]; then
@@ -42,7 +42,7 @@ echo "### Starting nginx ..."
 docker compose -f compose.yaml up --force-recreate -d nginx
 echo
 
-echo "### Moving dummy certificate for $domains ..."
+echo "### Deleting dummy certificate for $domains ..."
 docker compose -f compose.yaml run --rm --entrypoint "\
   rm -Rf /etc/letsencrypt/live/$domains && \
   rm -Rf /etc/letsencrypt/archive/$domains && \
@@ -67,7 +67,7 @@ esac
 if [ $staging != "0" ]; then staging_arg="--staging"; fi
 
 docker compose -f compose.yaml run --rm --entrypoint "\
-  certbot certonly --webroot -w /var/www/certbot \
+  certbot certonly --webroot -w /var/www/certbot -v \
     $staging_arg \
     $email_arg \
     $domain_args \
