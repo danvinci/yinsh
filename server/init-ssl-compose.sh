@@ -44,12 +44,9 @@ echo
 
 echo "### Moving dummy certificate for $domains ..."
 docker compose -f compose.yaml run --rm --entrypoint "\
-  mkdir /etc/letsencrypt/live_dummy/$domains && \
-  mv /etc/letsencrypt/live/$domains /etc/letsencrypt/live_dummy/$domains && \
-  mkdir /etc/letsencrypt/archive_dummy/$domains && \
-  mv /etc/letsencrypt/archive/$domains /etc/letsencrypt/archive_dummy/$domains && \
-  mkdir /etc/letsencrypt/renewal_dummy &&\
-  mv /etc/letsencrypt/renewal/$domains.conf /etc/letsencrypt/renewal_dummy/$domains.conf" certbot
+  rm -Rf /etc/letsencrypt/live/$domains && \
+  rm -Rf /etc/letsencrypt/archive/$domains && \
+  rm -Rf /etc/letsencrypt/renewal/$domains.conf" certbot
 echo
 
 
