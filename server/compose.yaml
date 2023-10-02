@@ -1,4 +1,5 @@
 # https://stackoverflow.com/questions/19109912/yaml-do-i-need-quotes-for-strings-in-yaml
+# https://stackoverflow.com/questions/3790454/how-do-i-break-a-string-in-yaml-over-multiple-lines
 
 services:
   
@@ -8,8 +9,9 @@ services:
     container_name: nginx-proxy
     volumes:
       - ./proxy/nginx.conf:/etc/nginx/conf.d/default.conf
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
+      - ./data/frontend:/var/frontend
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
     command: /bin/ash -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & exec nginx -g 'daemon off;'" # after cert issuing
       # /bin/ash -c "exec nginx -g 'daemon off;'" # to be used for issuing certs
     ports:
@@ -23,8 +25,8 @@ services:
     image: certbot/certbot
     container_name: certbot
     volumes:
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done;'" # after cert issuing
 
   # yinsh service

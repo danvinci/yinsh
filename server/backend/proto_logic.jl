@@ -2960,9 +2960,12 @@ md"#### Open issues "
 - AI doesn't always pick a ring after scoring
 - AI is too annoying in the beginning -> could add rule about placing something first, or experiment with RL and self-play ??
 - clients disconnecting / non-responsive are not handled
+- DONE service behind websocket rev proxy
 
--- auto docker + container start on startup
--- long container/server startup time
+-- ec2 server: auto docker + container start on startup
+-- long container/server startup time  (re-building julia env?)
+-- ssl for rev proxy
+-- serve everything from server (also files, ditch s3 ?)
 
 
 =#
