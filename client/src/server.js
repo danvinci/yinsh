@@ -16,14 +16,9 @@
 import { save_first_server_response, save_next_server_response, get_game_id, get_player_id, get_current_turn_no } from './data.js'
 
 // how to reach endpoint
-const ws_port = 5555; 
-const ip_address = "localhost"
 
-const ws_complete_address = `ws://${ip_address}:${ws_port}`;
-
-// const ws_complete_address = "ws://ec2-34-240-88-137.eu-west-1.compute.amazonaws.com:6091/"
-// const ws_complete_address = "wss://lt8g7s1rhi.execute-api.eu-west-1.amazonaws.com/production/"
-// const ws_complete_address = "wss://api.yinsh.net"
+//const ws_complete_address = `ws://localhost:5555`; // local test address
+const ws_complete_address = "wss://yinsh.net/api" // 
 
 
 ///// COMMUNICATION CODES
