@@ -93,7 +93,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         console.log(`LOG - Game setup time: ${Date.now() - request_start_time}ms`);
 
         // log game code (later should be in the UI)
-        console.log(`LOG - Your GAME CODE is: ${yinsh.server_data.game_id}`);
+        console.log(`USER - Your GAME CODE is: ${yinsh.server_data.game_id}`);
 
         // ask server what to do -> it will emit event on response
         await server_ws_advance_game();
@@ -133,12 +133,12 @@ async function server_actions_handler (event) {
 
         // from here on, it should go to the client turn manager
         enableInteraction();
-        console.log(`LOG - It's yout turn, make a move! - # ${get_current_turn_no()}`); // -> this should go to the UI
+        console.log(`USER - It's yout turn, make a move! - # ${get_current_turn_no()}`); // -> this should go to the UI
 
     } else if (_next_action == CODE_action_wait) {
 
         disableInteraction(); // a bit redundant, is disabled by default
-        console.log(`LOG - Wait for your opponent.`); // -> this should bubble up to a UI component
+        console.log(`USER - Wait for your opponent.`); // -> this should bubble up to a UI component
 
     };
 
@@ -165,7 +165,7 @@ async function replay_opponent_move(){
     // dispatch should be smarter
     if (typeof yinsh.delta !== "undefined") {
 
-        console.log(`LOG - Replaying opponent's move`);
+        console.log(`USER - Replaying opponent's move`);
         const replay_start_time = Date.now();
 
         console.log(`LOG - Delta: `, yinsh.delta);
@@ -475,7 +475,7 @@ async function ringDrop_handler (event) {
                 // handle only scoring for current player
                 if (_player_scores.length > 0) {
 
-                    console.log("LOG - Score!");
+                    console.log("USER - Score!");
 
                     // create task for markers scoring (options only for current player)
                     const mk_scoring = new Task('mk_scoring_task', _player_scores);
@@ -494,7 +494,7 @@ async function ringDrop_handler (event) {
                     reset_scoring_tasks();
 
                 } else {
-                    console.log("LOG - Oh no, you scored for your opponent!");
+                    console.log("USER - Oh no, you scored for your opponent!");
 
                 };  
             };
@@ -519,7 +519,7 @@ async function ringDrop_handler (event) {
     // CASE: invalid location for drop attempt
     } else { 
 
-        console.log("LOG - Invalid drop location");
+        console.log("USER - Invalid drop location");
         // NOTE: we could play specific sound 'err'
 
     };
@@ -546,7 +546,7 @@ function mk_scoring_options_handler(event){
     // CASE: score handling started
     if (event.type === 'mk_score_handling_on') {
 
-        console.log("LOG - Pick a marker to indicate the row!");
+        console.log("USER - Pick a marker to indicate the row!");
 
         // retrieve scoring options
         const scoring_options = get_scoring_options();
@@ -584,7 +584,7 @@ function mk_scoring_options_handler(event){
         const success_msg = mk_sel_picked_id; // value to be returned by completed task
         complete_task('mk_scoring_task', success_msg);
 
-        console.log("LOG - Pick a ring to be removed from the board!");
+        console.log("USER - Pick a ring to be removed from the board!");
 
     };
 };
