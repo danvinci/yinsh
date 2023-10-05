@@ -174,7 +174,7 @@ export function save_first_server_response(srv_response_input, joiner=false){
 
     console.log('LOG - Server response saved');
     
-    console.log(`LOG - You're player ${_server_response.client_player_id}`);
+    console.log(`USER - You're player ${_server_response.client_player_id}`);
 
 };
 
@@ -362,12 +362,12 @@ export function get_current_turn_no(){
 
 export function turn_start(){
    yinsh.objs.current_turn.in_progress = true;
-   console.log(`LOG - Turn started`);
+   console.log(`USER - Turn started`);
 };
 
 export function turn_end(){
    yinsh.objs.current_turn.in_progress = false;
-   console.log(`LOG - Turn completed`);
+   console.log(`USER - Turn completed`);
 };
 
 export function get_player_id() {
