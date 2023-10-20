@@ -29,6 +29,7 @@ The game can be played in two-players mode at [yinsh.net](https://yinsh.net/):
 
 ## Work to be done
 - Making a proper UI to eliminate use of the console log
+- Responsive canvas resizing
 - Add a join by invite link functionality
 - Restore AI server (not working due to breaking API changes)
 - Handle game ending
