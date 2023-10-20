@@ -1,6 +1,15 @@
 # Yinsh
 
-Yinsh is an abstract strategy board game for two players, created by Kris Burm. It is played on a hexagonal board where players place rings of their color. The objective is to create rows of five markers of the same color, while removing rings from the board to keep track of the score. Rings can only be moved when 'activated' by placing a same-color marker, which is left behind when the ring moves. The first to recover three rings wins, or one in the quick version.
+Yinsh is an abstract strategy board game for two players, created by Kris Burm. It is played on a hexagonal board where players place rings of their color. The objective is to create rows of five markers of the same color, while removing rings from the board to keep track of the score. Rings can only be moved when 'activated' by placing a same-color marker, which is left behind when the ring moves. 
+
+## Game rules
+- The game starts with 5 rings placed for each player
+- Each player, in their own turn, can activate one of their rings by placing a same-color marker in it
+- An activated ring can only move in straight lines (see visual cues)
+- Rings can't move over other rings
+- Rings can move over markers, but must stop at the first empty slot afterwards
+- If you get five same-color markers in a row (of your color), you can remove them as well a ring of your choice to mark your score
+- The first to recover three rings wins, or just one ring in the 'quick version' variant of the game
 
 ## Technical bits
 I built a digital version from scratch, using:
