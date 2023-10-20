@@ -1,4 +1,11 @@
+# NPM environment
 node_modules
+
+# macOS artifact
 .DS_Store
+
+# temp storage, not used now 
 *.jld2
+
+# certificates in /certs must be copied to the server for NGiNX to work
 *.pem
