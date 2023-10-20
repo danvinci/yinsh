@@ -8,7 +8,8 @@ Yinsh is an abstract strategy board game for two players, created by [Kris Burm]
 - An activated ring can only move in straight lines (see visual cues)
 - Rings can't move over other rings
 - Rings can move over markers, but must stop at the first empty slot afterwards
-- If you get five same-color markers in a row (of your color), you can remove them as well a ring of your choice to mark your score
+- Once a ring is placed, all the hovered markers flip - changing their color
+- If you get five same-color markers in a row (of your color), you can remove them as well as a ring of your choice to mark your score
 - The first to recover three rings wins, or just one ring in the 'quick version' variant of the game
 
 ## Technical bits
