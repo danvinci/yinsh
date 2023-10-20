@@ -21,14 +21,19 @@ I built a digital version from scratch, using:
 ![yinsh_edit_opt](https://github.com/danvinci/yinsh/assets/15657499/20dca6f6-c764-47a3-ac8b-8ababccaefd8)
 
 
-The game can be played in two-players mode at [yinsh.net](https://yinsh.net/): you'll need to grab the game ID from the code inspector and pass it to the other player.
+The game can be played in two-players mode at [yinsh.net](https://yinsh.net/): 
+- Start a new game
+- Grab the game ID code from the console log
+- Pass it to the other player, that will need to pick the "Play with a friend > Join with code" option
 
-## Work in progress
-- Making a proper UI to eliminate use of the inspector
+## Work to be done
+- Making a proper UI to eliminate use of the console log
+- Add a join by invite link functionality
 - Restore AI server (not working due to breaking API changes)
 - Handle game ending
 - Handle special edge cases (eg. adversarial scoring > markers selection)
 - Adding quick game option (first to score wins)
+- Add controls for game settings (mode, sounds)
 
 ## License
 Work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
