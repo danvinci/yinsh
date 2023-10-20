@@ -1,6 +1,9 @@
 # NPM environment
 node_modules
 
+# VS code settings
+**/.vscode/
+
 # macOS artifact
 .DS_Store
 
