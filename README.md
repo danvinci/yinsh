@@ -9,7 +9,7 @@ I built a digital version from scratch, using:
 - Julia for the game server and adversarial AI, which you can see an example of below:
 
 
-![yinsh_edit_opt](https://github.com/danvinci/yinsh/assets/15657499/5db243bc-b996-4c66-823c-5955ae3484c6)
+![yinsh_edit_opt](https://github.com/danvinci/yinsh/assets/15657499/20dca6f6-c764-47a3-ac8b-8ababccaefd8)
 
 
 The game can be played in two-players mode at [yinsh.net](https://yinsh.net/): you'll need to grab the game ID from the code inspector and pass it to the other player.
