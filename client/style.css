@@ -1,0 +1,14 @@
+div.wrapper {
+    background-color: lightblue;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-gap: 0.5em;
+    grid-auto-columns: minmax(50px, auto); /* how to make cols go below?*/
+    justify-items: center; /* align horizontally*/
+    /* align-items -> vertically*/
+}
+
+div.wrapper > div:nth-child(odd) {
+    background-color: gray;
+    font-style: italic;
+}

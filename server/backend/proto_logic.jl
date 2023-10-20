@@ -2946,13 +2946,15 @@ md"#### Open issues "
 # ╔═╡ 9b8a5995-d8f0-4528-ad62-a2113d5790fd
 #=
 
-- DONE - ws not saved
-- DONE - dual player is not handled // revisit turns handling
-- DONE - improve reply animation post scoring
+- timeout/connection closed when game starts -> handle gracefully
+- redesign UI from scratch (check battleship game for model) http://en.battleship-game.org
+-- configure it to work with invitation
+- config for sound and placement helper 
 - rings don't have reserved place
 - game doesn't end when 3 rings are taken
 - handling of scoring
 - textual cues
+- last-move replay
 - TEST with ngrok
 - opponent scoring for other
 - uniform handling/naming of originator vs joiner
@@ -2960,12 +2962,6 @@ md"#### Open issues "
 - AI doesn't always pick a ring after scoring
 - AI is too annoying in the beginning -> could add rule about placing something first, or experiment with RL and self-play ??
 - clients disconnecting / non-responsive are not handled
-- DONE service behind websocket rev proxy
-
--- ec2 server: auto docker + container start on startup
--- long container/server startup time  (re-building julia env?)
--- ssl for rev proxy
--- serve everything from server (also files, ditch s3 ?)
 
 
 =#
