@@ -35,6 +35,7 @@ The game can be played in two-players mode at [yinsh.net](https://yinsh.net/):
 - Handle special edge cases (eg. adversarial scoring > markers selection)
 - Adding quick game option (first to score wins)
 - Add controls for game settings (mode, sounds)
+- Make the AI less aggressive/dumb and more organic
 
 ## License
 Work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
