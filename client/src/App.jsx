@@ -1,8 +1,13 @@
-import Play from './ui';
+import {TextDialog, GameSetup, InGameSettings} from './ui';
 
 function App() {
   return (
-    <Play></Play>
+    <div class="side_panel">
+      <TextDialog></TextDialog>
+      <GameSetup></GameSetup>
+      <InGameSettings></InGameSettings>
+    </div>
+    
   );
 }
 

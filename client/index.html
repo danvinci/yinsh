@@ -20,27 +20,28 @@
     <title>Play Yinsh!</title>
   </head>
   <body>
+
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+    <header>
+      <div>
+        <p class="header_title">Yinsh</p>
+      </div>
+      <div class="links_container">
+        <a class="header_link" href="#">Rules</a>
+        <a class="header_link" href="#">GitHub</a>
+      </div>
+    </header>
 
-    <script src="/src/index.jsx" type="module"></script>
+    <main>
+      <section class="game-canvas">
+        <canvas id="canvas" width="650" height="600"></canvas>
+      </section>
 
-    <br></br>
-    <div class= "wrapper">
-      <div>page title</div>
-      <div>text clues box</div>
-      <div >board</div>
-      <div>timer</div>
-      <div>Lorem ipsum dolor sit, amet consectetur adipisicing elit. Animi temporibus iste cum culpa necessitatibus nam cupiditate fugiat odio aspernatur facere incidunt quis quae eos mollitia a at repellat, quidem vel aliquid ipsa porro nobis! Voluptatibus adipisci, soluta cupiditate facilis labore repellendus, dolore magni reprehenderit quaerat quia optio quam nam quisquam praesentium similique molestias facere dolor dolorem? Corporis officiis magni ipsa, minima a eligendi accusamus reprehenderit repellat provident, ex sunt exercitationem rem id distinctio, iusto voluptatem? Voluptate a modi corrupti totam suscipit quas quisquam, consequuntur at assumenda cum, libero quod eligendi alias quo ducimus error ipsum ratione distinctio quaerat, iste fugit.</div>
-      <div>play with AI</div>
-      <div>play with opponent</div>
-      <div>replay opponent's last move</div>
-      <div>randomize</div>
-      <div>audio off</div>
-      <div>clues off</div>
-      <div>footer - rules</div>
-      <div>footer - support</div>
-    </div>
 
+      <div id="root" class="game-panel"></div> 
+      <script src="/src/index.jsx" type="module"></script>
+
+    </main>
+  
   </body>
 </html>

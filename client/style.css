@@ -1,3 +1,26 @@
+body {
+    font-family: 'Figtree';
+}
+
+
+.header_title {
+    color: rgba(40, 40, 40, 0.88);
+    padding-left: 1em;
+    margin-top: 0;
+    margin-bottom: 0;
+    font-weight: bold;
+    font-size: 1.15rem;
+}
+
+
+.header_link {
+    text-decoration: none;
+    color: rgba(40, 40, 40, 0.55);
+    padding-right: 1em;
+    font-size: small;
+}
+
+
 div.wrapper {
     background-color: lightblue;
     display: grid;
@@ -8,7 +31,30 @@ div.wrapper {
     /* align-items -> vertically*/
 }
 
-div.wrapper > div:nth-child(odd) {
-    background-color: gray;
-    font-style: italic;
+div.side_panel {
+    margin-top: 15px;
+    background-color: lightcyan;
+    display: grid;
+    grid-template-rows: 20% 60% 20%;
 }
+
+div.in_game_settings {
+
+    grid-row: 5 / 7;
+
+}
+
+
+header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    padding: 1em;
+    border-radius: 0.3em;
+}
+
+main {
+    display: grid;
+    grid-template-columns: auto auto;
+}
+
+

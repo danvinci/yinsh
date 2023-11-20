@@ -1,7 +1,19 @@
 import { createSignal, Show, Switch, Match, createResource, createEffect, on } from "solid-js";
 import { init_game_fromServer } from "./core.js";
 
-export function Play() {
+
+export function TextDialog() {
+  // component for giving the player game tips and instructions
+
+  return (
+    <div class="text_dialog">
+      <textarea class="game_text">Game instructions here</textarea>
+    </div>
+  );
+
+}
+
+export function GameSetup() {
   
   // manage initial 'play' call to action 
   const [play, set_play] = createSignal(false);
@@ -25,21 +37,20 @@ export function Play() {
 
 
   return (
-    <div>
+    <div class="game_setup">
       <Show 
         when={play()}
         fallback={
-          <div>
-            <p>Welcome!</p>      
-            <button type = "button" onClick={toggle_Play}>Play Yinsh</button>
+          <div>   
+            <button type = "button" onClick={toggle_Play}>New game</button>
           </div>}
       >
         <Switch
           fallback={
             <div>
-              <button type="button" onClick={toggle_Play}>Go back</button>
+              <button type="button" onClick={toggle_Play}>&#60</button>
               <button type="button" onClick={toggle_PlayFriend}>Play with a friend</button>
-              <button type="button" onClick={toggle_PlayAI}>Play with AI</button>
+              <button type="button" disabled onClick={toggle_PlayAI}>Play with AI</button>
             </div>
           }
         >
@@ -48,20 +59,20 @@ export function Play() {
               <Switch
                 fallback={
                   <>
-                    <button type="button" onClick={toggle_PlayFriend}>Go back</button>
+                    <button type="button" onClick={toggle_PlayFriend}>&#60</button>
                     <button type="button" onClick={toggle_op_newGame}>New game</button>
                     <button type="button" onClick={toggle_op_join_wCode}>Join with code</button>
                   </>
                 }
               >
                 <Match when={op_newGame()}>
-                  <button type="button" onClick={toggle_op_newGame}>Go back</button> 
+                  <button type="button" onClick={toggle_op_newGame}>&#60</button> 
                   <Option_new_game></Option_new_game>
                 </Match>
 
                 <Match when={op_join_wCode()}>
                   <>
-                    <button type="button" onClick={toggle_op_join_wCode}>Go back</button>
+                    <button type="button" onClick={toggle_op_join_wCode}>&#60</button>
                     <Option_join_with_code></Option_join_with_code>
                   </>
                 </Match>
@@ -71,7 +82,7 @@ export function Play() {
 
           <Match when={playAI()}>
             <>
-              <button type="button" onClick={toggle_PlayAI}>Go back</button>
+              <button type="button" onClick={toggle_PlayAI}>&#60</button>
               <Option_playAI></Option_playAI>
             </>
           </Match>
@@ -82,6 +93,16 @@ export function Play() {
 }
 
 
+
+export function InGameSettings() {
+  // component for in-game settings (sound, visual cues)
+
+  return (
+    <div class="in_game_settings">
+      <p>In-game settings</p>
+    </div>
+  );
+}
 
 
 function Option_new_game() {
@@ -96,7 +117,6 @@ function Option_new_game() {
     fallback = {<button type="button" onClick={toggle_confirm}>Confirm new game</button>}
     >
       <Handler_newGame></Handler_newGame>
-      <GameCanvas></GameCanvas>
     </Show>
   );
 }
@@ -114,7 +134,6 @@ function Option_join_with_code() {
     fallback = {<button type="button" onClick={toggle_confirm}>Confirm join with code</button>}
     >
       <Handler_joinWithCode></Handler_joinWithCode>
-      <GameCanvas></GameCanvas>
     </Show>
   );
 }
@@ -132,7 +151,6 @@ function Option_playAI() {
     fallback = {<button type="button" onClick={toggle_confirm}>Confirm play with AI</button>}
     >
       <Handler_playAI></Handler_playAI>
-      <GameCanvas></GameCanvas>
     </Show>
   );
 
@@ -260,16 +278,6 @@ function Handler_playAI(){
 
 
 
-function GameCanvas(){
-
-  return (
-    <>
-    <canvas id="canvas" width="650" height="600"></canvas>
-    </>
-  );
-}
-
-
 // used to retrigger resource-wrapped fetch: if on -> off and then on again
 function doubleSwitch(setter, value){
   if (value() == false) {
@@ -281,6 +289,3 @@ function doubleSwitch(setter, value){
     setter(!value()); // -> and then to true again -> triggers refetch
   }
 };
-
-
-export default Play;
