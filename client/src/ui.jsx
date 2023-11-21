@@ -7,7 +7,7 @@ export function TextDialog() {
 
   return (
     <div class="text_dialog">
-      <textarea class="game_text">Game instructions here</textarea>
+      <div class="game_text">Click on 'new game' to start.</div>
     </div>
   );
 
@@ -37,7 +37,7 @@ export function GameSetup() {
 
 
   return (
-    <div class="game_setup">
+    <div class="game_setup_controls">
       <Show 
         when={play()}
         fallback={
@@ -174,23 +174,10 @@ function Handler_newGame(){
   const triggerRequest = () => doubleSwitch(set_reqTriggered, reqTriggered);
   
   // NOTE: snippet below should be reusable component
+  // sucess/fail result should be displayed in text field
   return (
     <>
     <button type="button" onClick={triggerRequest}>Start!</button>
-
-    <Switch
-      fallback={<p>{""}</p>}
-    >
-      
-      <Match when = {request_handler.loading}>
-        <p>{"Loading..."}</p>
-      </Match>
-
-      <Match when = {request_handler.error}>
-        <p>{"ERROR !"}</p>
-      </Match>
-
-    </Switch>
     </>
   );
   

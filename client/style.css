@@ -2,6 +2,12 @@ body {
     font-family: 'Figtree';
 }
 
+header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    padding: 1em;
+    border-radius: 0.3em;
+}
 
 .header_title {
     color: rgba(40, 40, 40, 0.88);
@@ -12,6 +18,12 @@ body {
     font-size: 1.15rem;
 }
 
+div.links_container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+
 
 .header_link {
     text-decoration: none;
@@ -20,41 +32,55 @@ body {
     font-size: small;
 }
 
-
-div.wrapper {
-    background-color: lightblue;
+main {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-gap: 0.5em;
-    grid-auto-columns: minmax(50px, auto); /* how to make cols go below?*/
-    justify-items: center; /* align horizontally*/
-    /* align-items -> vertically*/
+    grid-template-columns: 5fr 3fr;
+    height: 600px;
 }
 
 div.side_panel {
-    margin-top: 15px;
-    background-color: lightcyan;
+    background-color: lightskyblue;
     display: grid;
-    grid-template-rows: 20% 60% 20%;
+    margin-right: 15%;
+    margin-top: 50px;
+    grid-template-rows: 1fr 5fr 1fr;
+    border-style: solid;
+    border-width: 1px;
+    padding: 5px;
+    height: 80%;
 }
+
+div.text_dialog {
+    background-color: #f8f8f8;
+    border-width: 1px;
+    border-radius: 5px;
+    border-style: solid;
+    margin-bottom: 10px;
+    color: rgb(21, 21, 21);
+    font-size: small;
+}
+
+div.game_text {
+    background-color: #f8f8f8;
+    padding: 5px;
+}
+
+div.game_setup_controls {
+
+    background-color: lightcoral;
+    padding-top: 10px;
+    margin-bottom: 10px;
+}
+
 
 div.in_game_settings {
-
-    grid-row: 5 / 7;
+    background-color: lightsteelblue;
 
 }
 
 
-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    padding: 1em;
-    border-radius: 0.3em;
-}
 
-main {
-    display: grid;
-    grid-template-columns: auto auto;
-}
+
+
 
 
