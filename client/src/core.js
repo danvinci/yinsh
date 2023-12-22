@@ -4,8 +4,8 @@
 
 //////////// IMPORTS
 import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_advance_game} from './server.js'
-import { init_global_obj_params, init_empty_game_objects, init_new_game_data, get_player_id, save_next_server_response } from './data.js'
-import { reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
+import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_player_id, save_next_server_response } from './data.js'
+import { bind_adapt_canvas, reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no} from './data.js' 
 import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
@@ -39,9 +39,41 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
     const CODE_action_play = 'play'
     const CODE_action_wait = 'wait'
 
+    // window resizing -> canvas and object adjustments
+    window.addEventListener("resize", window_resize_handler);
 
 
 //////////// FUNCTIONS FOR INITIALIZING GAMES (NEW or JOIN)
+
+// paint empty game board on canvas (called before any game is started)
+export function draw_empty_game_board() {
+
+    // inits global object (globalThis.yinsh) + constants used throughout the game
+    init_global_obj_params();
+
+    // initialize empty game objects
+    init_empty_game_objects();
+
+    // bind and make canvas size match its parent -> redraw everything
+    window_resize_handler();
+
+}
+
+// window resizing -> impacts canvas, board, and objects (via drawing constants)
+function window_resize_handler() {
+
+    // bind and make canvas size match its parent
+    bind_adapt_canvas();
+
+    // regenerate objects using new S/H constants
+    init_game_objs();
+
+    // draw what you have
+    refresh_canvas_state();
+
+};
+
+
 
 // retrieve data from server (as originator or joiner) and init new game
 export async function init_game_fromServer(originator = false, joiner = false, game_code = '', ai_game = false){
@@ -75,13 +107,11 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         };
         
         // Bind canvas
-        // IDs different than 'canvas' seem not to work :|
-        globalThis.canvas = document.getElementById('canvas');
-        globalThis.ctx = canvas.getContext('2d', { alpha: true });  
+        bind_adapt_canvas();
         
             // maps data from server to game objects
             // sets up drop zones and rings
-            init_new_game_data();
+            init_game_objs();
         
             // draw everything
             refresh_canvas_state();
@@ -648,30 +678,3 @@ function ring_scoring_handler (event) {
 
 };
 
-
-/*
-
-
-// handling case of window resizing and first load -> impacts canvas, board, and objects 
-["load", "resize"].forEach(event => window.addEventListener(event, sizing_handler));
-
-// add to window onMount
-// https://docs.solidjs.com/references/api-reference/lifecycles/onMount
-
-
-function sizing_handler() {
-
-    win_height = window.innerHeight;
-    win_width = window.innerWidth;
-
-    update_sizing(win_height, win_width); // adjusts canvas and computes new S & H values
-
-    init_drop_zones(); // -> drop zones are re-created from scratch as S changes
-    refresh_objects(); // -> all objects are updated as S changes
-
-    refresh_draw_state();
-
-};
-
-
-*/

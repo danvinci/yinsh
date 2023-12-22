@@ -66,14 +66,11 @@ function init_const_parameters(){
 
 };
 
-export function init_new_game_data(){
+export function init_game_objs(){
 
     const game_objs_start_time = Date.now()
 
-    // init drawing constants -> ideally should be adjusted automatically or take parameter
-    init_drawing_constants();
-
-    // setups drop zones
+    // setups drop zones (FIRST)
     init_drop_zones();
 
     // inits slots for placing scoring rings
@@ -81,6 +78,9 @@ export function init_new_game_data(){
 
     // inits visual cues for legal moves (all off by default)
     init_legal_moves_cues();
+
+    // init markers
+    init_markers();
 
     // init rings (uses data from server)
     init_rings();
@@ -90,22 +90,43 @@ export function init_new_game_data(){
 
 };
 
-// sets S and H for drawing the board and game objects -> yinsh.drawing.params
-// these would be updated when a window is resied
-function init_drawing_constants(){
+// keeps canvas size and drawing constants compatible with div parent size
+export function bind_adapt_canvas(){
 
-    // init temporary object
-    const _params = {};
+    // get canvas container's dimensions
+    const canvasParent = document.getElementById("canvas_parent_div")
 
-    _params.S = 55 // defaul values, ideally should be set depending on window size
-    _params.H = Math.round(_params.S * Math.sqrt(3)/2);
+    // grab canvas
+    // IDs different than 'canvas' seem not to work :|
+    globalThis.canvas = document.getElementById('canvas');
+    globalThis.ctx = canvas.getContext('2d', { alpha: true }); 
 
+    // resize canvas to match parent container
+    // using .99* as a workaround to the ever growing canvas (borders counted each time, 2px top + bottom even if 0)
+    canvas.width = 0.99*canvasParent.clientWidth;
+    canvas.height = 0.99*canvasParent.clientHeight;
 
+    // SET DRAWING CONSTANTS
+   
+    // compute S_h and S_w (H) taking into account height and width of the canvas
+
+    const ratio_factor = 11;
+
+    // find out if height or width is the constraint for fittng N triangles
+    const S_by_height = Math.round(canvas.height/ratio_factor);
+
+    const H_by_width = Math.round(canvas.width/ratio_factor);
+    const S_by_width = Math.round(H_by_width / (Math.sqrt(3)/2));
+    
+    const S_param = Math.min(S_by_width, S_by_height);
+    const H_param = Math.round(S_param * Math.sqrt(3)/2);
+ 
     // save to global obj and log
-    yinsh.drawing_params = structuredClone(_params);
+    yinsh.drawing_params = structuredClone({S: S_param, H: H_param});
     console.log('LOG - Drawing constants set');
 
 };
+
 
 // inits/resets game objects (rings, markers, visual cues) ->  yinsh.objs.rings/markers/drop_zones/etc
 export function init_empty_game_objects(){
@@ -120,7 +141,7 @@ export function init_empty_game_objects(){
         _game_objects.rings = []; // -> array for rings
         _game_objects.markers = []; // -> array for markers
         _game_objects.drop_zones = []; // -> array for drop zones (markers and rings are placed at their coordinates only)
-        _game_objects.scoring_slots = []; // -> array for drop zones used for scoring rings
+        _game_objects.scoring_slots = []; // -> array for drop zones used for rings taken from board after scoring
 
         // turns, moves, score handling
         _game_objects.current_turn = {in_progress: false}; // to track if this is the client's turn 
@@ -295,14 +316,12 @@ export function get_opponent_score(){
 // increate player score and mark first available scoring slot as filled
 export function increase_player_score(){
 
-    const _current_player_id = get_player_id();
-
     // increase player score
     yinsh.objs.player_score += 1;
     const _player_score = get_player_score(); // 1,2,3
 
     // find scoring slot for the score and mark it as filled, otherwise leave it unaltered
-    yinsh.objs.scoring_slots.map(s => (s.slot_no == _player_score && s.player == _current_player_id) ? fill_scoring_slot(s) : s)
+    yinsh.objs.scoring_slots.map(s => (s.slot_no == _player_score && s.player == "this_player") ? fill_scoring_slot(s) : s)
 
     return yinsh.objs.player_score;
 };
@@ -319,14 +338,12 @@ function fill_scoring_slot(s) {
 
 export function increase_opponent_score(){
 
-    const _opponent_player_id = get_opponent_id();
-
     // increase player score
     yinsh.objs.opponent_score += 1;
     const _opponent_score = get_opponent_score(); // 1,2,3
 
     // find scoring slot for the score and mark it as filled, otherwise leave it unaltered
-    yinsh.objs.scoring_slots.map(s => (s.slot_no == _opponent_score && s.player == _opponent_player_id) ? fill_scoring_slot(s) : s)
+    yinsh.objs.scoring_slots.map(s => (s.slot_no == _opponent_score && s.player == "opponent") ? fill_scoring_slot(s) : s)
 
     return yinsh.objs.opponent_score;
 };
@@ -381,8 +398,6 @@ export function get_opponent_id() {
 export function get_game_id() {
     return yinsh.server_data.game_id;
 };
-
-
 
 
 
@@ -459,6 +474,13 @@ function init_drop_zones(){
 // initialize scoring slots (for rings)
 function init_scoring_slots(){
 
+    // this function depends on having already determined who is who
+
+
+    const _this_player_slot_name = "this_player";
+    const _opponent_slot_name = "opponent"; // get other id 
+
+
     // recovering S & H constants for drawing
     const S = yinsh.drawing_params.S;
     const H = yinsh.drawing_params.H;
@@ -479,8 +501,7 @@ function init_scoring_slots(){
     const _start_BL_point = {x: S/2, y: _height - S/1.5}
     const _start_TR_point = {x: _width - S/2, y: S/1.5}
 
-    const _this_player_id = get_player_id(); // get id of this player
-    const _other_player_id = get_opponent_id(); // get other id 
+
    
     // bottom left slots
     for (let k = 1; k <=3; k++){
@@ -496,7 +517,7 @@ function init_scoring_slots(){
                             y: s_point_y,  
                             path: slot_path,
                             slot_no: k,
-                            player: _this_player_id,
+                            player: _this_player_slot_name,
                             filled: false
                         }
 
@@ -519,7 +540,7 @@ function init_scoring_slots(){
                             y: s_point_y, 
                             path: slot_path,
                             slot_no: k,
-                            player: _other_player_id,
+                            player: _opponent_slot_name,
                             filled: false
                         }
 
@@ -566,102 +587,119 @@ function init_legal_moves_cues(){
 }; 
         
 
-
 // initializes rings and updates game state -> reads from rings data in DB
 function init_rings(){
 
-    // initial locations of rings from server
-    const server_rings = yinsh.server_data.rings; 
+    try {
 
-    // constants used in logic
-    const ring_id = yinsh.constant_params.ring_id;
+        // initial locations of rings from server
+        const server_rings = yinsh.server_data.rings; 
 
-    // init temporary rings array
-    let _rings_array = [];
-    // retrieve game state
-    let _game_state = yinsh.objs.game_state;
+        // constants used in logic
+        const ring_id = yinsh.constant_params.ring_id;
 
-    // retrieve drop_zones
-    const _drop_zones = yinsh.objs.drop_zones;
-    
-    // INITIALIZE RINGS
-    // loop and match rings over drop zones
-    for (const d_zone of _drop_zones) {
-        for (const s_ring of server_rings) {
+        // init temporary rings array
+        let _rings_array = [];
+        // retrieve game state
+        let _game_state = yinsh.objs.game_state;
 
-            if (s_ring.id == d_zone.loc.index){
+        // retrieve drop_zones
+        const _drop_zones = yinsh.objs.drop_zones;
+        
+        // INITIALIZE RINGS
+        // loop and match rings over drop zones
+        for (const d_zone of _drop_zones) {
+            for (const s_ring of server_rings) {
 
-            // create ring object
-            const ring = {  path: {}, //  will hold the path, filled in by drawing function
-                            loc: structuredClone(d_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
-                            type: ring_id, 
-                            player: s_ring.player
-                        };            
+                if (s_ring.id == d_zone.loc.index){
 
-            // add to temporary array
-            _rings_array.push(ring); 
+                // create ring object
+                const ring = {  path: {}, //  will hold the path, filled in by drawing function
+                                loc: structuredClone(d_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
+                                type: ring_id, 
+                                player: s_ring.player
+                            };            
+
+                // add to temporary array
+                _rings_array.push(ring); 
+                    
+                // update game state
+                _game_state[ring.loc.index] = ring.type.concat(ring.player); // -> RB, RW at index
                 
-            // update game state
-            _game_state[ring.loc.index] = ring.type.concat(ring.player); // -> RB, RW at index
-            
+                };
             };
         };
-    };
 
-    // save rings, updated game state, and log
-    yinsh.objs.game_state = structuredClone(_game_state);
-    yinsh.objs.rings = structuredClone(_rings_array);
-    
-    console.log('LOG - Rings initialized & game state updated');
+        // save rings, updated game state, and log
+        yinsh.objs.game_state = structuredClone(_game_state);
+        yinsh.objs.rings = structuredClone(_rings_array);
+        
+        console.log('LOG - Rings initialized & game state updated');
+
+    } catch {
+        
+        console.log('LOG - No rings initialized');
+
+    }
 
 };
 
 // initializes markers (only called after 1st+ turn)
 function init_markers(){
 
-    // initial locations of rings from server
-    const server_markers = yinsh.server_data.markers; 
+    // check if we have any markers available -> this allows to call this function whenever
+    try {
 
-    // constants used in logic
-    const marker_id = yinsh.constant_params.marker_id;
+        // initial locations of rings from server
+        const server_markers = yinsh.server_data.markers; 
 
-    // init temporary rings array
-    let _markers_array = [];
-    // retrieve game state
-    let _game_state = yinsh.objs.game_state;
+        // constants used in logic
+        const marker_id = yinsh.constant_params.marker_id;
 
-    // retrieve drop_zones
-    const _drop_zones = yinsh.objs.drop_zones;
-    
-    // INITIALIZE RINGS
-    // loop and match rings over drop zones
-    for (const d_zone of _drop_zones) {
-        for (const s_marker of server_markers) {
+        // init temporary rings array
+        let _markers_array = [];
+        // retrieve game state
+        let _game_state = yinsh.objs.game_state;
 
-            if (s_marker.id == d_zone.loc.index){
+        // retrieve drop_zones
+        const _drop_zones = yinsh.objs.drop_zones;
+        
+        // INITIALIZE RINGS
+        // loop and match rings over drop zones
+        for (const d_zone of _drop_zones) {
+            for (const s_marker of server_markers) {
 
-            // create ring object
-            const marker = {  path: {}, //  will hold the path, filled in by drawing function
-                            loc: structuredClone(d_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
-                            type: marker_id, 
-                            player: s_marker.player
-                        };            
+                if (s_marker.id == d_zone.loc.index){
 
-            // add to temporary array
-            _markers_array.push(marker); 
+                // create ring object
+                const marker = {  path: {}, //  will hold the path, filled in by drawing function
+                                loc: structuredClone(d_zone.loc), // pass as value -> we'll change the x,y for drawing and not mess the original drop zone
+                                type: marker_id, 
+                                player: s_marker.player
+                            };            
+
+                // add to temporary array
+                _markers_array.push(marker); 
+                    
+                // update game state
+                _game_state[marker.loc.index] = marker.type.concat(marker.player); // -> RB, RW at index
                 
-            // update game state
-            _game_state[marker.loc.index] = marker.type.concat(marker.player); // -> RB, RW at index
-            
+                };
             };
         };
-    };
 
-    // save rings, updated game state, and log
-    yinsh.objs.game_state = structuredClone(_game_state);
-    yinsh.objs.markers = structuredClone(_markers_array);
-    
-    console.log('LOG - Markers initialized & game state updated');
+        // save rings, updated game state, and log
+        yinsh.objs.game_state = structuredClone(_game_state);
+        yinsh.objs.markers = structuredClone(_markers_array);
+        
+        console.log('LOG - Markers initialized & game state updated');
+
+
+    } catch {
+
+        console.log('LOG - No markers to initialize');
+
+    };
 
 };
 

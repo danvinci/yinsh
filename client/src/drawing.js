@@ -5,7 +5,7 @@ export function refresh_canvas_state(){
 
     // https://docs.solidjs.com/references/api-reference/lifecycles/onMount
 
-    //const painting_start_time = Date.now()
+    const painting_start_time = Date.now()
 
     try {
         // clear canvas (assumes canvas already binded)
@@ -252,6 +252,7 @@ function draw_drop_zones(){
 };
 
 // drop zones for scoring rings // TESTING-ONLY, to see how to define boundary with rings
+// is the array is non-empty all the time, we can also draw them on the empty board
 function draw_scoring_slots(){
 
     // retrieve scoring slots data

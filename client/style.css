@@ -24,7 +24,6 @@ div.links_container {
 }
 
 
-
 .header_link {
     text-decoration: none;
     color: rgba(40, 40, 40, 0.55);
@@ -32,16 +31,26 @@ div.links_container {
     font-size: small;
 }
 
-main {
+div.game_main {
     display: grid;
     grid-template-columns: 5fr 3fr;
-    height: 600px;
+}
+
+div.canvas_parent {
+
+    min-height: 600px;
+    border-width: 0px;
+}
+
+div.side_panel_wrapper {
+    align-items: center;
 }
 
 div.side_panel {
     background-color: lightskyblue;
     display: grid;
-    margin-right: 15%;
+    margin-right: 10%;
+    margin-left: 5%;
     margin-top: 50px;
     grid-template-rows: 1fr 5fr 1fr;
     border-style: solid;
@@ -55,14 +64,16 @@ div.text_dialog {
     border-width: 1px;
     border-radius: 5px;
     border-style: solid;
+    border-color: rgb(42, 42, 42);
     margin-bottom: 10px;
-    color: rgb(21, 21, 21);
+    color: rgb(42, 42, 42);
     font-size: small;
 }
 
 div.game_text {
     background-color: #f8f8f8;
     padding: 5px;
+    border-radius: 5px;
 }
 
 div.game_setup_controls {
@@ -70,8 +81,20 @@ div.game_setup_controls {
     background-color: lightcoral;
     padding-top: 10px;
     margin-bottom: 10px;
+    display: grid;
+    grid-template: auto 1fr / auto 1fr;
 }
 
+div.core_controls {
+    grid-row-start: 2;
+    grid-column-start: 2;
+}
+
+p.fetching_info {
+
+    font-size: small;
+    color: rgb(69, 69, 69);
+}
 
 div.in_game_settings {
     background-color: lightsteelblue;

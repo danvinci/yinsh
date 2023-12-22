@@ -1,5 +1,19 @@
-import { createSignal, Show, Switch, Match, createResource, createEffect, on } from "solid-js";
-import { init_game_fromServer } from "./core.js";
+import { createSignal, Show, Switch, Match, createResource, createEffect, on, onMount, onCleanup } from "solid-js";
+import { init_game_fromServer, draw_empty_game_board } from "./core.js";
+
+
+export function GameCanvas() {
+  // canvas component
+  // auto-sizes based on size of outer container div -> div is already in place when component is rendering
+  
+  // paint empty canvas after canvas elem rendering is done
+  onMount(() => {draw_empty_game_board()}); 
+
+  return (
+    <canvas id="canvas"></canvas>
+  );
+
+}
 
 
 export function TextDialog() {
@@ -7,13 +21,20 @@ export function TextDialog() {
 
   return (
     <div class="text_dialog">
-      <div class="game_text">Click on 'new game' to start.</div>
+      <div class="game_text">Click on 'Play'.</div>
     </div>
   );
 
 }
 
+// game setup controls should be different if game is in progress (eg. resign/abandon game)
 export function GameSetup() {
+
+  // flag for keeping track if game is ongoing or not (changes controls mode)
+  const [game_ongoing, set_game_ongoing] = createSignal(false);
+  const toggle_game_ongoing = () => set_game_ongoing(!game_ongoing()); // called by event from core (?)
+  // hide core controls, display option to abandon game + similar for when other game is over
+  // think about animations
   
   // manage initial 'play' call to action 
   const [play, set_play] = createSignal(false);
@@ -41,17 +62,21 @@ export function GameSetup() {
       <Show 
         when={play()}
         fallback={
-          <div>   
-            <button type = "button" onClick={toggle_Play}>New game</button>
+          <div class="back_nav_controls"> 
+            <button type = "button" onClick={toggle_Play}>Play</button>
           </div>}
       >
         <Switch
           fallback={
-            <div>
-              <button type="button" onClick={toggle_Play}>&#60</button>
-              <button type="button" onClick={toggle_PlayFriend}>Play with a friend</button>
-              <button type="button" disabled onClick={toggle_PlayAI}>Play with AI</button>
-            </div>
+            <>
+              <div class="back_nav_controls">
+                <button type="button" onClick={toggle_Play}>&#60</button>
+              </div>
+              <div class="core_controls">
+                <button type="button" onClick={toggle_PlayFriend}>Human</button>
+                <button type="button" onClick={toggle_PlayAI}>AI</button> 
+              </div>
+            </>
           }
         >
           <Match when={playFriend()}> 
@@ -59,21 +84,33 @@ export function GameSetup() {
               <Switch
                 fallback={
                   <>
+                  <div class="back_nav_controls">
                     <button type="button" onClick={toggle_PlayFriend}>&#60</button>
+                  </div>
+                  <div class="core_controls">
                     <button type="button" onClick={toggle_op_newGame}>New game</button>
                     <button type="button" onClick={toggle_op_join_wCode}>Join with code</button>
+                  </div>
                   </>
                 }
               >
                 <Match when={op_newGame()}>
-                  <button type="button" onClick={toggle_op_newGame}>&#60</button> 
-                  <Option_new_game></Option_new_game>
+                  <div class="back_nav_controls">
+                    <button type="button" onClick={toggle_op_newGame}>&#60</button> 
+                  </div>
+                  <div class="core_controls">
+                    <Handler_newGame></Handler_newGame>
+                  </div>
                 </Match>
 
                 <Match when={op_join_wCode()}>
                   <>
-                    <button type="button" onClick={toggle_op_join_wCode}>&#60</button>
-                    <Option_join_with_code></Option_join_with_code>
+                  <div class="back_nav_controls">
+                    <button type="button" onClick={toggle_op_join_wCode}>&#60</button> 
+                  </div>
+                  <div class="core_controls">
+                      <Handler_joinWithCode></Handler_joinWithCode>
+                  </div>
                   </>
                 </Match>
               </Switch>
@@ -82,8 +119,12 @@ export function GameSetup() {
 
           <Match when={playAI()}>
             <>
-              <button type="button" onClick={toggle_PlayAI}>&#60</button>
-              <Option_playAI></Option_playAI>
+              <div class="back_nav_controls">
+                <button type="button" onClick={toggle_PlayAI}>&#60</button>
+              </div>
+              <div class="core_controls">
+                <Handler_playAI></Handler_playAI>
+              </div>
             </>
           </Match>
         </Switch>
@@ -105,57 +146,6 @@ export function InGameSettings() {
 }
 
 
-function Option_new_game() {
-
-  // handle option confirmation -> shows handler and canvas
-  const [confirm, set_confirm] = createSignal(false);
-  const toggle_confirm = () => set_confirm(!confirm());  
-
-  return (
-    <Show
-    when = {confirm()}
-    fallback = {<button type="button" onClick={toggle_confirm}>Confirm new game</button>}
-    >
-      <Handler_newGame></Handler_newGame>
-    </Show>
-  );
-}
-
-
-function Option_join_with_code() {
-
-  // handle option confirmation -> shows handler and canvas
-  const [confirm, set_confirm] = createSignal(false);
-  const toggle_confirm = () => set_confirm(!confirm());  
-
-  return (
-    <Show
-    when = {confirm()}
-    fallback = {<button type="button" onClick={toggle_confirm}>Confirm join with code</button>}
-    >
-      <Handler_joinWithCode></Handler_joinWithCode>
-    </Show>
-  );
-}
-
-
-function Option_playAI() {
-
-  // handle option confirmation -> shows handler and canvas
-  const [confirm, set_confirm] = createSignal(false);
-  const toggle_confirm = () => set_confirm(!confirm());  
-
-  return (
-    <Show
-    when = {confirm()}
-    fallback = {<button type="button" onClick={toggle_confirm}>Confirm play with AI</button>}
-    >
-      <Handler_playAI></Handler_playAI>
-    </Show>
-  );
-
-}
-
 
 function Handler_newGame(){
 
@@ -173,11 +163,10 @@ function Handler_newGame(){
   // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
   const triggerRequest = () => doubleSwitch(set_reqTriggered, reqTriggered);
   
-  // NOTE: snippet below should be reusable component
-  // sucess/fail result should be displayed in text field
+
   return (
     <>
-    <button type="button" onClick={triggerRequest}>Start!</button>
+    <button type="button" onClick={triggerRequest}>Play vs Human</button>
     </>
   );
   
@@ -191,7 +180,7 @@ function Handler_joinWithCode(){
 
   // function wrapper for requesting new game
   let code_input_field; // -> this is later attached to the input field
-  const req_newGame = async () => (await init_game_fromServer(false, true, code_input_field.value));
+  const req_newGame = async () => (await init_game_fromServer(false, true, code_input_field.value.replaceAll(/\s/, ''))); // removing any whitespace from input string
   
   // resource handler for new games
   const [request_handler] = createResource(reqTriggered, req_newGame);
@@ -201,22 +190,21 @@ function Handler_joinWithCode(){
   // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
   const triggerRequest = () => doubleSwitch(set_reqTriggered, reqTriggered);
   
-  // NOTE: snippet below should be reusable component
   return (
     <>
-    <input type="text" ref={code_input_field} placeholder="Input game code"></input>
+    <input size="10" type="text" ref={code_input_field} placeholder="Code here..."></input>
     <button type="button" onClick={triggerRequest}>Join!</button>
 
     <Switch
-      fallback={<p>{""}</p>}
+      fallback={<p class="fetching_info">{""}</p>}
     >
       
       <Match when = {request_handler.loading}>
-        <p>{"Loading..."}</p>
+        <p class="fetching_info">{"Joining game..."}</p>
       </Match>
 
       <Match when = {request_handler.error}>
-        <p>{"ERROR !"}</p>
+        <p class="fetching_info">{"An error occurred."}</p>
       </Match>
 
     </Switch>
@@ -243,18 +231,18 @@ function Handler_playAI(){
   
   return (
     <>
-    <button type="button" onClick={triggerRequest}>Start!</button>
+    <button type="button" onClick={triggerRequest}>Play vs AI</button>
 
     <Switch
-      fallback={<p>{""}</p>}
+      fallback={<p class="fetching_info">{""}</p>}
     >
       
       <Match when = {request_handler.loading}>
-        <p>{"Loading..."}</p>
+        <p class="fetching_info">{"Waking up the AI..."}</p>
       </Match>
 
       <Match when = {request_handler.error}>
-        <p>{"ERROR !"}</p>
+        <p class="fetching_info">{"An error occurred."}</p>
       </Match>
 
     </Switch>
