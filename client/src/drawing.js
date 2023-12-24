@@ -80,14 +80,14 @@ function draw_board(){
     // recovering S & H constants for drawing
     const S = yinsh.drawing_params.S;
     const H = yinsh.drawing_params.H;
+ 
+     // recover offset values for starting to draw (centering board and zones)
+     const _offset_x = yinsh.drawing_params.x_offset;
+     const _offset_y = yinsh.drawing_params.y_offset;
 
     // canvas parameters
     const _width = canvas.width;
     const _height = canvas.height;
-
-    // offset for starting to draw (centering board and zones)
-    const _offset_x = _width/2 -6*H;
-    const _offset_y = 0;
 
     // hardcoding triangles to be drawn for each column (fn call results in silent error)
     const triangles_toPaint_byCol = {0:3, 1:6, 2:7, 3:8, 4:9, 5:8, 6:9, 7:8, 8:7, 9:6, 10:3};

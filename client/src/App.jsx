@@ -1,15 +1,15 @@
-import {GameCanvas, TextDialog, GameSetup, InGameSettings} from './ui';
+import {GameCanvas, UserText, GameSetup, InGameSettings} from './ui';
 
 function App() {
   return (
     <div class = "game_main">
 
-      <div id = "canvas_parent_div" class = "canvas_parent">
+      <div class = "canvas_parent">
         <GameCanvas></GameCanvas>
       </div>
 
       <div class ="side_panel">
-        <TextDialog></TextDialog>
+        <UserText></UserText>
         <GameSetup></GameSetup>
         <InGameSettings></InGameSettings>
       </div>

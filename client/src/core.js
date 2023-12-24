@@ -62,6 +62,8 @@ export function draw_empty_game_board() {
 // window resizing -> impacts canvas, board, and objects (via drawing constants)
 function window_resize_handler() {
 
+    // NOTE: resize triggers regen/redraw, which changes the order of rings in the array, and a mess can happen if a move is in progress
+
     // bind and make canvas size match its parent
     bind_adapt_canvas();
 
@@ -125,6 +127,9 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         // log game code (later should be in the UI)
         console.log(`USER - Your GAME CODE is: ${yinsh.server_data.game_id}`);
 
+        // display code in the text prompt
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Share this code to play: ${yinsh.server_data.game_id}` }));
+
         // ask server what to do -> it will emit event on response
         await server_ws_advance_game();
 
@@ -132,6 +137,10 @@ export async function init_game_fromServer(originator = false, joiner = false, g
 
         // log error
         console.log(`LOG - Game setup ERROR. ${Date.now() - request_start_time}ms`);
+
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Ops, game can't be set up due to an error.` }));
+
+
         console.log(err);
         throw err;
 
@@ -163,12 +172,18 @@ async function server_actions_handler (event) {
 
         // from here on, it should go to the client turn manager
         enableInteraction();
-        console.log(`USER - It's yout turn, make a move! - # ${get_current_turn_no()}`); // -> this should go to the UI
+        console.log(`USER - It's your turn, make a move! - # ${get_current_turn_no()}`); // -> this should go to the UI
+
+        // display code in the text prompt
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `It's your turn, make a move.` }));
 
     } else if (_next_action == CODE_action_wait) {
 
         disableInteraction(); // a bit redundant, is disabled by default
         console.log(`USER - Wait for your opponent.`); // -> this should bubble up to a UI component
+
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Wait for your opponent to move.` }));
+
 
     };
 
@@ -196,6 +211,8 @@ async function replay_opponent_move(){
     if (typeof yinsh.delta !== "undefined") {
 
         console.log(`USER - Replaying opponent's move`);
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent is moving.` }));
+
         const replay_start_time = Date.now();
 
         console.log(`LOG - Delta: `, yinsh.delta);
@@ -249,6 +266,9 @@ async function replay_opponent_move(){
             const new_opponent_score = increase_opponent_score(); // increase opponent score and fill scoring slot
             refresh_canvas_state();
             console.log(`LOG - New opponent score: ${new_opponent_score}`);
+
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent has scored a point!` }));
+
 
         };
             
@@ -526,6 +546,9 @@ async function ringDrop_handler (event) {
                 } else {
                     console.log("USER - Oh no, you scored for your opponent!");
 
+                    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Oh no, you scored a point for your opponent!` }));
+
+
                 };  
             };
                     
@@ -552,6 +575,9 @@ async function ringDrop_handler (event) {
         console.log("USER - Invalid drop location");
         // NOTE: we could play specific sound 'err'
 
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You can't drop the ring in that location.` }));
+
+
     };
 };
 
@@ -577,6 +603,8 @@ function mk_scoring_options_handler(event){
     if (event.type === 'mk_score_handling_on') {
 
         console.log("USER - Pick a marker to indicate the row!");
+
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You scored a point! Pick the row of markers to remove.` }));
 
         // retrieve scoring options
         const scoring_options = get_scoring_options();
@@ -615,6 +643,9 @@ function mk_scoring_options_handler(event){
         complete_task('mk_scoring_task', success_msg);
 
         console.log("USER - Pick a ring to be removed from the board!");
+
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Pick a ring to be removed from the board.` }));
+
 
     };
 };

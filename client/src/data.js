@@ -93,36 +93,56 @@ export function init_game_objs(){
 // keeps canvas size and drawing constants compatible with div parent size
 export function bind_adapt_canvas(){
 
-    // get canvas container's dimensions
-    const canvasParent = document.getElementById("canvas_parent_div")
+    // info on details for making this work here:
+    // https://stackoverflow.com/questions/32230690/resize-div-containing-a-canvas
 
     // grab canvas
     // IDs different than 'canvas' seem not to work :|
     globalThis.canvas = document.getElementById('canvas');
     globalThis.ctx = canvas.getContext('2d', { alpha: true }); 
 
-    // resize canvas to match parent container
-    // using .99* as a workaround to the ever growing canvas (borders counted each time, 2px top + bottom even if 0)
-    canvas.width = 0.99*canvasParent.clientWidth;
-    canvas.height = 0.99*canvasParent.clientHeight;
+    // grab parent div
+    let canvasParent = canvas.parentNode;
+
+    // hide canvas for a bit (so that we can measure the parent without canvas, and avoid increasing sizes at every loop)
+    const dispStyle_backup = canvas.style.display;
+    canvas.style.display = "none";
+
+    // resize canvas to match parent container, but measuring parent without canvas in it
+    canvas.width = canvasParent.clientWidth;
+    canvas.height = canvasParent.clientHeight; 
+
+        /*
+        console.log(`parent height: ${canvasParent.clientHeight}, width: ${canvasParent.clientWidth}`);
+        console.log(`canvas height: ${canvas.height}, width: ${canvas.width}`);
+        */
+
+    // restore canvas visibility
+    canvas.style.display = dispStyle_backup;
 
     // SET DRAWING CONSTANTS
-   
     // compute S_h and S_w (H) taking into account height and width of the canvas
 
-    const ratio_factor = 11;
+    const h_ratio_factor = 12; // empirical value ~ number of triangle sides in height + 3 (proxy for scoring slots)
+    const w_ratio_factor = h_ratio_factor + 2 ; // +2 as we want more H space for scoring slots
 
-    // find out if height or width is the constraint for fittng N triangles
-    const S_by_height = Math.round(canvas.height/ratio_factor);
+        // find out if height or width is the constraint for fittng triangles of the board
+        const S_by_height = canvas.height/h_ratio_factor;
+        const S_by_width = canvas.width/w_ratio_factor;
+        
+        const S_param = Math.round(Math.min(S_by_width, S_by_height));
+        const H_param = Math.round(S_param * Math.sqrt(3)/2);
 
-    const H_by_width = Math.round(canvas.width/ratio_factor);
-    const S_by_width = Math.round(H_by_width / (Math.sqrt(3)/2));
-    
-    const S_param = Math.min(S_by_width, S_by_height);
-    const H_param = Math.round(S_param * Math.sqrt(3)/2);
+    // compute X & Y offset for drawing board and drop zones
+    const _off_x = canvas.width/2 - 6*H_param;
+    const _off_y = H_param/2;
+
+        // compute offset for drawing scoring slots
+        const _start_BL_point = {x: H_param, y: H_param/2 + h_ratio_factor*H_param }
+        const _start_TR_point = {x: canvas.width - H_param, y: H_param}
  
     // save to global obj and log
-    yinsh.drawing_params = structuredClone({S: S_param, H: H_param});
+    yinsh.drawing_params = structuredClone({S: S_param, H: H_param, x_offset: _off_x, y_offset: _off_y, start_BL: _start_BL_point, start_TR: _start_TR_point});
     console.log('LOG - Drawing constants set');
 
 };
@@ -414,13 +434,13 @@ function init_drop_zones(){
     const S = yinsh.drawing_params.S;
     const H = yinsh.drawing_params.H;
 
+    // recover offset values for starting to draw (centering board and zones)
+    const _offset_x = yinsh.drawing_params.x_offset;
+    const _offset_y = yinsh.drawing_params.y_offset;
+
     // canvas parameters
     const _width = canvas.width;
     const _height = canvas.height;
-
-    // offset for starting to draw (centering board and zones)
-    const _offset_x = _width/2 -6*H;
-    const _offset_y = 0;
 
     // init temp empty array for drop zones
     let _drop_zones = [];
@@ -476,7 +496,6 @@ function init_scoring_slots(){
 
     // this function depends on having already determined who is who
 
-
     const _this_player_slot_name = "this_player";
     const _opponent_slot_name = "opponent"; // get other id 
 
@@ -485,9 +504,8 @@ function init_scoring_slots(){
     const S = yinsh.drawing_params.S;
     const H = yinsh.drawing_params.H;
 
-    // canvas parameters
-    const _width = canvas.width;
-    const _height = canvas.height;
+    const _start_BL_point = yinsh.drawing_params.start_BL;
+    const _start_TR_point = yinsh.drawing_params.start_TR;
 
     // init temp empty array for drop zones
     let _scoring_slots = [];
@@ -498,15 +516,10 @@ function init_scoring_slots(){
     - pick bottom/left point and draw 3 in a row, rightward (this player)
     */
 
-    const _start_BL_point = {x: S/2, y: _height - S/1.5}
-    const _start_TR_point = {x: _width - S/2, y: S/1.5}
-
-
-   
     // bottom left slots
     for (let k = 1; k <=3; k++){
 
-        const s_point_x = _start_BL_point.x + k*S; // goes rightward
+        const s_point_x = _start_BL_point.x + k*1.05*S; // goes rightward
         const s_point_y = _start_BL_point.y; // doesn't change
 
         // create paths and add them to the global array
@@ -529,7 +542,7 @@ function init_scoring_slots(){
      // top right slots
      for (let k = 1; k <=3; k++){
 
-        const s_point_x = _start_TR_point.x - k*S; // goes leftward
+        const s_point_x = _start_TR_point.x - k*1.05*S; // goes leftward
         const s_point_y = _start_TR_point.y; // doesn't change
 
         // create paths and add them to the global array
@@ -987,116 +1000,3 @@ export function update_mk_halos(mk_ids = [], hot_flag = false){
  
 };
 
-
-// DONE
-    // add_marker + remove_marker (move)
-    // update_current_move (move)
-    // flip_markers + update game state (next move)
-    // rings re-ordering
-    // update current move
-    // getter for ids of legal drops
-    // getter for id (in array) of last ring
-    // setter for updating loc of dropping ring
-    // update_score_handling (next move)
-    // update mk halos (score handling)
-
-
-
-// TODO
-    // refresh_objects (window resize)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// (OLD) DATA functions below
-////////////////////////////////////
-
-
-// function to edit S & H
-function update_sizing(win_height, win_width) {
-
-    // copy values -> these may change and ref should take into account UI elements
-    // note: canvas should be resized first, S & H from there
-    let ref_height = win_height
-    let ref_width = win_width
-   
-    // compute S_h and S_w (H) taking into account height and width respectively
-    // use the smaller one
-    let opt_S_Height = Math.round(ref_height/11.5);
-
-    let opt_H_Width = Math.round(ref_width/11.5);
-    let opt_S_Width = Math.round(opt_H_Width / (Math.sqrt(3)/2));
-    
-    S = Math.min(opt_S_Width, opt_S_Height);
-    H = Math.round(S * Math.sqrt(3)/2);
-
-    // update canvas sizing -> note: this should be aware of UI elements on screen
-    canvas.height = win_height;
-    canvas.width = win_width;
-
-};
-
-
-
-
-
-// refresh rings, markers, legal moves, and markers halos -> handling case of changes to underlying drop_zones
-function refresh_objects(){
-
-    // iterate over all the drop zones
-    for (const drop_zone of drop_zones.values()){
-
-        // check rings
-        for (let i=0; i<rings.length; i++){
-            if (rings[i].loc.index == drop_zone.loc.index){
-
-                // update location of ring
-                rings[i].loc = structuredClone(drop_zone.loc);
-
-            };
-        };
-    
-        // check markers
-        for (let i=0; i<markers.length; i++){
-            if (markers[i].loc.index == drop_zone.loc.index){
-
-                // update location of ring
-                markers[i].loc = structuredClone(drop_zone.loc);
-
-            };
-        };
-    
-
-        // refresh highlight zones (in case move is in progress)
-        update_highlight_zones();
-
-        // updates markers' halos (score handling)
-        update_mk_halos();
-
-    };
-};
-
-
-
-// destroys objects (both global variables and array of objects to draw)
-function destroy_objects(){
-
-    // game state
-    game_state = Array(19*11).fill(""); 
-
-    // objects
-    rings = [];
-    markers = [];
-    highlight_zones = [];
-
-    // moves
-    current_legal_moves = [];
-    current_move = {on: false, start_index: null};
-
-    // scoring 
-    mk_halos = [];
-    mk_sel_scoring = {ids:[], hot:false}
-    score_handling_var 
-
-
-};

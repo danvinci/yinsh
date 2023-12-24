@@ -16,16 +16,32 @@ export function GameCanvas() {
 }
 
 
-export function TextDialog() {
-  // component for giving the player game tips and instructions
+// component for giving the player game tips and instructions
+export function UserText() {
+
+  // setter is called from core component, and text re-rendered when value changes
+  const [userText, set_userText] = createSignal("Click < PLAY > to start");
+
+  // event target for UI
+  globalThis.ui_et = new EventTarget(); 
+  ui_et.addEventListener('new_user_text', userTxt_handler, false);
+
+  function userTxt_handler(event) {
+  
+    // add text
+    set_userText(userText() + "\n" + event.detail);
+    
+    // scroll text to end
+    let txt_div = document.getElementById('user_txt_id');
+    txt_div.scrollTop = txt_div.scrollHeight;
+  } 
 
   return (
-    <div class="text_dialog">
-      <div class="game_text">Click on 'Play'.</div>
-    </div>
+    <div class="user_text_div" id="user_txt_id">{userText}</div>
   );
-
 }
+
+
 
 // game setup controls should be different if game is in progress (eg. resign/abandon game)
 export function GameSetup() {
@@ -238,7 +254,6 @@ function Handler_playAI(){
     >
       
       <Match when = {request_handler.loading}>
-        <p class="fetching_info">{"Waking up the AI..."}</p>
       </Match>
 
       <Match when = {request_handler.error}>

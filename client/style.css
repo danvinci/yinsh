@@ -1,105 +1,129 @@
+@import url('https://fonts.googleapis.com/css?family=Rubik&display=swap');
+
+/* https://stackoverflow.com/questions/33776171/how-to-use-css-calc-with-an-elements-height */
+
 body {
-    font-family: 'Figtree';
+    font-family: 'Rubik';
+    margin:0px;
+    overflow: hidden;
 }
 
-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    padding: 1em;
-    border-radius: 0.3em;
-}
+    header {
+        display: grid;
+        grid-template-columns: 1fr max-content 2.5%;
+        margin: 25px;
+    }
 
-.header_title {
-    color: rgba(40, 40, 40, 0.88);
-    padding-left: 1em;
-    margin-top: 0;
-    margin-bottom: 0;
-    font-weight: bold;
-    font-size: 1.15rem;
-}
+        .header_title {
+            color: rgba(40, 40, 40, 0.809);
+            padding-left: 1em;
+            margin-top: 0;
+            margin-bottom: 0;
+            font-weight: 600;
+            font-size: 1.15rem;
+        }
 
-div.links_container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-}
+        div.links_container {
+            display: grid;
+            grid-template-columns: max-content max-content;
+        }
+
+            .header_link {
+                text-decoration: none;
+                color: rgba(40, 40, 40, 0.55);
+                padding-right: 1em;
+                font-size: small;
+            }
+
+    div.app_root {
+        height: calc(100vh - 100px);
+    }
+
+        div.game_main {
+
+            height: 100%;
+
+            display: grid;
+            grid-template-columns: 4fr 2fr;
+            
+            margin-left: 5%;
+            margin-right: 5%;
+            margin-top: 30px;
+            
+            background-color: rgb(183, 207, 230);
+            
+        }
+
+            div.canvas_parent {
+
+                background-color: white;
+            }
 
 
-.header_link {
-    text-decoration: none;
-    color: rgba(40, 40, 40, 0.55);
-    padding-right: 1em;
-    font-size: small;
-}
+            div.side_panel {
+                background-color: rgb(14, 55, 109);
+                
+                display: grid;
+                grid-template-rows: auto 3fr 1fr;
 
-div.game_main {
-    display: grid;
-    grid-template-columns: 5fr 3fr;
-}
+                margin-right: 5%;
+                margin-left: 10%;
+                margin-top: 10%;
+                margin-bottom: 10%;
 
-div.canvas_parent {
+                border-style: solid;
+                border-width: 1px;
 
-    min-height: 600px;
-    border-width: 0px;
-}
+                padding: 5px;
 
-div.side_panel_wrapper {
-    align-items: center;
-}
+            }
+                
+                /* Dialog of text for user */
+                div.user_text_div {
+                    background-color: #f8f8f8;
+                    border-width: 1px;
+                    border-style: solid;
+                    border-color: rgb(42, 42, 42);
+                    padding: 5px;
+                    margin-bottom: 8px;
+                    border-radius: 5px;
+                    overflow-y: scroll;
+                    max-height: 50px;
+                    font-size: small;
+                    white-space: pre-wrap;
 
-div.side_panel {
-    background-color: lightskyblue;
-    display: grid;
-    margin-right: 10%;
-    margin-left: 5%;
-    margin-top: 50px;
-    grid-template-rows: 1fr 5fr 1fr;
-    border-style: solid;
-    border-width: 1px;
-    padding: 5px;
-    height: 80%;
-}
+                }
 
-div.text_dialog {
-    background-color: #f8f8f8;
-    border-width: 1px;
-    border-radius: 5px;
-    border-style: solid;
-    border-color: rgb(42, 42, 42);
-    margin-bottom: 10px;
-    color: rgb(42, 42, 42);
-    font-size: small;
-}
+                /* Block for starting/joining new game */
+                div.game_setup_controls {
 
-div.game_text {
-    background-color: #f8f8f8;
-    padding: 5px;
-    border-radius: 5px;
-}
+                    background-color: rgb(56, 104, 170);
+                    padding-top: 10px;
+                    padding-left: 5px;
+                    margin-bottom: 10px;
+                    display: grid;
+                    grid-template: auto 1fr / auto 1fr;
+                }
 
-div.game_setup_controls {
+                    div.core_controls {
+                        grid-row-start: 2;
+                        grid-column-start: 2;
+                    }
+            
+                        /* Text that appears when loading game */
+                        p.fetching_info {
 
-    background-color: lightcoral;
-    padding-top: 10px;
-    margin-bottom: 10px;
-    display: grid;
-    grid-template: auto 1fr / auto 1fr;
-}
+                            font-size: small;
+                            color: rgb(69, 69, 69);
+                        }
 
-div.core_controls {
-    grid-row-start: 2;
-    grid-column-start: 2;
-}
+                /* Block for controlling on/off audio and visual cues */
+                div.in_game_settings {
+                    font-size: small;
+                    padding-left: 5px;
+                    background-color: rgb(213, 220, 228);
 
-p.fetching_info {
-
-    font-size: small;
-    color: rgb(69, 69, 69);
-}
-
-div.in_game_settings {
-    background-color: lightsteelblue;
-
-}
+                }
 
 
 
