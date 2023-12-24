@@ -196,7 +196,7 @@ function Handler_joinWithCode(){
 
   // function wrapper for requesting new game
   let code_input_field; // -> this is later attached to the input field
-  const req_newGame = async () => (await init_game_fromServer(false, true, code_input_field.value.replaceAll(/\s/, ''))); // removing any whitespace from input string
+  const req_newGame = async () => (await init_game_fromServer(false, true, code_input_field.value.replace(/ /g, ''))); // removing any whitespace from input string
   
   // resource handler for new games
   const [request_handler] = createResource(reqTriggered, req_newGame);
@@ -208,7 +208,7 @@ function Handler_joinWithCode(){
   
   return (
     <>
-    <input size="10" type="text" ref={code_input_field} placeholder="Code here..."></input>
+    <input size="10" type="text" id = "code_txt_inputvalue" ref={code_input_field} placeholder="Code here..."></input>
     <button type="button" onClick={triggerRequest}>Join!</button>
 
     <Switch
