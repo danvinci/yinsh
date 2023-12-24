@@ -90,7 +90,7 @@ export function GameSetup() {
               </div>
               <div class="core_controls">
                 <button type="button" onClick={toggle_PlayFriend}>Human</button>
-                <button type="button" onClick={toggle_PlayAI}>AI</button> 
+                <button type="button" disabled="true" onClick={toggle_PlayAI}>AI (coming soon)</button> 
               </div>
             </>
           }
@@ -156,7 +156,7 @@ export function InGameSettings() {
 
   return (
     <div class="in_game_settings">
-      <p>In-game settings (coming soon)</p>
+      <p>Game settings (coming soon)</p>
     </div>
   );
 }

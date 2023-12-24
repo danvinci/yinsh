@@ -61,7 +61,7 @@ body {
 
 
             div.side_panel {
-                background-color: rgb(14, 55, 109);
+                background-color: rgb(228, 228, 228);
                 
                 display: grid;
                 grid-template-rows: auto 3fr 1fr;
@@ -73,6 +73,8 @@ body {
 
                 border-style: solid;
                 border-width: 1px;
+                border-color: rgb(200, 200, 200);
+                border-radius: 5px;
 
                 padding: 5px;
 
@@ -88,7 +90,7 @@ body {
                     margin-bottom: 8px;
                     border-radius: 5px;
                     overflow-y: scroll;
-                    max-height: 50px;
+                    height: 50px;
                     font-size: small;
                     white-space: pre-wrap;
 
@@ -97,12 +99,17 @@ body {
                 /* Block for starting/joining new game */
                 div.game_setup_controls {
 
-                    background-color: rgb(56, 104, 170);
+                    background-color: rgb(236, 240, 245);
                     padding-top: 10px;
                     padding-left: 5px;
                     margin-bottom: 10px;
                     display: grid;
                     grid-template: auto 1fr / auto 1fr;
+
+                    border-style: solid;
+                    border-width: 1px;
+                    border-color: rgb(144, 144, 144);
+                    border-radius: 5px;
                 }
 
                     div.core_controls {
@@ -110,6 +117,11 @@ body {
                         grid-column-start: 2;
                     }
             
+                    button {
+                        border-radius: 5px;
+                        background-color: rgb(117, 145, 176);
+                        color: white;
+                    }
                         /* Text that appears when loading game */
                         p.fetching_info {
 
@@ -121,7 +133,14 @@ body {
                 div.in_game_settings {
                     font-size: small;
                     padding-left: 5px;
-                    background-color: rgb(213, 220, 228);
+
+                    border-style: solid;
+                    border-width: 1px;
+                    border-color: rgb(189, 189, 189);
+                    border-radius: 5px;
+
+                    color: rgb(118, 117, 117);
+
 
                 }
 
