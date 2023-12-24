@@ -156,7 +156,7 @@ export function InGameSettings() {
 
   return (
     <div class="in_game_settings">
-      <p>In-game settings</p>
+      <p>In-game settings (coming soon)</p>
     </div>
   );
 }

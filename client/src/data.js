@@ -138,7 +138,7 @@ export function bind_adapt_canvas(){
     const _off_y = H_param/2;
 
         // compute offset for drawing scoring slots
-        const _start_BL_point = {x: H_param, y: H_param/2 + h_ratio_factor*H_param }
+        const _start_BL_point = {x: H_param, y: H_param/3 + h_ratio_factor*H_param }
         const _start_TR_point = {x: canvas.width - H_param, y: H_param}
  
     // save to global obj and log

@@ -46,11 +46,11 @@ body {
             display: grid;
             grid-template-columns: 4fr 2fr;
             
-            margin-left: 5%;
+            margin-left: 1%;
             margin-right: 5%;
-            margin-top: 30px;
+            margin-top: 20px;
             
-            background-color: rgb(183, 207, 230);
+            background-color: rgb(255, 255, 255);
             
         }
 
