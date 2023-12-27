@@ -258,8 +258,8 @@ function draw_scoring_slots(){
     // retrieve scoring slots data
     const _scoring_slots = yinsh.objs.scoring_slots;
 
-    const _empty_score_color = "#666";
-    const _filled_score_color = "#00008b";
+    const _empty_score_color = "#e1e7f5";
+    const _filled_score_color = "#2d4d89";
 
     // drawing
     ctx.save();

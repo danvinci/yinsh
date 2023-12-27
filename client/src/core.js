@@ -42,6 +42,10 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
     // window resizing -> canvas and object adjustments
     window.addEventListener("resize", window_resize_handler);
 
+    // game termination by user (via UI)
+    core_et.addEventListener('game_exited', game_exit_handler, false);
+
+
 
 //////////// FUNCTIONS FOR INITIALIZING GAMES (NEW or JOIN)
 
@@ -84,6 +88,10 @@ export async function init_game_fromServer(originator = false, joiner = false, g
     //_setup = {originator: false, joiner: false, game_code: undefined, ai_game: false}
 
     console.log(' -- Requesting new game --');
+    
+    // wipe clean dialog box anytime a new game is requested
+    ui_et.dispatchEvent(new CustomEvent('reset_dialog'));
+
     const request_start_time = Date.now()
 
     try{
@@ -127,8 +135,14 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         // log game code (later should be in the UI)
         console.log(`USER - Your GAME CODE is: ${yinsh.server_data.game_id}`);
 
-        // display code in the text prompt
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Share this code to play: ${yinsh.server_data.game_id}` }));
+        // inform the user which color they are
+        const _player_id_string = get_player_id() == 'B' ? 'BLACK' : 'WHITE and move first';
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You'll play ${_player_id_string}` }));
+
+        // display code in the text prompt depending on player
+        if (originator) {
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Share this code to play: ${yinsh.server_data.game_id}` }));
+        };
 
         // ask server what to do -> it will emit event on response
         await server_ws_advance_game();
@@ -138,7 +152,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         // log error
         console.log(`LOG - Game setup ERROR. ${Date.now() - request_start_time}ms`);
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Ops, game can't be set up due to an error.` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Whoopsie, error while setting up the game.` }));
 
 
         console.log(err);
@@ -151,7 +165,6 @@ export async function init_game_fromServer(originator = false, joiner = false, g
 
 
 //////////// EVENT HANDLERS FOR TURNS
-
 async function server_actions_handler (event) {
 
     const _next_action = event.detail.next_action_code;
@@ -161,7 +174,7 @@ async function server_actions_handler (event) {
         // replay move by opponent (if we have delta data)
         await replay_opponent_move();
 
-        // handle scoring by opponent if necessary (multiple rows too) :|
+        // handle scoring by opponent if necessary (multiple rows too, FUUUCK) :|
         // TODO
 
         // prepare data, objects, and canvas for next turn
@@ -172,18 +185,24 @@ async function server_actions_handler (event) {
 
         // from here on, it should go to the client turn manager
         enableInteraction();
-        console.log(`USER - It's your turn, make a move! - # ${get_current_turn_no()}`); // -> this should go to the UI
+        console.log(`USER - It's your turn - # ${get_current_turn_no()}`); // -> this should go to the UI
 
         // display code in the text prompt
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `It's your turn, make a move.` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `It's your turn` }));
+
+        // hide game setup controls on first turn in which the player moves
+        if (get_current_turn_no() == 1) {
+            ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_in_progress` }));
+            console.log("LOG - Hiding game controls on first playable turn");
+        };
+
 
     } else if (_next_action == CODE_action_wait) {
 
         disableInteraction(); // a bit redundant, is disabled by default
-        console.log(`USER - Wait for your opponent.`); // -> this should bubble up to a UI component
+        console.log(`USER - Wait for your opponent.`); 
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Wait for your opponent to move.` }));
-
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Wait for your opponent` }));
 
     };
 
@@ -211,7 +230,7 @@ async function replay_opponent_move(){
     if (typeof yinsh.delta !== "undefined") {
 
         console.log(`USER - Replaying opponent's move`);
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent is moving.` }));
+        //ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent is moving` }));
 
         const replay_start_time = Date.now();
 
@@ -267,7 +286,7 @@ async function replay_opponent_move(){
             refresh_canvas_state();
             console.log(`LOG - New opponent score: ${new_opponent_score}`);
 
-            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent has scored a point!` }));
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
 
 
         };
@@ -507,6 +526,7 @@ async function ringDrop_handler (event) {
             // CASE: some markers must be flipped
             if (move_scenario.flip_flag == true){
                 // flip and re-draw
+                await sleep(150);
                 flip_markers(move_scenario.markers_toFlip);
                 refresh_canvas_state(); 
             };
@@ -575,7 +595,7 @@ async function ringDrop_handler (event) {
         console.log("USER - Invalid drop location");
         // NOTE: we could play specific sound 'err'
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You can't drop the ring in that location.` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You can't drop the ring in that location` }));
 
 
     };
@@ -604,7 +624,7 @@ function mk_scoring_options_handler(event){
 
         console.log("USER - Pick a marker to indicate the row!");
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You scored a point! Pick the row of markers to remove.` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You scored a point! Pick a row of markers` }));
 
         // retrieve scoring options
         const scoring_options = get_scoring_options();
@@ -644,7 +664,7 @@ function mk_scoring_options_handler(event){
 
         console.log("USER - Pick a ring to be removed from the board!");
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Pick a ring to be removed from the board.` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Pick a ring to remove` }));
 
 
     };
@@ -709,3 +729,21 @@ function ring_scoring_handler (event) {
 
 };
 
+/////////// EXITING GAME - prompted by user via UI
+
+function game_exit_handler(event){
+
+    // disable any canvas interaction
+    disableInteraction();
+
+    // interrupt game -> notify server --> other user is informed by server
+
+    // receives formal 'you lost' response from server ?
+
+    // display text to the UI
+    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You lost :(` }));
+
+    // inform UI that game is no longer in progress
+    ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
+
+};

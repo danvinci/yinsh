@@ -1,39 +1,60 @@
-@import url('https://fonts.googleapis.com/css?family=Rubik&display=swap');
-
+/* @import url('https://fonts.googleapis.com/css?family=Rubik&display=swap'); */
 /* https://stackoverflow.com/questions/33776171/how-to-use-css-calc-with-an-elements-height */
 
-body {
-    font-family: 'Rubik';
+
+@import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500;1,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap');
+
+body, html {
+    font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
     margin:0px;
     overflow: hidden;
 }
 
     header {
         display: grid;
-        grid-template-columns: 1fr max-content 2.5%;
+        grid-template-columns: 1fr max-content;
         margin: 25px;
+        margin-right: 5%;
+        align-items: center;
+
+        font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
     }
 
         .header_title {
-            color: rgba(40, 40, 40, 0.809);
+            color: rgba(40, 40, 40, 0.85);
             padding-left: 1em;
-            margin-top: 0;
-            margin-bottom: 0;
+            margin-top: 0px;
+            margin-bottom: 0px;
             font-weight: 600;
-            font-size: 1.15rem;
+            font-size: 1.3rem;
         }
 
-        div.links_container {
+        div.header_menu {
             display: grid;
-            grid-template-columns: max-content max-content;
+            grid-template-columns: auto auto;
+            align-items: center;
         }
 
             .header_link {
+                display: grid;
+                grid-template-columns: auto auto;
                 text-decoration: none;
-                color: rgba(40, 40, 40, 0.55);
-                padding-right: 1em;
-                font-size: small;
+                align-items: center;
+                margin-right: 20px;
             }
+
+                .header_link_img {
+                    height: 17px;
+                    width: 17px;
+                    margin-right: 4px;
+                    filter: opacity(65%);
+                }
+
+                .header_link_text {
+                    color: rgba(40, 40, 40, 0.7);
+                    font-size: small;
+                }
 
     div.app_root {
         height: calc(100vh - 100px);
@@ -44,13 +65,13 @@ body {
             height: 100%;
 
             display: grid;
-            grid-template-columns: 4fr 2fr;
+            grid-template-columns: 5fr 2fr;
             
             margin-left: 1%;
             margin-right: 5%;
             margin-top: 20px;
             
-            background-color: rgb(255, 255, 255);
+            background-color: white;
             
         }
 
@@ -61,87 +82,253 @@ body {
 
 
             div.side_panel {
-                background-color: rgb(228, 228, 228);
+                /* background-color: rgb(228, 228, 228); */
                 
                 display: grid;
                 grid-template-rows: auto 3fr 1fr;
 
                 margin-right: 5%;
                 margin-left: 10%;
-                margin-top: 10%;
-                margin-bottom: 10%;
+                padding-top: 20%;
+                padding-bottom: 30%;
 
+                /*
                 border-style: solid;
                 border-width: 1px;
                 border-color: rgb(200, 200, 200);
                 border-radius: 5px;
+                */
 
-                padding: 5px;
+                align-items: center; /* vertical alignment */
 
             }
                 
                 /* Dialog of text for user */
                 div.user_text_div {
-                    background-color: #f8f8f8;
-                    border-width: 1px;
+                    background-color: rgb(252, 252, 252);
+                    border-width: 2px;
                     border-style: solid;
-                    border-color: rgb(42, 42, 42);
-                    padding: 5px;
+                    border-color: rgb(243, 243, 243);
+                    
+                    padding: 7px;
                     margin-bottom: 8px;
-                    border-radius: 5px;
-                    overflow-y: scroll;
+                    border-radius: 8px;
+                
                     height: 50px;
+                    
                     font-size: small;
                     white-space: pre-wrap;
+                    overflow-y: scroll;
 
+                    font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
+
+                    color: rgb(112, 112, 112);
                 }
 
-                /* Block for starting/joining new game */
-                div.game_setup_controls {
+        
+                /* wraps one or more buttons for the game controls*/
+                div.game_controls {
 
-                    background-color: rgb(236, 240, 245);
-                    padding-top: 10px;
-                    padding-left: 5px;
-                    margin-bottom: 10px;
+                    /* background-color: rgb(221, 214, 214); */
+
                     display: grid;
-                    grid-template: auto 1fr / auto 1fr;
+                    grid-template-rows: 1fr;
 
-                    border-style: solid;
-                    border-width: 1px;
-                    border-color: rgb(144, 144, 144);
-                    border-radius: 5px;
+                    justify-content: center;
+
                 }
 
-                    div.core_controls {
-                        grid-row-start: 2;
-                        grid-column-start: 2;
-                    }
-            
-                    button {
-                        border-radius: 5px;
-                        background-color: rgb(117, 145, 176);
-                        color: white;
-                    }
-                        /* Text that appears when loading game */
-                        p.fetching_info {
+                    hr {
 
-                            font-size: small;
-                            color: rgb(69, 69, 69);
+                        border-width:1px;
+                        border-style: solid;
+                        color:rgb(249, 249, 249);
+                        width: 90%;
+                        margin-bottom: 15px;
+                    }
+        
+                    button {
+                        border-color: rgb(158, 179, 205);
+                        border-style: solid;
+                        background-color: rgb(105, 145, 193);
+                        
+                        color: white;
+                        
+                        border-radius: 6px;
+                        border-width: 3px;
+
+                        padding: 8px 0px;
+                        margin-bottom: 8px;
+
+                        box-sizing: border-box;
+                        width: 11vw; /* generic rule we overwrite later */
+
+                        font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
+
+                    }
+
+                    button.play_btn {
+
+                        height: 5vh;
+                        width: 10vw;
+
+                        border-radius: 10px;
+                        border-width: 4px;
+
+                        font-size: 16px;
+                    }
+
+                    button:hover:enabled {
+
+                        background-color: rgb(88, 126, 171); 
+                        font-weight: 600;
+
+                    }
+
+                    button.back_nav_btn {
+
+                        background-color: rgb(255, 255, 255);
+                        border-color: rgb(255, 255, 255);
+
+                        color: rgb(173, 171, 171);
+
+                        width: max-content;
+                        height: 30px;
+
+                        padding: 0px;
+                        margin: 0px;
+
+                        font-weight: 600;
+                        font-size: 23px;
+
+                    }
+
+                        button.back_nav_btn:hover {
+                            color: #5e5d5d;
+                            background-color: rgb(255, 255, 255);
+                            border-color: rgb(255, 255, 255);
                         }
+
+                    button:disabled {
+                        border-color: rgb(220, 220, 220);
+                        background-color: rgb(196, 195, 195);
+                    }
+
+                    div.join_input_div {
+                        display: grid;
+                        grid-template-columns: 1.7fr 1fr;
+
+                        height: 37px;
+                        align-items: center;
+
+                    }
+
+                    button.join_input_button_class {
+
+                        width: 4vw;
+
+                        height: 100%;
+                        padding: 6px;
+
+                        margin: 0px;
+                        margin-left: 7px;
+                    }
+
+                    input.join_input_txt_class {
+
+                        border-color: rgb(206, 206, 206);
+                        border-style: dashed;
+                        border-radius: 2px;
+
+                        box-sizing: border-box;
+                        height: calc(100% - 2px);
+                        padding: 5px;
+
+                        font-family: 'Roboto Mono', monospace;
+                        font-weight: 600;
+
+                        font-size: 11px;
+                        color: rgb(69, 69, 69);
+
+                    }
+
+                    input.join_input_txt_class:focus {
+                        outline-width: 0;
+                    }
+
+                    button.exit_button {
+                        height: 5vh;
+                        width: 10vw;
+
+                        border-radius: 10px;
+                        border-width: 4px;
+
+                        font-size: 16px;
+
+                        background-color: rgb(216, 216, 216);
+                        border-color: rgb(237, 236, 236);
+                    }
+
+                        button.exit_button:hover {
+                            font-weight: 600;
+
+                            background-color: rgb(255, 161, 161);
+                            border-color: rgb(255, 197, 197);
+                        }
+
+                    div.exit_game_div {
+                        display: grid;
+                        grid-template-columns: auto auto;
+
+                    }
+
+                    button.exit_button_back {
+
+                        background-color: rgb(216, 216, 216);
+                        border-color: rgb(237, 236, 236);
+
+                        width: 7vw;
+                        margin-left:5px;
+                        margin-right:5px;
+                    }
+
+                        button.exit_button_back:hover {
+                            font-weight: 600;
+
+                            background-color: rgb(188, 188, 188);
+                            border-color: rgb(216, 216, 216);
+                        }
+
+                    button.exit_button_confirm {
+
+                        width: 7vw;
+                        margin-left:5px;
+                        margin-right:5px;
+
+                    }
+
+                    span.exit_game_txt{
+
+                        font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
+                        font-size: 13px;
+                        color: rgb(126, 126, 126);
+                    }
+
+                      
 
                 /* Block for controlling on/off audio and visual cues */
                 div.in_game_settings {
                     font-size: small;
                     padding-left: 5px;
 
-                    border-style: solid;
+                    border-style: dashed;
                     border-width: 1px;
-                    border-color: rgb(189, 189, 189);
+                    border-color: rgb(204, 204, 204);
                     border-radius: 5px;
 
-                    color: rgb(118, 117, 117);
+                    color: rgb(189, 189, 189);
 
-
+                    font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
                 }
 
 

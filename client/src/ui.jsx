@@ -2,6 +2,10 @@ import { createSignal, Show, Switch, Match, createResource, createEffect, on, on
 import { init_game_fromServer, draw_empty_game_board } from "./core.js";
 
 
+// event target for UI
+globalThis.ui_et = new EventTarget(); 
+
+
 export function GameCanvas() {
   // canvas component
   // auto-sizes based on size of outer container div -> div is already in place when component is rendering
@@ -20,21 +24,33 @@ export function GameCanvas() {
 export function UserText() {
 
   // setter is called from core component, and text re-rendered when value changes
-  const [userText, set_userText] = createSignal("Click < PLAY > to start");
 
-  // event target for UI
-  globalThis.ui_et = new EventTarget(); 
+  const _welcome_txt = 'Click < PLAY > to start a new game';
+  const [userText, set_userText] = createSignal(_welcome_txt);
+
+  // handle incoming events from CORE
   ui_et.addEventListener('new_user_text', userTxt_handler, false);
+  ui_et.addEventListener('reset_dialog', userTxt_handler, false);
 
-  function userTxt_handler(event) {
-  
-    // add text
-    set_userText(userText() + "\n" + event.detail);
+    function userTxt_handler(event) {
+
+      if (event.type === 'new_user_text') {
+
+        // add text
+        const _new_text = (userText().length > 0) ? (userText() + "\n" + event.detail) : event.detail
+        set_userText(_new_text);
+        
+        // scroll text to end
+        let txt_div = document.getElementById('user_txt_id');
+        txt_div.scrollTop = txt_div.scrollHeight;
+
+      };
+
+      if (event.type === 'reset_dialog') {
+        set_userText("");
+      };
     
-    // scroll text to end
-    let txt_div = document.getElementById('user_txt_id');
-    txt_div.scrollTop = txt_div.scrollHeight;
-  } 
+    } 
 
   return (
     <div class="user_text_div" id="user_txt_id">{userText}</div>
@@ -47,103 +63,132 @@ export function UserText() {
 export function GameSetup() {
 
   // flag for keeping track if game is ongoing or not (changes controls mode)
-  const [game_ongoing, set_game_ongoing] = createSignal(false);
-  const toggle_game_ongoing = () => set_game_ongoing(!game_ongoing()); // called by event from core (?)
-  // hide core controls, display option to abandon game + similar for when other game is over
-  // think about animations
+  const [game_inProgress, set_game_inProgress] = createSignal(false);
+  //const toggle_gameInProgress = () => set_gameInProgress(!gameInProgress()); // called by event from core (?)
+  // hide core controls, display option to abandon game + similar for when other game is over -> ask for confirmation?
   
-  // manage initial 'play' call to action 
+  ui_et.addEventListener('game_status_update', game_status_handler, false);
+
+  // setting var to true so to show option to exit/resign/abandon game
+  function game_status_handler(event){
+    if (event.detail == 'game_in_progress') {
+      set_game_inProgress(true);
+    };
+
+    if (event.detail == 'game_exited') {
+      toggle_Play();
+      set_game_inProgress(false);
+    }; 
+  };
+
+  // tell CORE the user has decided to exit the game
+  function fn_game_exited_by_user(){
+    core_et.dispatchEvent(new CustomEvent('game_exited'));
+
+  };
+
+  // first 'PLAY' button
   const [play, set_play] = createSignal(false);
   const toggle_Play = () => set_play(!play());
 
-      // manage 'play with a friend' option
-      const [playFriend, set_playFriend] = createSignal(false);
-      const toggle_PlayFriend = () => set_playFriend(!playFriend());
+  // vars for interrupting/abandoning game once it starts
+  const [exitGame, set_exitGame] = createSignal(false);
+  const toggle_exitGame = () => set_exitGame(!exitGame());
 
-          // manage 'play w/ friend > generate new game' option
-          const [op_newGame, set_op_newGame] = createSignal(false);
-          const toggle_op_newGame = () => set_op_newGame(!op_newGame());
 
-          // manage 'play w/ friend > join existing game with code' option
-          const [op_join_wCode, set_op_join_wCode] = createSignal(false);
-          const toggle_op_join_wCode = () => set_op_join_wCode(!op_join_wCode());
+  ////\\\\ NEW GAME vs FRIEND OPTION
 
-      // manage 'play with AI' option
-      const [playAI, set_playAI] = createSignal(false);
-      const toggle_PlayAI = () => set_playAI(!playAI());
+      // signal for button interaction
+      const [req_new_VSfriend, set_reqTrig_newVSfriend] = createSignal(false); 
+
+      // function wrapper for requesting new game as originator
+      const fn_req_newVSfriend = async () => (await init_game_fromServer(true));
+      
+      // resource handler for new games
+      const [res_handler_newVSfriend] = createResource(req_new_VSfriend, fn_req_newVSfriend);
+      
+      // handling interaction and resource fetching
+      // createResource is triggered for anything other than: false, null, undefined onMount
+      // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
+      const triggerRequest_newVSfriend = () => doubleSwitch(set_reqTrig_newVSfriend, req_new_VSfriend);
+
+  ////\\\\ JOIN GAME vs FRIEND OPTION
+    
+    // show/display "text field for entering code"
+    const [joinClick, set_joinClick] = createSignal(false); 
+    const toggle_joinClick = () => set_joinClick(!joinClick());
+
+    // signal for join/request button interaction
+    const [req_join_VSfriend, set_reqTrig_joinVSfriend] = createSignal(false); 
+
+    // function wrapper for requesting new game
+    let code_input_field; // -> this is later attached to the input field
+    const fn_req_joinVSfriend = async () => (await init_game_fromServer(false, true, code_input_field.value.replace(/ /g, ''))); // removing any whitespace from input string
+    
+    // resource handler for new games
+    const [res_handler_joinVSfriend] = createResource(req_join_VSfriend, fn_req_joinVSfriend);
+    
+    // handling interaction and resource fetching
+    // createResource is triggered for anything other than: false, null, undefined onMount
+    // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
+    const triggerRequest_joinVSfriend = () => doubleSwitch(set_reqTrig_joinVSfriend, req_join_VSfriend);
+
+
+  ////\\\\ JOIN GAME vs AI OPTION
+
+    // signal for button interaction
+    const [req_join_VS_AI, set_req_join_VS_AI] = createSignal(false); 
+
+    // function wrapper for requesting new game
+    const fn_req_newGame_AI = async () => (await init_game_fromServer(false, false, undefined, true));
+    
+    // resource handler for new games
+    const [res_handler_joinVS_AI] = createResource(req_join_VS_AI, fn_req_newGame_AI);
+    
+    // handling interaction and resource fetching
+    const triggerRequest_joinVS_AI = () => doubleSwitch(set_req_join_VS_AI, req_join_VS_AI);
 
 
   return (
-    <div class="game_setup_controls">
+    <div class="game_controls">
       <Show 
-        when={play()}
+        when={game_inProgress()}
         fallback={
-          <div class="back_nav_controls"> 
-            <button type = "button" onClick={toggle_Play}>Play</button>
-          </div>}
+          <Show
+          when={play()}
+          fallback={<button type = "button" class="play_btn" onClick={toggle_Play}>PLAY</button>}>
+          <Show
+            when={joinClick()}
+            fallback={
+              <>
+                <button type="button" class="back_nav_btn" onClick={toggle_Play}>&#9665;</button>
+                <hr class="menu_line"></hr>
+                <button type="button" onClick={triggerRequest_newVSfriend}>NEW game vs Friend</button>
+                <button type="button" onClick={toggle_joinClick}>JOIN game vs Friend </button> 
+                <button type="button" disabled = "true" onClick={triggerRequest_joinVS_AI}>NEW game vs AI (WIP) </button> 
+              </>}>
+
+              <>
+                <button type="button" class="back_nav_btn" onClick={toggle_joinClick}>&#9665;</button>
+                <hr class="menu_line"></hr>
+                <div class="join_input_div">
+                  <input size="10" type="text" class="join_input_txt_class" ref={code_input_field} placeholder="Code here..."></input>
+                  <button type="button" class="join_input_button_class" onClick={triggerRequest_joinVSfriend}>JOIN</button>
+                </div>
+              </>
+          </Show>
+        </Show>}
       >
-        <Switch
-          fallback={
-            <>
-              <div class="back_nav_controls">
-                <button type="button" onClick={toggle_Play}>&#60</button>
-              </div>
-              <div class="core_controls">
-                <button type="button" onClick={toggle_PlayFriend}>Human</button>
-                <button type="button" disabled="true" onClick={toggle_PlayAI}>AI (coming soon)</button> 
-              </div>
-            </>
-          }
-        >
-          <Match when={playFriend()}> 
-            <>
-              <Switch
-                fallback={
-                  <>
-                  <div class="back_nav_controls">
-                    <button type="button" onClick={toggle_PlayFriend}>&#60</button>
-                  </div>
-                  <div class="core_controls">
-                    <button type="button" onClick={toggle_op_newGame}>New game</button>
-                    <button type="button" onClick={toggle_op_join_wCode}>Join with code</button>
-                  </div>
-                  </>
-                }
-              >
-                <Match when={op_newGame()}>
-                  <div class="back_nav_controls">
-                    <button type="button" onClick={toggle_op_newGame}>&#60</button> 
-                  </div>
-                  <div class="core_controls">
-                    <Handler_newGame></Handler_newGame>
-                  </div>
-                </Match>
-
-                <Match when={op_join_wCode()}>
-                  <>
-                  <div class="back_nav_controls">
-                    <button type="button" onClick={toggle_op_join_wCode}>&#60</button> 
-                  </div>
-                  <div class="core_controls">
-                      <Handler_joinWithCode></Handler_joinWithCode>
-                  </div>
-                  </>
-                </Match>
-              </Switch>
-            </>
-          </Match>
-
-          <Match when={playAI()}>
-            <>
-              <div class="back_nav_controls">
-                <button type="button" onClick={toggle_PlayAI}>&#60</button>
-              </div>
-              <div class="core_controls">
-                <Handler_playAI></Handler_playAI>
-              </div>
-            </>
-          </Match>
-        </Switch>
+        <Show
+          when={exitGame()}
+          fallback={<button type="button" class="exit_button" onClick={toggle_exitGame}>Resign</button>}>
+            <span class="exit_game_txt">Are you sure?</span>
+            <hr></hr>
+            <div class="exit_game_div">
+              <button type="button" class="exit_button_back" onClick={toggle_exitGame}>No</button>
+              <button type="button" class="exit_button_confirm" onClick={fn_game_exited_by_user}>Yes</button>
+            </div>
+        </Show>
       </Show>
     </div>
   );
@@ -160,112 +205,6 @@ export function InGameSettings() {
     </div>
   );
 }
-
-
-
-function Handler_newGame(){
-
-  // signal for button interaction
-  const [reqTriggered, set_reqTriggered] = createSignal(false); 
-
-  // function wrapper for requesting new game as originator
-  const req_newGame = async () => (await init_game_fromServer(true));
-  
-  // resource handler for new games
-  const [request_handler] = createResource(reqTriggered, req_newGame);
-  
-  // handling interaction and resource fetching
-  // createResource is triggered for anything other than: false, null, undefined onMount
-  // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
-  const triggerRequest = () => doubleSwitch(set_reqTriggered, reqTriggered);
-  
-
-  return (
-    <>
-    <button type="button" onClick={triggerRequest}>Play vs Human</button>
-    </>
-  );
-  
-}
-
-
-function Handler_joinWithCode(){
-
-  // signal for button interaction
-  const [reqTriggered, set_reqTriggered] = createSignal(false); 
-
-  // function wrapper for requesting new game
-  let code_input_field; // -> this is later attached to the input field
-  const req_newGame = async () => (await init_game_fromServer(false, true, code_input_field.value.replace(/ /g, ''))); // removing any whitespace from input string
-  
-  // resource handler for new games
-  const [request_handler] = createResource(reqTriggered, req_newGame);
-  
-  // handling interaction and resource fetching
-  // createResource is triggered for anything other than: false, null, undefined onMount
-  // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
-  const triggerRequest = () => doubleSwitch(set_reqTriggered, reqTriggered);
-  
-  return (
-    <>
-    <input size="10" type="text" id = "code_txt_inputvalue" ref={code_input_field} placeholder="Code here..."></input>
-    <button type="button" onClick={triggerRequest}>Join!</button>
-
-    <Switch
-      fallback={<p class="fetching_info">{""}</p>}
-    >
-      
-      <Match when = {request_handler.loading}>
-        <p class="fetching_info">{"Joining game..."}</p>
-      </Match>
-
-      <Match when = {request_handler.error}>
-        <p class="fetching_info">{"An error occurred."}</p>
-      </Match>
-
-    </Switch>
-    </>
-  );
-}
-
-
-function Handler_playAI(){
-
-  // signal for button interaction
-  const [reqTriggered, set_reqTriggered] = createSignal(false); 
-
-  // function wrapper for requesting new game
-  const req_newGame_AI = async () => (await init_game_fromServer(false, false, undefined, true));
-  
-  // resource handler for new games
-  const [request_handler] = createResource(reqTriggered, req_newGame_AI);
-  
-  // handling interaction and resource fetching
-  // createResource is triggered for anything other than: false, null, undefined onMount
-  // so we initialize the signal value false -> is then swapped to false/true to re-trigger fetching
-  const triggerRequest = () => doubleSwitch(set_reqTriggered, reqTriggered);
-  
-  return (
-    <>
-    <button type="button" onClick={triggerRequest}>Play vs AI</button>
-
-    <Switch
-      fallback={<p class="fetching_info">{""}</p>}
-    >
-      
-      <Match when = {request_handler.loading}>
-      </Match>
-
-      <Match when = {request_handler.error}>
-        <p class="fetching_info">{"An error occurred."}</p>
-      </Match>
-
-    </Switch>
-    </>
-  );
-  
-}
-
 
 
 // used to retrigger resource-wrapped fetch: if on -> off and then on again

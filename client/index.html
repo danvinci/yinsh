@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv = "Content-Security-Policy" content="default-src 'self' fonts.googleapis.com fonts.gstatic.com; script-src 'self' 'unsafe-inline' *.cloudflareinsights.com; connect-src 'self' wss://yinsh.net/api ;">
+    <meta http-equiv = "Content-Security-Policy" content="default-src 'self'; script-src 'self' *.cloudflareinsights.com; connect-src 'self' wss://yinsh.net/api ; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com">
     
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
@@ -17,7 +17,7 @@
       <source src="/src/assets/wood.wav" type="audio/wav">
     </audio> 
 
-    <title>Play Yinsh!</title>
+    <title>YINSH</title>
   </head>
   <body>
 
@@ -26,15 +26,22 @@
       <div>
         <p class="header_title">YINSH</p>
       </div>
-      <div class="links_container">
-        <div class="link_with_img">
-          <img>
-          <a class="header_link" href="#">Rules</a>
-        </div>
-        <div>
-          <img class="link_with_img">
-          <a class="header_link" href="#">GitHub</a>
-        </div>
+      <div class="header_menu">
+
+        <!-- fixing height/width for svg necessary to avoid size-adj on load 800px -> normal -->
+
+        <a class="header_link" href="https://en.wikipedia.org/wiki/YINSH#Rules" target="_blank">
+          <img class="header_link_img" src="/src/assets/ico_rules.svg"  height="17px" width="17px">
+          <span class="header_link_text" >Rules</span>
+        </a>
+
+        <a class="header_link" href="https://github.com/danvinci/yinsh/" target="_blank">
+          <img class="header_link_img" src="/src/assets/ico_github.svg" height="17px" width="17px">
+          <span class="header_link_text">GitHub</span>
+
+          <!-- https://www.svgrepo.com/collection/codicons-coding-icons/ -->
+          <!-- https://css-tricks.com/scale-svg/ -->
+        </a>
       </div>
     </header>
 

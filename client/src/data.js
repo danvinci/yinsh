@@ -317,6 +317,10 @@ export function get_task_status(task_name){
 
 };
 
+export function get_current_turn_no(){
+    return yinsh.server_data.turn_no;
+}
+
 // returns scoring options in the task (should be for current player only)
 export function get_scoring_options(){
 
@@ -348,11 +352,10 @@ export function increase_player_score(){
 
 function fill_scoring_slot(s) {
 
-    let _filled_s = s
+    let new_s = s
+    new_s.filled = true;
 
-    _filled_s.filled = true;
-
-    return _filled_s
+    return new_s
 };
 
 
@@ -392,10 +395,6 @@ export function update_objects_next_turn(){
     init_rings();
     init_markers();
 };
-
-export function get_current_turn_no(){
-    return yinsh.server_data.turn_no;
-}
 
 export function turn_start(){
    yinsh.objs.current_turn.in_progress = true;
