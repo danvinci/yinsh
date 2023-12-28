@@ -538,7 +538,7 @@ function init_scoring_slots(){
             slot_path.arc(s_point_x, s_point_y, S*0.35, 0, 2*Math.PI);
 
         // score can be 1 -> 3, fill slot accordingly as we go through them
-        const _score_flag = local_score == k ? true : false;
+        const _score_flag = local_score >= k ? true : false;
 
         const _bl_slot = {  x: s_point_x, 
                             y: s_point_y,  
@@ -564,7 +564,7 @@ function init_scoring_slots(){
             slot_path.arc(s_point_x, s_point_y, S*0.35, 0, 2*Math.PI);
 
         // score can be 1 -> 3, fill slot accordingly as we go through them (negative)
-        const _score_flag = oppon_score == k ? true : false;
+        const _score_flag = oppon_score >= k ? true : false;
 
         const _tr_slot = {  x: s_point_x, 
                             y: s_point_y, 
@@ -825,11 +825,10 @@ export function add_marker(loc_index, as_opponent = false){
     _markers.push(m);  
     yinsh.objs.markers = _markers;
 
-    // update local data copy
+    // update local server data ref copy
     const _new_m = {id: structuredClone(m.loc.index), player: structuredClone(m.player)};
     yinsh.local_server_data_ref.markers.push(_new_m);
 
-    
     
     // update game state and log change
     update_game_state(m.loc.index, m.type.concat(m.player)); // -> MB, MW at index
@@ -856,8 +855,7 @@ export function remove_markers(mk_indexes_array){ // input is array of loc index
     // cleans game_state copy at selected indexes
     mk_indexes_array.forEach( (index) => {
 
-        if (_game_state[index].includes(_marker_id)) {
-            
+        if (_game_state[index].includes(_marker_id)) {  
             _game_state[index]= ''; // cleans state only if a marker is there 
         };
         
@@ -886,8 +884,7 @@ export function remove_ring_scoring(ring_loc_index){
     yinsh.local_server_data_ref.rings = yinsh.local_server_data_ref.rings.filter(r => r.id != ring_loc_index);
 
     // cleans game_state copy at selected indexes
-    if (_game_state[ring_loc_index].includes(_ring_id)) {
-        
+    if (_game_state[ring_loc_index].includes(_ring_id)) {   
         _game_state[ring_loc_index]= ''; // cleans state only if a ring is there 
     };
         
@@ -910,12 +907,15 @@ export function flip_markers(mk_indexes_array){
     let _markers = yinsh.objs.markers;
     let _game_state = structuredClone(yinsh.objs.game_state);
 
+    // helper function for doing the swapping
+    const swap_m_player = (m_player) => (m_player == _player_black_id ? _player_white_id : _player_black_id);
+
         // flips markers and logs change to game state
         for (let m of _markers) {
             if (mk_indexes_array.includes(m.loc.index)) {
                 
                 // flips
-                m.player = (m.player == _player_black_id ? _player_white_id : _player_black_id);   
+                m.player = swap_m_player(m.player);   
                 _game_state[m.loc.index] = ( _game_state[m.loc.index] == m.type.concat(_player_black_id) ? m.type.concat(_player_white_id) : m.type.concat(_player_black_id) );
 
             };
@@ -924,6 +924,10 @@ export function flip_markers(mk_indexes_array){
     // updates global markers object and game state
     yinsh.objs.markers = _markers;
     yinsh.objs.game_state = _game_state;
+
+    // update local server data ref copy
+    const _new_ref_markers = _markers.map((m) => ({id: m.loc.index, player: m.player}));
+    yinsh.local_server_data_ref.markers = structuredClone(_new_ref_markers);
 
     console.log(`LOG - Marker(s) flipped at indexes: ${mk_indexes_array}`);
     

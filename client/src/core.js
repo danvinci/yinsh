@@ -197,10 +197,10 @@ async function server_actions_handler (event) {
         // display code in the text prompt
         ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `It's your turn` }));
 
-        // hide game setup controls in the first turns in which the player moves
+        // hide game setup controls in the first turns in which the player moves (can be either 1 or 3)
         if (get_current_turn_no() <= 3) {
             ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_in_progress` }));
-            console.log("LOG - Hiding game controls on first playable turn");
+            //console.log("LOG - Hiding game controls on first playable turns");
         };
 
 

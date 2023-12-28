@@ -408,7 +408,7 @@ function draw_rings(ring_spec = {}){
         ctx.save();
 
             // rings in scoring slots should look not look available for interaction - playing w/ transparency, not sure if it's good
-            ctx.globalAlpha = 0.85;
+            ctx.globalAlpha = 0.8;
 
             // draw black ring
             if (_ring_id == player_black_id){ 
