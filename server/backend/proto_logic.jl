@@ -1773,7 +1773,7 @@ begin
 	
 	# ip and port to use for the server
 	ws_ip = "0.0.0.0" # listen on every ip / host ip
-	ws_port = 6092
+	ws_port = 6091
 
 end
 
@@ -1923,9 +1923,6 @@ function fn_join_game(ws, msg)
 	return _existing_game_data, _other_pld
 
 end
-
-# ╔═╡ d366e475-6679-48d5-a599-cfc68aa1cbdd
-games_log_dict["1kevO5"]
 
 # ╔═╡ 384e2313-e1c7-4221-8bcf-142b0a49bff2
 function _is_playing_next(game_id::String, _player_id::String)::Bool
@@ -2399,9 +2396,6 @@ function update_game_end!(game_id::String)::Dict
 	end
 
 end
-
-# ╔═╡ af06f8dd-968b-43f9-9305-37ccc7c9e11a
-update_game_end!("sqc6OO")[:end]
 
 # ╔═╡ 8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 function get_last_turn_details(game_code::String)
@@ -4341,9 +4335,7 @@ version = "1.4.1+0"
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╠═ca346015-b2c9-45da-8c1e-17493274aca2
-# ╠═af06f8dd-968b-43f9-9305-37ccc7c9e11a
 # ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
-# ╠═d366e475-6679-48d5-a599-cfc68aa1cbdd
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
 # ╟─5d6e868b-50a9-420b-8533-5db4c5d8f72c

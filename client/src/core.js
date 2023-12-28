@@ -214,7 +214,6 @@ async function server_actions_handler (event) {
     } else if (_next_action == CODE_action_end_game) { // handling case of winning/losing game
 
         disableInteraction(); 
-        console.log("LOG - GAME COMPLETED");
 
         // replay move by opponent (if we have delta data)
         await replay_opponent_move();
@@ -241,6 +240,7 @@ async function server_actions_handler (event) {
 
         // reset UI
         ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
+        console.log("LOG - GAME COMPLETED");
 
     };
 };
@@ -339,11 +339,10 @@ async function replay_opponent_move(){
             const new_opponent_score = increase_opponent_score();
             console.log(`LOG - New opponent score: ${new_opponent_score}`);
 
-            // refresh canvas (ring is drawn in scoring slot now)
-            refresh_canvas_state();
-
             // remove ring from rings array 
             remove_ring_scoring(yinsh.delta.scoring_ring); // remove ring (scoring ring id)
+
+            // refresh canvas (ring is drawn in scoring slot now)
             refresh_canvas_state();
 
             ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
