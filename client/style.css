@@ -169,7 +169,7 @@ body, html {
 
                     button.play_btn {
 
-                        height: 5vh;
+                        height: 6vh;
                         width: 10vw;
 
                         border-radius: 10px;
@@ -257,7 +257,7 @@ body, html {
                     }
 
                     button.exit_button {
-                        height: 5vh;
+                        height: 6vh;
                         width: 10vw;
 
                         border-radius: 10px;
@@ -265,14 +265,14 @@ body, html {
 
                         font-size: 16px;
 
-                        background-color: rgb(216, 216, 216);
+                        background-color: rgb(223, 223, 223);
                         border-color: rgb(237, 236, 236);
                     }
 
                         button.exit_button:hover {
                             font-weight: 600;
 
-                            background-color: rgb(255, 161, 161);
+                            background-color: rgb(250, 144, 144);
                             border-color: rgb(255, 197, 197);
                         }
 

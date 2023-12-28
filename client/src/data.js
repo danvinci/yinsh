@@ -532,7 +532,7 @@ function init_scoring_slots(){
 
         // create paths and add them to the global array
         let slot_path = new Path2D();
-            slot_path.arc(s_point_x, s_point_y, S*0.35, 0, 2*Math.PI);
+            slot_path.arc(s_point_x, s_point_y, S*0.3, 0, 2*Math.PI);
 
         // score can be 1 -> 3, fill slot accordingly as we go through them
         const _score_flag = local_score >= k ? true : false;
@@ -558,7 +558,7 @@ function init_scoring_slots(){
 
         // create paths and add them to the global array
         let slot_path = new Path2D();
-            slot_path.arc(s_point_x, s_point_y, S*0.35, 0, 2*Math.PI);
+            slot_path.arc(s_point_x, s_point_y, S*0.3, 0, 2*Math.PI);
 
         // score can be 1 -> 3, fill slot accordingly as we go through them (negative)
         const _score_flag = oppon_score >= k ? true : false;
@@ -1014,7 +1014,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
                     let h_path = new Path2D()
 
                     const hot_flag = (r_id == sel_ring) ? true : false;
-                    const shape_diam = (r_id == sel_ring) ? S*0.19 : S*0.12;
+                    const shape_diam = (r_id == sel_ring) ? S*0.19 : S*0.13;
 
                     h_path.arc(d_zone.loc.x, d_zone.loc.y, shape_diam, 0, 2*Math.PI);
 

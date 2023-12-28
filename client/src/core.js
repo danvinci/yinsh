@@ -40,7 +40,7 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
     // action codes
     const CODE_action_play = 'play'
     const CODE_action_wait = 'wait'
-    const CODE_end_game = 'eng_game'
+    const CODE_action_end_game = 'end_game'
 
     // window resizing -> canvas and object adjustments
     window.addEventListener("resize", window_resize_handler);
@@ -48,10 +48,8 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
     // game termination by user (via UI)
     core_et.addEventListener('game_exited', game_exit_handler, false);
 
-    // handler for random tests
-    core_et.addEventListener('test_triggered', text_exec_handler, false);
-
-
+    // handler for tests triggered from the UI
+    core_et.addEventListener('test_triggered', text_exec_from_ui_handler, false);
 
 
 //////////// FUNCTIONS FOR INITIALIZING GAMES (NEW or JOIN)
@@ -182,14 +180,14 @@ async function server_actions_handler (event) {
         // replay move by opponent (if we have delta data)
         await replay_opponent_move();
 
-        // handle scoring by opponent if necessary (multiple rows too, FUUUCK) :|
-        // TODO
-
         // prepare data, objects, and canvas for next turn
         prep_next_turn(event.detail.turn_no);
 
         // -> start player's turn
         turn_start(); 
+
+        // handle scoring by opponent if necessary - multiple rows too, FUUUCK :( 
+        // TODO
 
         // from here on, it should go to the client turn manager
         enableInteraction();
@@ -212,16 +210,38 @@ async function server_actions_handler (event) {
 
         ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Wait for your opponent` }));
 
-    } else if (_next_action == CODE_action_end_game) {
 
-        // handling case of winning/losing move
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You win! :)` }));
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You lose! :(` }));
-        ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
+    } else if (_next_action == CODE_action_end_game) { // handling case of winning/losing game
 
-        // trigger winning animation (?)
+        disableInteraction(); 
+        console.log("LOG - GAME COMPLETED");
+
+        // replay move by opponent (if we have delta data)
+        await replay_opponent_move();
+        refresh_canvas_state(); 
+
+        const winning_player = event.detail.won_by;
+        const win_reason = event.detail.won_why;
+        const _player_id = get_player_id();
+
+        // local player wins 
+        if (winning_player == _player_id){
+            
+            // trigger winning animation (?)
+
+            if (win_reason == "resign") {
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent resigned. You win! :)` }));
+            } else { // winning by score
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You win! :)` }));
+            };
+
+        } else {
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You lose! :(` }));
+        };
 
         // reset UI
+        ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
+
     };
 };
 
@@ -246,7 +266,7 @@ async function replay_opponent_move(){
     if (typeof yinsh.delta !== "undefined") {
 
         console.log(`USER - Replaying opponent's move`);
-        //ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent is moving` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent is moving` }));
 
         const replay_start_time = Date.now();
 
@@ -295,10 +315,10 @@ async function replay_opponent_move(){
 
             markersRemoved_play_sound(); // play sound
 
-            _score_ring_wait = 1300;
-            await sleep(_score_ring_wait);
+            //// RING SCORING
 
-            // ring scoring
+            _score_ring_wait = 650;
+            await sleep(_score_ring_wait);
 
             // move picked ring on top (need for animation)
             const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == yinsh.delta.scoring_ring);
@@ -328,11 +348,8 @@ async function replay_opponent_move(){
 
             ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
 
-
         };
             
-        // TODO: add animation + sound + UI text for scoring replay
-
         // total sleep time
         const _tot_sleep_time = array_sum([_marker_add_wait, _ring_move_wait, _flip_wait, _score_mk_wait, _score_mk_wait, _score_ring_wait])
         const _tot_time = Date.now() - replay_start_time;
@@ -341,8 +358,11 @@ async function replay_opponent_move(){
         // log replay done
         console.log(`LOG - Move replay time - Total: ${_tot_time}ms - Net: ${_net_time}ms`);
 
-    };
+        // wipe clean delta data once used
+        // avoids issues when replaying_opponent_move in winning scenarios: serverJS only saves new data if it has delta, so on winning move it will mess up trying to replay past delta
+        delete yinsh.delta;
 
+    };
 };
 
 // update current/next data -> reinit/redraw everything (on-canvas nothing should change)
@@ -589,8 +609,7 @@ async function ringDrop_handler (event) {
                                     end: drop_loc_index,
                                     mk_sel_pick: scoring_mk_sel_picked, // default to -1
                                     ring_removed: scoring_ring_picked, // defaults to -1
-                                    completed_turn_no: _played_turn_no,
-                                    random_field_test: "helllo"
+                                    completed_turn_no: _played_turn_no
                                 }; 
 
             // turn completed -> notify server with info on scenario
@@ -785,7 +804,7 @@ function ring_sel_hover_handler (event) {
     };
 };
 
-function text_exec_handler(){
+function text_exec_from_ui_handler(){
 
     enableInteraction();
 

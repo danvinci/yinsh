@@ -17,7 +17,7 @@ import { save_first_server_response, save_next_server_response, get_game_id, get
 
 // how to reach endpoint
 
-//const ws_complete_address = `ws://localhost:5555`; // local test address
+// const ws_complete_address = `ws://localhost:6092`; // local test address
 const ws_complete_address = "wss://yinsh.net/api" 
 
 
@@ -396,19 +396,17 @@ export async function server_ws_advance_game(scenario_pick = false){
 
 function _handler_next_action_data(server_response_data) {
 
-    // save/overwrite data only if we have turn information data (eg. turn_no key)
-    if ("turn_no" in server_response_data) {
-
-        // save server response data, but only if not push
+    // save/overwrite data only if we have turn information data 
+    if ("delta" in server_response_data) {
         save_next_server_response(server_response_data);
-
     };
-    
-    console.log(`TEST - server response data`, server_response_data);
-    console.log(`TEST - current turn number`, get_current_turn_no());
 
-     // dispatch event for core game logic
-     core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: server_response_data }));
+    console.log(`SERVER TEST - server response data`, server_response_data);
+    console.log(`SERVER TEST - current turn number`, get_current_turn_no());
+
+    // dispatch event for core game logic
+    core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: server_response_data }));
+
 
 };
 

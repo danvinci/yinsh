@@ -1625,13 +1625,16 @@ function gen_newGame(vs_ai=false)
 						:orig_player_id => ORIG_player_id,
 						:join_player_id => JOIN_player_id,
 						:init_dateTime => now(),
-						:status => game_status)
+						:status => game_status,
+						:end_dateTime => now(),
+						:won_by => :undef,
+						:won_why => :undef)
 	
 		# logs of game messages (one per player)
 		_players = Dict(:orig_player_status => :not_available,
 						:join_player_status => (vs_ai ? :ready : :not_available),
-						:orig_player_comms => [], 
-						:join_player_comms => [])
+						:orig_player_score => 0, 
+						:join_player_score => 0)
 		
 		# first game state (server format)
 		_srv_states = [_game_state]
@@ -1770,7 +1773,7 @@ begin
 	
 	# ip and port to use for the server
 	ws_ip = "0.0.0.0" # listen on every ip / host ip
-	ws_port = 6091
+	ws_port = 6092
 
 end
 
@@ -1835,9 +1838,6 @@ function msg_dispatcher(ws, msg_id, msg_code, payload = Dict(), _status::Bool = 
 
 end
 
-# ╔═╡ befb251e-563e-4927-b504-40f22b9470f4
-ws_messages_log
-
 # ╔═╡ 612a1121-b672-4bc7-9eee-f7989ac27346
 function update_ws_handler!(game_id::String, ws, is_orig_player::Bool)
 
@@ -1849,12 +1849,10 @@ function update_ws_handler!(game_id::String, ws, is_orig_player::Bool)
 		
 		# understand necessary key  
 		_dict_key = is_orig_player ? :orig_player_ws : :join_player_ws
-
-		# update existing value
+		
 		games_log_dict[game_id][:ws_connections][_dict_key] = ws
 
 		println("LOG - WS handler updated for $_dict_key")
-		
 	
 	catch 
 		throw(error("ERROR retrieving game data when updating WS handler"))
@@ -1926,30 +1924,42 @@ function fn_join_game(ws, msg)
 
 end
 
-# ╔═╡ 3294f66d-359c-4aea-a41e-611c01c4dc7e
-ws_messages_log
-
-# ╔═╡ 6cc8be77-a911-4119-a709-fd1ad3e2f667
-ws_messages_log
+# ╔═╡ d366e475-6679-48d5-a599-cfc68aa1cbdd
+games_log_dict["1kevO5"]
 
 # ╔═╡ 384e2313-e1c7-4221-8bcf-142b0a49bff2
-function _is_playing_next(game_id::String, _player_id::String)
+function _is_playing_next(game_id::String, _player_id::String)::Bool
+# returns false if error
 
+	try
 
-	_game_data = get(games_log_dict, game_id, nothing)
-
-	if !isnothing(_game_data)
-
-		_current_turn = _game_data[:turns][:current]
-		_moving_player = _game_data[:turns][:data][_current_turn][:moving_player]
+		_current_turn = games_log_dict[game_id][:turns][:current]
+		_moving_player = games_log_dict[game_id][:turns][:data][_current_turn][:moving_player]
 
 		return _moving_player == _player_id
 
-	else
-
+	catch
+		println("ERROR - _is_playing_next fn, data for g_id $game_id can't be located")
 		return false
 	end
 
+end
+
+# ╔═╡ 5d6e868b-50a9-420b-8533-5db4c5d8f72c
+function is_human_playing_next(game_id::String)::Bool
+# human is always the originator
+
+	try
+		_originator_id = games_log_dict[game_id][:identity][:orig_player_id]
+		
+		return _is_playing_next(game_id, _originator_id)
+
+	catch
+
+		println("ERROR - is_human_playing_next fn, data for g_id $game_id can't be located")
+		return false
+
+	end
 end
 
 # ╔═╡ c77607ad-c11b-4fd3-bac9-6c43d71ae932
@@ -1974,7 +1984,7 @@ function set_turn_closed!(game_code::String, turn_no::Int)
 end
 
 # ╔═╡ 92a20829-9f0a-4ed2-9fd3-2d6560514e03
-function advance_turn!(game_code::String, completed_turn_no::Int)
+function advance_turn!(game_code::String, completed_turn_no::Int)::Dict
 # this function manages turns across :open -> :closed
 # closes indicated turn and creates new one
 # returns dict of new turn data
@@ -1991,7 +2001,7 @@ function advance_turn!(game_code::String, completed_turn_no::Int)
 
 	if _current_turn_no != completed_turn_no
 
-		throw(error("ERROR - current and completed turn don't match"))
+		throw(error("ERROR - fn advance_turn - current and completed turn don't match"))
 
 	else
 
@@ -2043,6 +2053,19 @@ function check_both_players_ready(game_id)
 
 end
 
+# ╔═╡ 8929062f-0d97-41f9-99dd-99d51f01b664
+function is_game_vs_ai(game_id::String)::Bool
+# checks if game is vs ai/server, if not (or if error) returns false
+	
+	try
+		return games_log_dict[game_id][:identity][:game_type] == :h_vs_ai
+	catch
+		println("ERROR in is_game_vs_ai check: game code $game_id not found")
+		return false
+	end
+
+end
+
 # ╔═╡ 903e103c-ec53-423f-9fe1-99abea55c28d
 function complete_turn!(game_code) # TO BE DELETED
 
@@ -2071,7 +2094,7 @@ function complete_turn!(game_code) # TO BE DELETED
 end
 
 # ╔═╡ ebd8e962-2150-4ada-8ebd-3eba6e29c12e
-function whos_player(game_code::String, player_id::String)
+function whos_player(game_code::String, player_id::String)::Symbol
 
 	try 
 		
@@ -2164,6 +2187,10 @@ end
 
 # ╔═╡ f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 function update_serverStates!(_game_code, _player_id, _scenario_pick)
+# updates server state for game given a scenario by a player 
+# replays move server-side and logs score
+# generates delta payload info
+	
 
 	## extract info payload, convert moves to server indexes
 	_start_index = reshape_in(_scenario_pick[:start])
@@ -2178,7 +2205,6 @@ function update_serverStates!(_game_code, _player_id, _scenario_pick)
 	_scoring_handled = (_mk_sel_pick_cli != _no_scoring_default && 
 						_ring_removed_cli != _no_scoring_default) ? true : false
 
-
 	# neutral value
 	_no_scoring_def_server = CartesianIndex(0,0)
 
@@ -2190,7 +2216,13 @@ function update_serverStates!(_game_code, _player_id, _scenario_pick)
 	
 			_mk_sel_index = reshape_in(_scenario_pick[:mk_sel_pick])
 			_score_ring_index = reshape_in(_scenario_pick[:ring_removed])
+
+			# updates score for player_id
+			_player_type = whos_player(_game_code, _player_id)
+			_player_score_k = _player_type == :originator ? :orig_player_score : :join_player_score
 			
+			games_log_dict[_game_code][:players][_player_score_k] += 1
+					
 		end
 
 	# retrieve old game state and last moving
@@ -2206,7 +2238,7 @@ function update_serverStates!(_game_code, _player_id, _scenario_pick)
 	# extract delta to be logged and passed onto client
 	_delta_client = Dict()
 
-	# differentiate response based on scoring being handled (sucks > to be cleaned)
+	# differentiate response based on scoring being handled (it sucks, to be cleaned)
 	if _scoring_handled
 		_delta_client = Dict(:flip_flag => _new_gs_delta[:flip_flag],
 							:markers_toFlip => _new_gs_delta[:markers_toFlip_cli],
@@ -2231,7 +2263,6 @@ function update_serverStates!(_game_code, _player_id, _scenario_pick)
 	# save delta for client
 	push!(games_log_dict[_game_code][:client_delta], _delta_client)
 	
-	
 
 	println("LOG - Server game state and delta updated")
 
@@ -2250,7 +2281,7 @@ end
 # ╔═╡ a7b92ca8-8a39-4332-bab9-ed612bf24c17
 function fn_nextPlaying_payload(game_code::String)
 # generate payload for next playing player
-# assumes at least one move took place
+# assumes at least a move took place from previous player
 
 	try 
 
@@ -2267,7 +2298,7 @@ function fn_nextPlaying_payload(game_code::String)
 	
 			# append delta to package for client
 			setindex!(_pkg, _client_delta, :delta)
-	
+
 	
 		return _pkg::Dict
 
@@ -2278,6 +2309,99 @@ function fn_nextPlaying_payload(game_code::String)
 	end
 
 end
+
+# ╔═╡ 7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
+function is_game_over_by_score(game_id::String)::Dict
+# checks if one of the players scored 3
+
+	ret = Dict(:end_flag => false, :won_by => :undef, :won_why => :score)
+
+	_orig_player_sk = :orig_player_score
+	_join_player_sk = :join_player_score
+
+	_orig_score = games_log_dict[game_id][:players][_orig_player_sk] 
+	_join_score = games_log_dict[game_id][:players][_join_player_sk] 
+
+	if _orig_score == 3
+		ret[:end_flag] = true
+		ret[:won_by] = games_log_dict[game_id][:identity][:orig_player_id]
+
+	elseif _join_score == 3
+		ret[:end_flag] = true
+		ret[:won_by] = games_log_dict[game_id][:identity][:join_player_id]
+	end
+
+	return ret
+
+end
+
+# ╔═╡ 42e4b611-abe4-41c4-8f92-ea39bb928122
+function is_game_over_by_resign(game_id::String)::Dict
+# checks if one of the players abandoned game
+
+	ret = Dict(:end_flag => false, :won_by => :undef, :won_why => :resign)
+
+	_orig_player_sk = :orig_player_status
+	_join_player_sk = :join_player_status
+
+	_orig_status = games_log_dict[game_id][:players][_orig_player_sk] 
+	_join_status = games_log_dict[game_id][:players][_join_player_sk] 
+
+	if _orig_status == "resigned"
+		ret[:end_flag] = true
+		ret[:won_by] = games_log_dict[game_id][:identity][:join_player_id]
+
+	elseif _join_status == "resigned"
+		ret[:end_flag] = true
+		ret[:won_by] = games_log_dict[game_id][:identity][:orig_player_id]
+	end
+
+	return ret
+
+end
+
+# ╔═╡ 20a8fbe0-5840-4a70-be33-b4103df291a1
+function update_game_end!(game_id::String)::Dict
+# checks if game is over or not, either by scoring or resign by one of the players
+# marks reason in game log - who won, reason (score vs resign), and end time 
+
+	_def_ret = Dict(:end_flag => false)
+
+	_end_check_by_score = is_game_over_by_score(game_id)
+	_end_check_by_resign = is_game_over_by_resign(game_id)
+
+	if _end_check_by_score[:end_flag] 
+
+		games_log_dict[game_id][:identity][:won_by] = _end_check_by_score[:won_by]
+		games_log_dict[game_id][:identity][:won_why] = :score
+		games_log_dict[game_id][:identity][:end_dateTime] = now()
+		games_log_dict[game_id][:identity][:status] = :completed
+
+		println("SRV - Game $game_id completed")
+		
+		return _end_check_by_score
+
+	elseif _end_check_by_resign[:end_flag] 
+
+		games_log_dict[game_id][:identity][:won_by] = _end_check_by_resign[:won_by]
+		games_log_dict[game_id][:identity][:won_why] = :resign
+		games_log_dict[game_id][:identity][:end_dateTime] = now()
+		games_log_dict[game_id][:identity][:status] = :completed
+
+		println("SRV - Game $game_id completed")
+
+		return _end_check_by_resign
+
+	else
+
+		return _def_ret
+	
+	end
+
+end
+
+# ╔═╡ af06f8dd-968b-43f9-9305-37ccc7c9e11a
+update_game_end!("sqc6OO")[:end]
 
 # ╔═╡ 8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 function get_last_turn_details(game_code::String)
@@ -2489,65 +2613,157 @@ function game_runner(msg)
 	_game_code = msg[:game_id]
 	_player_id = msg[:player_id]
 	_who = whos_player(_game_code, _player_id) # :originator || :joiner
-	_game_type = games_log_dict[_game_code][:identity][:game_type]
+	_game_vs_ai_flag = is_game_vs_ai(_game_code)
 
 	# update player status -> marked as ready anytime they ping
-	# should be a continuous thing to handle disconnections ?
 	mark_player_ready!(_game_code, _who)
 
 	_scenario_pick = msg[:scenario_pick] # false || start/end/mk_sel/ring_pick
 
-	println("Scenario pick: ", _scenario_pick)
+	println("SRV Runner - scenario pick: ", _scenario_pick)
 
-	println("TEST RUNNER _ 0")
-
-	# empty payload for playing player (+ turn info)
-	_PLAY_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_play)
-	# empty payload for waiting player
-	_WAIT_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_wait)
+	# empty dict to be used for end game checks, set to false as default
+	_end_check = Dict(:end_flag => false)
 
 
-	println("TEST RUNNER _ 1")
-		
-		# reflect scenario choice into server data
-		if _scenario_pick != false
+	## EMPTY RESPONSE PAYLOADS
 	
+		# template payload for playing player (+ turn info)
+		_PLAY_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_play)
+		
+		# template payload for waiting player
+		_WAIT_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_wait)
+		
+		# template payload in case game ends
+		_END_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_end_game)
+	
+		# empty responses for CALLER / OTHER
+		_caller_pld = Dict()
+		_other_pld = Dict()
+
+	
+	## REFLECT LAST MOVE
+		if _scenario_pick != false
+		
 			# update server state & generates delta for move replay
 			update_serverStates!(_game_code, _player_id, _scenario_pick)
 			
 			# move turn due to scenario being picked
 			advance_turn!(_game_code, _scenario_pick[:completed_turn_no])
 
-			merge!(_PLAY_payload, fn_nextPlaying_payload(_game_code))
+				# check if game is over after last move
+				_end_check = update_game_end!(_game_code)
+				println("SRV - end check $_end_check")
+				
+				if _end_check[:end_flag]
 
-			# add turn information
-			setindex!(_PLAY_payload, get_last_turn_details(_game_code)[:turn_no], :turn_no)
+					# add ending info to template payload
+					merge!(_END_payload, _end_check)
 
-		end
+					# inform both players with same base payload (END)
+					_PLAY_payload = copy(_END_payload)
+					_WAIT_payload = copy(_END_payload)
 
-	println("TEST RUNNER _ 2")
+				end
+			
+			if !_game_vs_ai_flag # human vs human games (just pass on changes)
+
+				# generate payload for next moving player
+				merge!(_PLAY_payload, fn_nextPlaying_payload(_game_code))
 		
-	# empty responses for CALLER / OTHER
-	_caller_pld = Dict()
-	_other_pld = Dict()
+				# add turn information
+				setindex!(_PLAY_payload, get_last_turn_details(_game_code)[:turn_no], :turn_no)
 
-
-	# if both players ready -> who starts ? -> reply accordingly
-	if check_both_players_ready(_game_code)
-
-		# check if the caller is who plays next
-		_caller_plays = _is_playing_next(_game_code, _player_id)
-
-		# assigns payloads accordingly
-		_caller_pld = _caller_plays ? _PLAY_payload : _WAIT_payload
-		_other_pld = _caller_plays ? _WAIT_payload : _PLAY_payload 
+			end
+		end
 	
-	
-	else # both players not ready, tell the caller to wait
 
-		_caller_pld = _WAIT_payload
+	## HANDLE PLAY AND RESPONSES 
+		if _game_vs_ai_flag # vs AI, make AI play and pass changes to human
+
+			if is_human_playing_next(_game_code) # human plays current turn
+				
+				println("SRV - HUMAN plays next, just passing on changes")
+
+				# add turn information
+				setindex!(_PLAY_payload, get_last_turn_details(_game_code)[:turn_no], :turn_no)
+
+				# inform human it's their turn
+				_caller_pld = _PLAY_payload
+				
+			else # AI plays current turn
+				
+				println("SRV - AI plays")
+
+				if _end_check[:end_flag] # AI loses
+
+					# alter caller payload, PLAY was modified at first end_check
+					_caller_pld = _PLAY_payload
+
+				else # AI moves
+
+					_ai_player_id = get_last_moving_player(_game_code)
+
+					# make a move - last moving player should be AI
+					_pick = play_turn_AI(_game_code, _ai_player_id)
+					
+					# sync server data
+					update_serverStates!(_game_code, _ai_player_id, _pick)
 	
-	end
+					# mark turn completed
+					_no_turn_played_by_ai = get_last_turn_details(_game_code)[:turn_no]
+
+					
+					# re-check if last AI play ended game
+					_end_check = update_game_end!(_game_code)
+					println("SRV - end check $_end_check")
+				
+					if _end_check[:end_flag] # AI beats human w/ last move
+	
+						# add ending info to template payload
+						merge!(_END_payload, _end_check)
+	
+						# alter base payload
+						_PLAY_payload = copy(_END_payload)
+
+					else
+
+						# prep new turn for human
+						advance_turn!(_game_code, _no_turn_played_by_ai)
+						_new_turn_info = get_last_turn_details(_game_code)[:turn_no]
+
+						# add turn information
+						setindex!(_PLAY_payload, _new_turn_info, :turn_no)
+						
+					end 
+
+					
+					# prepare payload for client (delta information)
+					merge!(_PLAY_payload, fn_nextPlaying_payload(_game_code))
+
+					# alter called payload
+					_caller_pld = _PLAY_payload
+				end
+			end
+
+		else # vs HUMAN, just handle payload swap - payload generated before
+
+			# if both players ready -> who starts ? -> reply accordingly
+			if check_both_players_ready(_game_code) 
+	
+				# check if the caller is who plays next
+				_caller_plays = _is_playing_next(_game_code, _player_id)
+		
+				# assigns payloads accordingly
+				_caller_pld = _caller_plays ? _PLAY_payload : _WAIT_payload
+				_other_pld = _caller_plays ? _WAIT_payload : _PLAY_payload 
+			
+			else # both players not ready, tell the caller to wait
+				_caller_pld = _WAIT_payload
+			end
+
+		end		
+
 
 
 	# return CALLER and OTHER payload
@@ -2558,9 +2774,9 @@ end
 # ╔═╡ ca346015-b2c9-45da-8c1e-17493274aca2
 function fn_advance_game(ws, msg)
 # human client asking to advance the game status (either ready or just made a move)
-
+	
 	try 
-
+		
 		# is this orig or joiner ?
 		_who = whos_player(msg[:game_id], msg[:player_id])
 		_is_originator = (_who == :originator) ? true : false
@@ -2572,7 +2788,7 @@ function fn_advance_game(ws, msg)
 		_resp_caller, _resp_other = game_runner(msg)
 	
 		return _resp_caller, _resp_other
-
+	
 
 	catch e
 
@@ -2592,7 +2808,6 @@ begin
 									)
 
 
-
 	# array of codes
 	allowed_CODES = collect(keys(codes_toFun_match))
 
@@ -2604,7 +2819,6 @@ function msg_handler(ws, msg, msg_log)
 # handles messages depending on their code
 # every incoming message should have an id and code - if they're missing, throw error
 
-	
 	# save incoming message
 	setindex!(msg, "received", :type)
 	push!(msg_log, msg)
@@ -2614,11 +2828,10 @@ function msg_handler(ws, msg, msg_log)
 	_msg_code = get(msg, :msg_code, nothing)
 
 
-	# if they're present and valid, do something
+	# if messages are valid, run matching function 
 	if !isnothing(_msg_id) && (_msg_code in allowed_CODES)
 
 		try
-
 
 			# all functions return two dictionaries
 			_pld_caller, _pld_other = codes_toFun_match[_msg_code](ws, msg)
@@ -2626,8 +2839,9 @@ function msg_handler(ws, msg, msg_log)
 				# reply to caller, including code-specific response
 				msg_dispatcher(ws, _msg_id, _msg_code, _pld_caller)
 				
-			# reply to other, if payload is not empty, assumes game already exists
-			if !isempty(_pld_other)
+			# if payload is not empty, assumes game already exists
+			# game vs other human player, informed with other payload
+			if !isempty(_pld_other) && !is_game_vs_ai(msg[:game_id])
 
 				# game and player id are in the original msg as game exists
 				_game_id = msg[:game_id]
@@ -2642,7 +2856,6 @@ function msg_handler(ws, msg, msg_log)
 				_ws_other = get_ws_handler(_game_id, _other_identity_flag)
 
 				msg_dispatcher(_ws_other, _msg_id, _msg_code, _pld_other)
-
 			
 			end
 
@@ -2947,22 +3160,18 @@ md"#### Open issues "
 #=
 
 - timeout/connection closed when game starts -> handle gracefully
-- redesign UI from scratch (check battleship game for model) http://en.battleship-game.org
 -- configure it to work with invitation
 - config for sound and placement helper 
-- rings don't have reserved place
 - game doesn't end when 3 rings are taken
 - handling of scoring
-- textual cues
 - last-move replay
 - TEST with ngrok
 - opponent scoring for other
 - uniform handling/naming of originator vs joiner
 - way too many hardcoded values everywhere
 - AI doesn't always pick a ring after scoring
-- AI is too annoying in the beginning -> could add rule about placing something first, or experiment with RL and self-play ??
+- AI is too annoying  -> could add rule about placing something first, or experiment with RL and self-play ??
 - clients disconnecting / non-responsive are not handled
-
 
 =#
 
@@ -4127,21 +4336,22 @@ version = "1.4.1+0"
 # ╠═7316a125-3bfe-4bac-babf-4e3db953078b
 # ╠═064496dc-4e23-4242-9e25-a41ddbaf59d1
 # ╠═28ee9310-9b7d-4169-bae4-615e4b2c386e
-# ╠═befb251e-563e-4927-b504-40f22b9470f4
 # ╟─612a1121-b672-4bc7-9eee-f7989ac27346
 # ╟─a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╠═ca346015-b2c9-45da-8c1e-17493274aca2
-# ╠═3294f66d-359c-4aea-a41e-611c01c4dc7e
+# ╠═af06f8dd-968b-43f9-9305-37ccc7c9e11a
 # ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
-# ╠═6cc8be77-a911-4119-a709-fd1ad3e2f667
+# ╠═d366e475-6679-48d5-a599-cfc68aa1cbdd
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
+# ╟─5d6e868b-50a9-420b-8533-5db4c5d8f72c
 # ╟─c77607ad-c11b-4fd3-bac9-6c43d71ae932
 # ╟─b5c7295e-c464-4f57-8556-c36b9a5df6ca
 # ╟─92a20829-9f0a-4ed2-9fd3-2d6560514e03
 # ╟─13eb72c7-ac24-4b93-8fd9-260b49940370
+# ╟─8929062f-0d97-41f9-99dd-99d51f01b664
 # ╟─903e103c-ec53-423f-9fe1-99abea55c28d
 # ╟─f479f1f8-d6fd-4e48-a0f3-447997bc0416
 # ╟─ebd8e962-2150-4ada-8ebd-3eba6e29c12e
@@ -4149,6 +4359,9 @@ version = "1.4.1+0"
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
+# ╟─20a8fbe0-5840-4a70-be33-b4103df291a1
+# ╟─7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
+# ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 # ╟─6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 # ╟─14aa5b7c-9065-4ca3-b0e9-19c104b1854d
