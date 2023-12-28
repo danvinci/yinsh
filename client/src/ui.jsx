@@ -16,7 +16,6 @@ export function GameCanvas() {
   return (
     <canvas id="canvas"></canvas>
   );
-
 }
 
 

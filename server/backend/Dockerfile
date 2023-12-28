@@ -1,5 +1,5 @@
 # start Julia docker image
-FROM julia:1.9.3
+FROM julia:1.10
 
 # name and create working directory
 ENV workdir_name=/yinsh

@@ -613,8 +613,8 @@ function draw_legal_moves_cues(){
 
 
         ctx.globalAlpha = 1; 
-        ctx.strokeStyle = "#668bd2";
-        ctx.fillStyle = "#aaccdd";
+        ctx.strokeStyle = "#4890b6";
+        ctx.fillStyle = "#8ebbd2";
         ctx.lineWidth = 0.5;
 
         for(const cue of _legal_moves_cues){

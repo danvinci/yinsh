@@ -5,7 +5,7 @@
 //////////// IMPORTS
 import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_advance_game} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_player_id, save_next_server_response } from './data.js'
-import { bind_adapt_canvas, reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
+import { bind_adapt_canvas, reorder_rings, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
 import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
@@ -40,6 +40,7 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
     // action codes
     const CODE_action_play = 'play'
     const CODE_action_wait = 'wait'
+    const CODE_end_game = 'eng_game'
 
     // window resizing -> canvas and object adjustments
     window.addEventListener("resize", window_resize_handler);
@@ -211,13 +212,21 @@ async function server_actions_handler (event) {
 
         ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Wait for your opponent` }));
 
-    };
+    } else if (_next_action == CODE_action_end_game) {
 
+        // handling case of winning/losing move
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You win! :)` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You lose! :(` }));
+        ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
+
+        // trigger winning animation (?)
+
+        // reset UI
+    };
 };
 
 
 //////////// UTILS
-
 
 class Task {
     constructor(name, data = {}) {
@@ -378,9 +387,6 @@ async function synthetic_ring_move_drop(moved_ring_details) {
 
     console.log(`LOG - Ring ${_mr_player} picked from index ${_mr_start_index}`);
 
-    // clean up game state for starting position
-    update_game_state(_mr_start_index, "");
-
     // move ring to end of array (top for drawing)
     const _mr_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == _mr_start_index);
     reorder_rings(_mr_index_in_array);
@@ -401,10 +407,6 @@ async function synthetic_ring_move_drop(moved_ring_details) {
     // retrieve ring and its index details
     const dropping_ring = yinsh.objs.rings.at(-1); // last ring
     const dropping_ring_loc_index = dropping_ring.loc.index;
-
-    // update game state
-    const gs_value = dropping_ring.type.concat(dropping_ring.player); // -> RB, RW
-    update_game_state(dropping_ring_loc_index, gs_value);
 
     console.log(`LOG - Ring ${dropping_ring.player} moved to index ${dropping_ring_loc_index}`);
 
@@ -431,9 +433,6 @@ function ringPicked_handler (event) {
     // remove the element and put it back at the end of the array, so it's always drawn last => appears on top of all other rings, useful when moving it
     // we could also move ring to dedicated structure that is drawn last and then put back in, but roughly same copying work
     reorder_rings(index_picked_ring_in_array);
-    
-    // wipe game state for location
-    update_game_state(picked_ring_loc_index, "");
 
     // write start of the currently active move to a global variable
     update_current_move(true, picked_ring_loc_index);
@@ -495,10 +494,6 @@ async function ringDrop_handler (event) {
 
         // drops ring -> update ring loc information 
         updateLoc_last_ring(snap_drop_loc);
-        
-        // update game state
-        // if ring is dropped in same location, this automatically overrides the existing marker (MB/MW)
-        update_game_state(drop_loc_index, gs_value);
 
         // resets data for current move (move is complete/off)
         update_current_move(); // -> important to close the move to prevent side effects
@@ -814,9 +809,8 @@ function game_exit_handler(event){
     // interrupt game -> notify server --> other user is informed by server
 
     // receives formal 'you lost' response from server ?
-
-    // display text to the UI
-    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You lost :(` }));
+        // display text to the UI
+        // ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You resigned and lost :(` }));
 
     // inform UI that game is no longer in progress
     ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
