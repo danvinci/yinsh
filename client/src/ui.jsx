@@ -71,13 +71,20 @@ export function GameSetup() {
 
   // setting var to true so to show option to exit/resign/abandon game
   function game_status_handler(event){
+
+    // 
     if (event.detail == 'game_in_progress') {
       set_game_inProgress(true);
     };
 
     if (event.detail == 'game_exited') {
-      toggle_Play();
+
+      // reset all signals to false, to ensure UI flow is unwrapped
+      set_play(false);
+      set_joinClick(false);
       set_game_inProgress(false);
+      set_exitGame(false);
+
     }; 
   };
 
@@ -148,6 +155,10 @@ export function GameSetup() {
     // handling interaction and resource fetching
     const triggerRequest_joinVS_AI = () => doubleSwitch(set_req_join_VS_AI, req_join_VS_AI);
 
+    function trigger_test_fn(){
+      core_et.dispatchEvent(new CustomEvent('test_triggered'));
+    };
+
 
   return (
     <div class="game_controls">
@@ -164,8 +175,9 @@ export function GameSetup() {
                 <button type="button" class="back_nav_btn" onClick={toggle_Play}>&#9665;</button>
                 <hr class="menu_line"></hr>
                 <button type="button" onClick={triggerRequest_newVSfriend}>NEW game vs Friend</button>
-                <button type="button" onClick={toggle_joinClick}>JOIN game vs Friend </button> 
-                <button type="button" disabled = "true" onClick={triggerRequest_joinVS_AI}>NEW game vs AI (WIP) </button> 
+                <button type="button" onClick={toggle_joinClick}>JOIN game vs Friend</button> 
+                <button type="button" disabled = "true" onClick={triggerRequest_joinVS_AI}>NEW game vs AI (WIP)</button> 
+                {/*<button type="button" onClick={trigger_test_fn}>- test button -</button> */}
               </>}>
 
               <>

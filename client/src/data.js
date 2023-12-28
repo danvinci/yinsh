@@ -172,6 +172,7 @@ export function init_empty_game_objects(){
         _game_objects.current_mk_scoring = {in_progress: false, task_ref: {}}; // referencing task of general score handling
         _game_objects.current_ring_scoring = {in_progress: false, task_ref: {}}; // referencing task of ring picking within score handling
         _game_objects.mk_halos = []; // -> halos objects
+        _game_objects.ring_highlights = []; // -> highlights for rings
 
         _game_objects.player_score = 0; // -> player score 
         _game_objects.opponent_score = 0; // -> opponent score 
@@ -212,6 +213,10 @@ export function save_first_server_response(srv_response_input, joiner=false){
     
     // save to global obj and log
     yinsh.server_data = structuredClone(_server_response);
+    
+    // make local working copy that we can alter, and from which markers/rings will be re-init in case of window resize
+    // this way we can preserve local state without messing with server data
+    yinsh.local_server_data_ref = structuredClone(yinsh.server_data);
 
     console.log('LOG - Server response saved');
     
@@ -245,7 +250,6 @@ export function save_next_server_response(srv_response_input){
     const has_delta = Object.keys(srv_response_input).includes('delta');
     yinsh.delta = has_delta ? structuredClone(srv_response_input.delta) : undefined;
 
-
     console.log('LOG - Next turn data from server saved');
     
 };
@@ -254,18 +258,20 @@ export function save_next_server_response(srv_response_input){
 // updates rings, markers, and scenario tree so to match data for next turn
 export function swap_data_next_turn() {
 
-    // rings
-    yinsh.server_data.rings = structuredClone(yinsh.next_server_data.rings);
+        // rings
+        yinsh.server_data.rings = structuredClone(yinsh.next_server_data.rings);
 
-    // markers
-    yinsh.server_data.markers = structuredClone(yinsh.next_server_data.markers);
+        // markers
+        yinsh.server_data.markers = structuredClone(yinsh.next_server_data.markers);
 
-    // tree
-    yinsh.server_data.scenarioTree = structuredClone(yinsh.next_server_data.scenarioTree);
+        // tree
+        yinsh.server_data.scenarioTree = structuredClone(yinsh.next_server_data.scenarioTree);
 
-    // turn number
-    yinsh.server_data.turn_no = yinsh.next_server_data.turn_no;
+        // turn number
+        yinsh.server_data.turn_no = yinsh.next_server_data.turn_no;
 
+    // make local working copy
+    yinsh.local_server_data_ref = structuredClone(yinsh.server_data);
 
     console.log('LOG - Data ready for next turn');
 
@@ -350,14 +356,6 @@ export function increase_player_score(){
     return yinsh.objs.player_score;
 };
 
-function fill_scoring_slot(s) {
-
-    let new_s = s
-    new_s.filled = true;
-
-    return new_s
-};
-
 
 export function increase_opponent_score(){
 
@@ -370,6 +368,15 @@ export function increase_opponent_score(){
 
     return yinsh.objs.opponent_score;
 };
+
+// mark slot as filled and put ring shape in it
+function fill_scoring_slot(s) {
+
+    let new_s = s
+        new_s.filled = true;
+    return new_s
+};
+
 
 
 // resolves task-promises so that they can return a value to the task initiator
@@ -498,6 +505,8 @@ function init_scoring_slots(){
     const _this_player_slot_name = "this_player";
     const _opponent_slot_name = "opponent"; // get other id 
 
+    const local_score = get_player_score();
+    const oppon_score = get_opponent_score();
 
     // recovering S & H constants for drawing
     const S = yinsh.drawing_params.S;
@@ -515,7 +524,7 @@ function init_scoring_slots(){
     - pick bottom/left point and draw 3 in a row, rightward (this player)
     */
 
-    // bottom left slots
+    // bottom left slots (local player)
     for (let k = 1; k <=3; k++){
 
         const s_point_x = _start_BL_point.x + k*1.05*S; // goes rightward
@@ -525,12 +534,15 @@ function init_scoring_slots(){
         let slot_path = new Path2D();
             slot_path.arc(s_point_x, s_point_y, S*0.35, 0, 2*Math.PI);
 
+        // score can be 1 -> 3, fill slot accordingly as we go through them
+        const _score_flag = local_score == k ? true : false;
+
         const _bl_slot = {  x: s_point_x, 
                             y: s_point_y,  
                             path: slot_path,
                             slot_no: k,
                             player: _this_player_slot_name,
-                            filled: false
+                            filled: _score_flag
                         }
 
         // push object to temp array
@@ -548,12 +560,15 @@ function init_scoring_slots(){
         let slot_path = new Path2D();
             slot_path.arc(s_point_x, s_point_y, S*0.35, 0, 2*Math.PI);
 
+        // score can be 1 -> 3, fill slot accordingly as we go through them (negative)
+        const _score_flag = oppon_score == k ? true : false;
+
         const _tr_slot = {  x: s_point_x, 
                             y: s_point_y, 
                             path: slot_path,
                             slot_no: k,
                             player: _opponent_slot_name,
-                            filled: false
+                            filled: _score_flag
                         }
 
         // push object to temp array
@@ -565,6 +580,18 @@ function init_scoring_slots(){
     yinsh.objs.scoring_slots = _scoring_slots;
     console.log('LOG - Scoring slots initialized')
     
+};
+
+// return coordinates of first free slot for either current player or opponent
+// caller is responsible for ensuring conditions for this function to always return x,y = i.e. score <=3
+export function get_coord_free_slot(this_player = true){
+
+    const _player = this_player == true ? "this_player" : "opponent"; 
+
+    const _slot = yinsh.objs.scoring_slots.find(s => s.player == _player && s.filled == false);
+
+    return {x: _slot.x, y:_slot.y}
+
 };
 
 
@@ -604,8 +631,8 @@ function init_rings(){
 
     try {
 
-        // initial locations of rings from server
-        const server_rings = yinsh.server_data.rings; 
+        // initial locations of rings from server (use local working copy)
+        const server_rings = yinsh.local_server_data_ref.rings; 
 
         // constants used in logic
         const ring_id = yinsh.constant_params.ring_id;
@@ -663,7 +690,7 @@ function init_markers(){
     try {
 
         // initial locations of rings from server
-        const server_markers = yinsh.server_data.markers; 
+        const server_markers = yinsh.local_server_data_ref.markers; 
 
         // constants used in logic
         const marker_id = yinsh.constant_params.marker_id;
@@ -814,6 +841,9 @@ export function remove_markers(mk_indexes_array){ // input is array of loc index
     // updates global object
     yinsh.objs.markers = _markers.filter(m => !mk_indexes_array.includes(m.loc.index));
 
+    // update local working data ref (keep all markers which id is not included in markers to be removed)
+    yinsh.local_server_data_ref.markers = yinsh.local_server_data_ref.markers.filter(m => !mk_indexes_array.includes(m.id));
+
     // cleans game_state copy at selected indexes
     mk_indexes_array.forEach( (index) => {
 
@@ -842,6 +872,9 @@ export function remove_ring_scoring(ring_loc_index){
 
     // updates global object -> remove picked ring
     yinsh.objs.rings = _rings.filter(r => r.loc.index != ring_loc_index);
+
+    // update local working data ref
+    yinsh.local_server_data_ref.rings = yinsh.local_server_data_ref.rings.filter(r => r.id != ring_loc_index);
 
     // cleans game_state copy at selected indexes
     if (_game_state[ring_loc_index].includes(_ring_id)) {
@@ -999,3 +1032,44 @@ export function update_mk_halos(mk_ids = [], hot_flag = false){
  
 };
 
+
+// creates and destroys highlight inside rings for cueing/selection in scoring
+// assumes that we either have all cold or all cold with 1 hot highlight
+export function update_ring_highlights(rings_ids = [], sel_ring = -1){
+
+    // empty inner var
+    let _ring_highlights = [];
+        
+    if (rings_ids.length > 0) {
+
+        // drawing param
+        const S = yinsh.drawing_params.S;
+        
+        // retrieve drop zones
+        const _drop_zones = yinsh.objs.drop_zones;
+        
+        for (const r_id of rings_ids) {
+
+            // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
+            for(const d_zone of _drop_zones){
+                if (d_zone.loc.index == r_id) {
+
+                    // create shape + coordinates and store in the global array
+                    let h_path = new Path2D()
+
+                    const hot_flag = (r_id == sel_ring) ? true : false;
+                    const shape_diam = (r_id == sel_ring) ? S*0.19 : S*0.11;
+
+                    h_path.arc(d_zone.loc.x, d_zone.loc.y, shape_diam, 0, 2*Math.PI);
+
+                    _ring_highlights.push({path: h_path, hot: hot_flag});
+            
+                };
+            };  
+        };      
+    };
+
+    // acts as a reset function if arguments stay as default
+    yinsh.objs.ring_highlights = _ring_highlights;
+ 
+};

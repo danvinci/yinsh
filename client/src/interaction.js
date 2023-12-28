@@ -88,10 +88,10 @@ function mouseDown_handler (event) {
         } else if (mk_scoring_in_progress == false && ring_scoring_in_progress == true){
 
             // retrieve array of rings
-            const _rings = yinsh.objs.rings;
+            const _player_rings = yinsh.objs.rings.filter((ring) => (ring.player == player_id));
 
             // check all the rings and dispatch event to core logic if match found for local player
-            const picked_ring = _rings.find((ring) => (ring.player == player_id && ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)));
+            const picked_ring = _player_rings.find((ring) => (ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)));
             if (typeof picked_ring !== 'undefined') {
                 core_et.dispatchEvent(new CustomEvent('ring_picked_scoring', { detail: picked_ring.loc.index }));
             };
@@ -106,6 +106,9 @@ function mouseMove_handler (event) {
 
     if (canvas_interaction_flag) { // works only if interaction is allowed
 
+        // retrieve current player 
+        const player_id = get_player_id();
+
         // get relative mouse position
         const mousePos = getMousePos(canvas, event);
         //console.log("move");
@@ -117,7 +120,6 @@ function mouseMove_handler (event) {
         const mk_scoring_in_progress = get_task_status('mk_scoring_task'); 
         const ring_scoring_in_progress = get_task_status('ring_scoring_task'); 
             const any_scoring_in_progress = mk_scoring_in_progress || ring_scoring_in_progress;
-
             
         // if a move is underway, dispatch event for moving ring
         if (move_in_progress == true){
@@ -148,6 +150,24 @@ function mouseMove_handler (event) {
                 core_et.dispatchEvent(new CustomEvent('mk_sel_hover_OFF'));
             };
 
+        };
+
+        // mk scoring action is completed but ring scoring is in progress
+        if (mk_scoring_in_progress == false && ring_scoring_in_progress == true){
+
+            // retrieve array of rings
+            const _player_rings = yinsh.objs.rings.filter((ring) => (ring.player == player_id));
+            const _p_rings_ids = _player_rings.map(ring => ring.loc.index);
+
+            // check which ring is being hovered on (find returns either the first or undefined)
+            const hovered_ring = _player_rings.find((ring) => (ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)));
+            
+            // dispatch event accordingly
+            if (typeof hovered_ring !== 'undefined') {
+                core_et.dispatchEvent(new CustomEvent('ring_sel_hover_ON', { detail: {player_rings: _p_rings_ids, hovered_ring: hovered_ring.loc.index }}));
+            } else {
+                core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', {detail: {player_rings: _p_rings_ids}}));
+            };
         };
 
     };

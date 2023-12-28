@@ -1,5 +1,7 @@
 // DRAWING FUNCTIONS
 
+import {get_player_id, get_opponent_id} from './data.js'
+
 // glue function called by orchestrator after data manipulation
 export function refresh_canvas_state(){
 
@@ -29,6 +31,7 @@ export function refresh_canvas_state(){
         
         // Draw markers halos (score handling)
         draw_markers_halos();
+        draw_rings_highlight();
 
         // logging time 
         //console.log(`LOG - Drawing time: ${Date.now() - painting_start_time}ms`);
@@ -258,79 +261,174 @@ function draw_scoring_slots(){
     // retrieve scoring slots data
     const _scoring_slots = yinsh.objs.scoring_slots;
 
-    const _empty_score_color = "#e1e7f5";
-    const _filled_score_color = "#2d4d89";
+    const player_black_id = yinsh.constant_params.player_black_id;
+    const player_white_id = yinsh.constant_params.player_white_id;
 
-    // drawing
-    ctx.save();
+    const _local_player = "this_player";
+    const _oppon_player = "opponent";
 
-        for(const slot of _scoring_slots){
+    const S = yinsh.drawing_params.S;
 
-            if (slot.filled == false) {
+    const _empty_score_color = "#d3dbf0";
+    // const _filled_score_color = "#2d4d89"; // not used anymore, we draw ring in place
 
-                ctx.globalAlpha = 0.1; 
+    for(const slot of _scoring_slots){
+
+        if (slot.filled == false) {
+
+            // drawing
+            ctx.save();
+
+                ctx.globalAlpha = 0.15; 
                 ctx.fillStyle = _empty_score_color;
 
                 ctx.fill(slot.path);
 
+            ctx.restore();
+
+        // we call this case only when at least one slot is filled -> we have server data on which player has a given ID/color
+        } else {
+
+            const _local_color_id = get_player_id(); // B, W
+            const _oppon_color_id = get_opponent_id();
+        
+            if (slot.player == _local_player) {
+
+                // draw ring  
+                const _ring_spec = {x: slot.x, y: slot.y, id: _local_color_id}
+                draw_rings(_ring_spec);
+
             } else {
-
-                ctx.globalAlpha = 0.45; 
-                ctx.fillStyle = _filled_score_color;
-
-                ctx.fill(slot.path);
+                
+                // draw ring  
+                const _ring_spec = {x: slot.x, y: slot.y, id: _oppon_color_id}
+                draw_rings(_ring_spec);
 
             };
+            
         };
-
-    ctx.restore();
-
+    };
 };
 
 // rings
-function draw_rings(){
+// can also be called as external function by scoring_slots to draw rings in such locations
+function draw_rings(ring_spec = {}){
 
     // const painting_start_time = Date.now()
-    
-    // retrieve rings data (local copy) and other constants
-    let _rings = yinsh.objs.rings;
 
     const player_black_id = yinsh.constant_params.player_black_id;
     const player_white_id = yinsh.constant_params.player_white_id;
 
+    // drawing parameters
     const S = yinsh.drawing_params.S;
+    const inner = S*0.38;
+    const ring_lineWidth = inner/3;
 
-    // starts painting
-    ctx.save();
+    // check for valid input to decide which flow to enact
+    const _ring_spec_flag = ring_spec.hasOwnProperty('x'); 
 
-        // reading from local copy
-        for (let ring of _rings) {
+    // draw rings (normally)
+    if (!_ring_spec_flag) {
 
-            let inner = S*0.38;
-            let ring_lineWidth = inner/3;
+        // retrieve rings data (local copy) and other constants
+        let _rings = yinsh.objs.rings;
+
+        // starts painting - normal flow using rings array
+        ctx.save();
+
+            // reading from local copy
+            for (let ring of _rings) {
+
+                // draw black ring
+                if (ring.player == player_black_id){ 
+                    
+                    ctx.strokeStyle = "#1A1A1A";
+                    ctx.lineWidth = ring_lineWidth;            
+                    
+                    let ring_path = new Path2D()
+                        ring_path.arc(ring.loc.x, ring.loc.y, inner, 0, 2*Math.PI);
+                    ctx.stroke(ring_path);
+
+                    // update path shape definition -> needed for rings (click within shape)
+                    ring.path = ring_path;
+            
+                // draw white ring
+                } else if (ring.player == player_white_id){
+
+                    //inner white ~ light gray
+                    ctx.strokeStyle = "#F6F7F6";
+                    ctx.lineWidth = ring_lineWidth*0.9;            
+                    
+                    let ring_path = new Path2D()
+                        ring_path.arc(ring.loc.x, ring.loc.y, inner, 0, 2*Math.PI);
+                    ctx.stroke(ring_path);
+
+                    // outer border
+                    ctx.strokeStyle = "#3D3F3D";
+                    ctx.lineWidth = ring_lineWidth/12; 
+                    
+                    let outerB_path = new Path2D()
+                        outerB_path.arc(ring.loc.x, ring.loc.y, inner*1.15, 0, 2*Math.PI);
+                    ctx.stroke(outerB_path);
+                    
+                    ring_path.addPath(outerB_path);
+
+                    // inner border
+                    ctx.strokeStyle = "#3D3F3D";
+                    ctx.lineWidth = ring_lineWidth/12;  
+
+                    let innerB_path = new Path2D()
+                        innerB_path.arc(ring.loc.x, ring.loc.y, inner*0.85, 0, 2*Math.PI);
+                    ctx.stroke(innerB_path);
+
+                    ring_path.addPath(outerB_path);
+
+                    // update path shape definition
+                    ring.path = ring_path;
+
+                };
+            };
+
+        // save updated rings definitions (with new paths) 
+        // note: structured clone doesn't work for writing into nested objects -> as long as I have a deep copy barrier at the entrance, I should be good
+        yinsh.objs.rings = _rings;
+
+        ctx.restore();
+
+        // console.log(`LOG - ${_rings.length} Rings painted on canvas: ${Date.now() - painting_start_time}ms`);
+    
+    } else { // draw ring as specified
+
+        // retrieve specifications
+        const _ring_x = ring_spec.x;
+        const _ring_y = ring_spec.y;
+        const _ring_id = ring_spec.id;
+
+        // starts painting - special flow using ring specification from scoring slot function
+        ctx.save();
+
+            // rings in scoring slots should look not look available for interaction - playing w/ transparency, not sure if it's good
+            ctx.globalAlpha = 0.85;
 
             // draw black ring
-            if (ring.player == player_black_id){ 
-                
+            if (_ring_id == player_black_id){ 
+                    
                 ctx.strokeStyle = "#1A1A1A";
                 ctx.lineWidth = ring_lineWidth;            
                 
                 let ring_path = new Path2D()
-                    ring_path.arc(ring.loc.x, ring.loc.y, inner, 0, 2*Math.PI);
+                    ring_path.arc(_ring_x, _ring_y, inner, 0, 2*Math.PI);
                 ctx.stroke(ring_path);
 
-                // update path shape definition -> needed for rings (click within shape)
-                ring.path = ring_path;
-        
             // draw white ring
-            } else if (ring.player == player_white_id){
+            } else if (_ring_id == player_white_id){
 
                 //inner white ~ light gray
                 ctx.strokeStyle = "#F6F7F6";
                 ctx.lineWidth = ring_lineWidth*0.9;            
                 
                 let ring_path = new Path2D()
-                    ring_path.arc(ring.loc.x, ring.loc.y, inner, 0, 2*Math.PI);
+                    ring_path.arc(_ring_x, _ring_y, inner, 0, 2*Math.PI);
                 ctx.stroke(ring_path);
 
                 // outer border
@@ -338,35 +436,22 @@ function draw_rings(){
                 ctx.lineWidth = ring_lineWidth/12; 
                 
                 let outerB_path = new Path2D()
-                    outerB_path.arc(ring.loc.x, ring.loc.y, inner*1.15, 0, 2*Math.PI);
+                    outerB_path.arc(_ring_x, _ring_y, inner*1.15, 0, 2*Math.PI);
                 ctx.stroke(outerB_path);
-                
-                ring_path.addPath(outerB_path);
 
                 // inner border
                 ctx.strokeStyle = "#3D3F3D";
                 ctx.lineWidth = ring_lineWidth/12;  
 
                 let innerB_path = new Path2D()
-                    innerB_path.arc(ring.loc.x, ring.loc.y, inner*0.85, 0, 2*Math.PI);
+                    innerB_path.arc(_ring_x, _ring_y, inner*0.85, 0, 2*Math.PI);
                 ctx.stroke(innerB_path);
 
-                ring_path.addPath(outerB_path);
-
-                // update path shape definition
-                ring.path = ring_path;
-
             };
-        };
 
-    // save updated rings definitions (with new paths) 
-    // note: structured clone doesn't work for writing into nested objects -> as long as I have a deep copy barrier at the entrance, I should be good
-    yinsh.objs.rings = _rings;
+        ctx.restore();
 
-    ctx.restore();
-
-    // console.log(`LOG - ${_rings.length} Rings painted on canvas: ${Date.now() - painting_start_time}ms`);
-    
+    };
 };
 
 // markers
@@ -454,7 +539,7 @@ function draw_markers_halos(){
         // to be checked only if any markers halos have been created
         // the whole function is called anyway at each refresh
 
-        ctx.globalAlpha = 0.8; 
+        ctx.globalAlpha = 0.7; 
         ctx.lineWidth = S/10; 
 
         // can paint hot/cold dynamically, for each specific halo's properties
@@ -473,6 +558,45 @@ function draw_markers_halos(){
     ctx.restore();
 
     // console.log(`LOG - ${_mk_halos.length} Markers halos painted on canvas: ${Date.now() - painting_start_time}ms`);
+    
+};
+
+function draw_rings_highlight(){
+
+    // const painting_start_time = Date.now()
+    
+    // retrieve ring highlights data and other constants
+    const _r_high = yinsh.objs.ring_highlights; // the function is called at each refresh, if array is empty nothing happens
+
+    const S = yinsh.drawing_params.S;
+
+    const hot_color = "#4172a4";
+    const cold_color = "#98C1D6";
+
+    
+    ctx.save();
+
+        ctx.globalAlpha = 0.7; 
+
+        // can paint hot/cold dynamically, for each specific halo's properties
+        for(const h of _r_high){
+
+            if (h.hot == true) {
+
+                ctx.fillStyle = hot_color;
+                ctx.fill(h.path); 
+
+            } else {
+
+                ctx.fillStyle = cold_color;
+                ctx.fill(h.path); 
+            };
+            
+        };        
+    
+    ctx.restore();
+
+    // console.log(`LOG - ${_r_high.length} Rings highlights painted on canvas: ${Date.now() - painting_start_time}ms`);
     
 };
 

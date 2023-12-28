@@ -6,7 +6,7 @@
 import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_advance_game} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_player_id, save_next_server_response } from './data.js'
 import { bind_adapt_canvas, reorder_rings, update_game_state, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
-import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no} from './data.js' 
+import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
 import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
@@ -34,6 +34,8 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
     
     // ring scoring
     core_et.addEventListener('ring_picked_scoring', ring_scoring_handler, false);
+    core_et.addEventListener('ring_sel_hover_ON', ring_sel_hover_handler, false);
+    core_et.addEventListener('ring_sel_hover_OFF', ring_sel_hover_handler, false);
 
     // action codes
     const CODE_action_play = 'play'
@@ -44,6 +46,10 @@ import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
 
     // game termination by user (via UI)
     core_et.addEventListener('game_exited', game_exit_handler, false);
+
+    // handler for random tests
+    core_et.addEventListener('test_triggered', text_exec_handler, false);
+
 
 
 
@@ -72,6 +78,7 @@ function window_resize_handler() {
     bind_adapt_canvas();
 
     // regenerate objects using new S/H constants
+    // note -> temp issue with marker halos (need to be re-generated correctly or wiped / will regenerate on 1st hover interaction) + grave issue when handling rings when resizing (as order is changed while moving ring is expected to be on top)
     init_game_objs();
 
     // draw what you have
@@ -137,7 +144,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
 
         // inform the user which color they are
         const _player_id_string = get_player_id() == 'B' ? 'BLACK' : 'WHITE and move first';
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You'll play ${_player_id_string}` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You'll play as ${_player_id_string}` }));
 
         // display code in the text prompt depending on player
         if (originator) {
@@ -152,7 +159,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         // log error
         console.log(`LOG - Game setup ERROR. ${Date.now() - request_start_time}ms`);
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Whoopsie, error while setting up the game.` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Whoopsie, error while setting up the game` }));
 
 
         console.log(err);
@@ -358,35 +365,11 @@ async function synthetic_ring_move_drop(moved_ring_details) {
     const _drop_start = yinsh.objs.drop_zones.find(d => d.loc.index == _mr_start_index);
     const _drop_end = yinsh.objs.drop_zones.find(d => d.loc.index == _mr_end_index);
 
-        const _x_start = _drop_start.loc.x;
-        const _y_start = _drop_start.loc.y;
-
-        const _x_end = _drop_end.loc.x;
-        const _y_end = _drop_end.loc.y;
+        const start = {x:_drop_start.loc.x, y:_drop_start.loc.y};
+        const end = {x:_drop_end.loc.x, y:_drop_end.loc.y};
 
     // animate move via synthetic mouse event
-    const _steps = 30; 
-    let _progress = 0;
-
-    for(let i=1; i <= _steps; i++){ 
-
-        // compute cumulative integral for sin
-        // results in non-linear progress for having ease-in/out effect
-        if (i == _steps) { // force 100% as integral is very approximated
-            _progress = 1;
-        } else {
-            _progress += (Math.sin(Math.PI*((i)/_steps)) * Math.PI/_steps )/2;
-        };
-    
-        const _new_x = _x_start + _progress*(_x_end - _x_start);
-        const _new_y = _y_start + _progress*(_y_end - _y_start);
-
-        await sleep(15);
-
-        const synthetic_mouse_move = {x:_new_x, y:_new_y};
-        core_et.dispatchEvent(new CustomEvent('ring_moved', { detail: synthetic_mouse_move }));
-
-    };
+    await syn_ring_move(start, end, 30, 15);
 
     // update dropping ring loc information 
     updateLoc_last_ring(_drop_end.loc);
@@ -542,7 +525,7 @@ async function ringDrop_handler (event) {
                 const _all_scores = structuredClone(move_scenario.scores_toHandle);
                 const _player_scores = _all_scores.filter(s => s.player == player_id);
 
-                // handle only scoring for current player
+                // handle scoring for current player
                 if (_player_scores.length > 0) {
 
                     console.log("USER - Score!");
@@ -566,7 +549,7 @@ async function ringDrop_handler (event) {
                 } else {
                     console.log("USER - Oh no, you scored for your opponent!");
 
-                    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Oh no, you scored a point for your opponent!` }));
+                    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Oh no, you scored for your opponent!` }));
 
 
                 };  
@@ -670,7 +653,6 @@ function mk_scoring_options_handler(event){
     };
 };
 
-
 // listens to hovering event over sel_markers in scoring rows -> handle highlighting
 function mk_sel_hover_handler (event) {
 
@@ -706,28 +688,90 @@ function mk_sel_hover_handler (event) {
 
 };
 
-// listens for ring to be removed to be picked
-function ring_scoring_handler (event) {
+// listens for scoring ring to be picked
+async function ring_scoring_handler (event) {
 
-    // retrieve index of marker
+    disableInteraction();
+
+    // retrieve index of ring (meant as location)
     const picked_ring_id = event.detail;
 
-    // remove ring and redraw
-    remove_ring_scoring(picked_ring_id);
-    refresh_canvas_state();
+    // move picked ring on top (need for animation)
+    const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == picked_ring_id);
+    reorder_rings(_ring_index_in_array);
 
+    // empty array of rings highlights
+    update_ring_highlights(); 
+
+    // grab start (x,y) coordinates     
+    const _start = yinsh.objs.drop_zones.find(d => d.loc.index == picked_ring_id);
+    const _start_xy = {x:_start.loc.x, y:_start.loc.y};
+
+    // grab end coordinates -> these will be of the scoring slots
+    const _slot_coord = get_coord_free_slot(true);
+    const _end_xy = {x:_slot_coord.x, y:_slot_coord.y};    
+
+    // animate ring move via synthetic mouse event
+    await syn_ring_move(_start_xy, _end_xy, 30, 15);
+    
     // increases player's score by one and fill scoring slot
     const new_player_score = increase_player_score();
     console.log(`LOG - New player score: ${new_player_score}`);
 
+    // refresh canvas (ring is drawn in scoring slot now)
+    // scoring slots call draw_rings function with a ring_spec to draw a ring in their x,y coordinates
     refresh_canvas_state();
-    // play specific sound ??
+
+    // remove ring from rings array 
+    remove_ring_scoring(picked_ring_id);
+    refresh_canvas_state();
 
     // completes ring scoring task
     const success_msg = picked_ring_id; // value to be returned by completed task
     complete_task('ring_scoring_task', success_msg);
 
 };
+
+// listens to hovering event over rings when having to pick a ring for scoring -> handle highlighting
+function ring_sel_hover_handler (event) {
+
+    // CASE: ring sel hovered on -> get darker
+    if (event.type === 'ring_sel_hover_ON') {
+
+        // retrieve players' rings and index of hovered ring
+        const player_rings_ids = event.detail.player_rings;
+        const hovered_ring_id = event.detail.hovered_ring;
+
+        // prepare ring cores objects and refresh canvas
+        update_ring_highlights(player_rings_ids, hovered_ring_id);
+        refresh_canvas_state();
+
+    // CASE: ring sel hovered off -> need to restore baseline highlighting of all rings
+    } else if (event.type === 'ring_sel_hover_OFF') {
+
+        // retrieve indexes of rings for current player
+        const player_rings_ids = event.detail.player_rings;
+
+        // prepare ring cores objects and refresh canvas
+        update_ring_highlights(player_rings_ids);
+        refresh_canvas_state();
+
+    };
+};
+
+function text_exec_handler(){
+
+    enableInteraction();
+
+    console.log('LOG - Test triggered');
+
+    // mark ring selection as true
+    yinsh.objs.current_mk_scoring.in_progress = false;
+    yinsh.objs.current_ring_scoring.in_progress = true;
+
+    // interaction JS should work its magic here
+
+}
 
 /////////// EXITING GAME - prompted by user via UI
 
@@ -746,4 +790,33 @@ function game_exit_handler(event){
     // inform UI that game is no longer in progress
     ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
+};
+
+
+// HELPER FUNCTION
+// animate last ring (ie. on top of canvas) to move between start and end points
+// as the ring is moved, it triggers redraw of the canvas
+async function syn_ring_move(start, end, no_steps, sleep_ms){
+
+    let _progress = 0;
+
+    for(let i=1; i <= no_steps; i++){ 
+
+        // compute cumulative integral for sin
+        // results in non-linear progress for having ease-in/out effect
+        if (i == no_steps) { // force 100% as integral is very approximated
+            _progress = 1;
+        } else {
+            _progress += (Math.sin(Math.PI*((i)/no_steps)) * Math.PI/no_steps )/2;
+        };
+    
+        const _new_x = start.x + _progress*(end.x - start.x);
+        const _new_y = start.y + _progress*(end.y - start.y);
+
+        await sleep(sleep_ms);
+
+        const synthetic_mouse_move = {x:_new_x, y:_new_y};
+        core_et.dispatchEvent(new CustomEvent('ring_moved', { detail: synthetic_mouse_move }));
+
+    };
 };
