@@ -197,8 +197,8 @@ async function server_actions_handler (event) {
         // display code in the text prompt
         ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `It's your turn` }));
 
-        // hide game setup controls on first turn in which the player moves
-        if (get_current_turn_no() == 1) {
+        // hide game setup controls in the first turns in which the player moves
+        if (get_current_turn_no() <= 3) {
             ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_in_progress` }));
             console.log("LOG - Hiding game controls on first playable turn");
         };
@@ -271,6 +271,7 @@ async function replay_opponent_move(){
         let _score_ring_wait = 0;
         if (yinsh.delta.score_handled){
             
+            // markers
             _score_mk_wait = 600;
             await sleep(_score_mk_wait);
             
@@ -287,11 +288,34 @@ async function replay_opponent_move(){
 
             _score_ring_wait = 1300;
             await sleep(_score_ring_wait);
-            remove_ring_scoring(yinsh.delta.scoring_ring); // remove ring
 
-            const new_opponent_score = increase_opponent_score(); // increase opponent score and fill scoring slot
-            refresh_canvas_state();
+            // ring scoring
+
+            // move picked ring on top (need for animation)
+            const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == yinsh.delta.scoring_ring);
+            reorder_rings(_ring_index_in_array);
+
+            // grab start (x,y) coordinates     
+            const _start = yinsh.objs.drop_zones.find(d => d.loc.index == yinsh.delta.scoring_ring);
+            const _start_xy = {x:_start.loc.x, y:_start.loc.y};
+
+            // grab end coordinates -> these will be of the scoring slots for the opponent
+            const _slot_coord = get_coord_free_slot(false);
+            const _end_xy = {x:_slot_coord.x, y:_slot_coord.y};    
+
+            // animate ring move via synthetic mouse event
+            await syn_ring_move(_start_xy, _end_xy, 45, 15);
+            
+            // increases player's score by one and mark scoring slot as filled
+            const new_opponent_score = increase_opponent_score();
             console.log(`LOG - New opponent score: ${new_opponent_score}`);
+
+            // refresh canvas (ring is drawn in scoring slot now)
+            refresh_canvas_state();
+
+            // remove ring from rings array 
+            remove_ring_scoring(yinsh.delta.scoring_ring); // remove ring (scoring ring id)
+            refresh_canvas_state();
 
             ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
 
@@ -541,6 +565,13 @@ async function ringDrop_handler (event) {
                     // turn will be ended by score handling function 
                     core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
                     scoring_mk_sel_picked = await mk_scoring.promise // wait for mk to be picked -> return value of loc_id
+
+                    // highlight rings - need to pass player own rings ids to the function
+                    await sleep(200);
+                    const _player_rings_ids = yinsh.objs.rings.filter((ring) => (ring.player == player_id)).map(ring => ring.loc.index);;
+                    core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', {detail: {player_rings: _player_rings_ids}}));
+                    
+                    // wait for ring to be picked 
                     scoring_ring_picked = await ring_scoring.promise // wait for ring to be picked -> return value of loc_id
                     
                     // wipe tasks data from global refs
@@ -688,7 +719,7 @@ function mk_sel_hover_handler (event) {
 
 };
 
-// listens for scoring ring to be picked
+// listens for scoring ring to be picked, animates its move to the 1st scoring slot and then removes it from the obj array
 async function ring_scoring_handler (event) {
 
     disableInteraction();
@@ -746,7 +777,7 @@ function ring_sel_hover_handler (event) {
         update_ring_highlights(player_rings_ids, hovered_ring_id);
         refresh_canvas_state();
 
-    // CASE: ring sel hovered off -> need to restore baseline highlighting of all rings
+    // CASE: ring sel hovered off -> need to establish/restore baseline highlighting of all rings
     } else if (event.type === 'ring_sel_hover_OFF') {
 
         // retrieve indexes of rings for current player

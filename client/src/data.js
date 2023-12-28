@@ -205,6 +205,9 @@ export function save_first_server_response(srv_response_input, joiner=false){
         // initial rings setup
         _server_response.rings = srv_response_input.rings; 
 
+         // initial markers setup (empty array)
+         _server_response.markers = []; 
+
         // pre-computed scenario tree for each possible move (except pick/drop in same location)
         _server_response.scenarioTree = srv_response_input.scenarioTree;
 
@@ -821,6 +824,12 @@ export function add_marker(loc_index, as_opponent = false){
     // add to temp array and to global object
     _markers.push(m);  
     yinsh.objs.markers = _markers;
+
+    // update local data copy
+    const _new_m = {id: structuredClone(m.loc.index), player: structuredClone(m.player)};
+    yinsh.local_server_data_ref.markers.push(_new_m);
+
+    
     
     // update game state and log change
     update_game_state(m.loc.index, m.type.concat(m.player)); // -> MB, MW at index
@@ -940,15 +949,19 @@ export function getIndex_last_ring(){
 };
 
 
-// update loc information for last ring in the array (picked one)
-// returns loc.index of such ring
+// update loc information for last ring in the array (picked one) in both rings array and local working copy of server data
 export function updateLoc_last_ring(new_loc){
 
-    // retrieve index of last ring in array (about to drop)
-    const id_dropping_ring = getIndex_last_ring();
+    // retrieve index and old index loc of last ring in array (about to drop)
+    const id_dropping_ring_inArray = getIndex_last_ring();
+    const _old_ring_loc_id = structuredClone(yinsh.objs.rings[id_dropping_ring_inArray].loc.index);
 
     // save new location for last ring
-    yinsh.objs.rings[id_dropping_ring].loc = structuredClone(new_loc);
+    yinsh.objs.rings[id_dropping_ring_inArray].loc = structuredClone(new_loc);
+
+    // update ring index also in working copy of server ref data
+    const _index_ring_inArray = yinsh.local_server_data_ref.rings.findIndex(r => r.id == _old_ring_loc_id);
+    yinsh.local_server_data_ref.rings[_index_ring_inArray].id = structuredClone(new_loc.index)
 
 };
 
@@ -1058,7 +1071,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
                     let h_path = new Path2D()
 
                     const hot_flag = (r_id == sel_ring) ? true : false;
-                    const shape_diam = (r_id == sel_ring) ? S*0.19 : S*0.11;
+                    const shape_diam = (r_id == sel_ring) ? S*0.19 : S*0.12;
 
                     h_path.arc(d_zone.loc.x, d_zone.loc.y, shape_diam, 0, 2*Math.PI);
 

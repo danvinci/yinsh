@@ -570,8 +570,8 @@ function draw_rings_highlight(){
 
     const S = yinsh.drawing_params.S;
 
-    const hot_color = "#4172a4";
-    const cold_color = "#98C1D6";
+    const hot_color = "#477cb2";
+    const cold_color = "#8ab9d0";
 
     
     ctx.save();
