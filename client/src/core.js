@@ -320,15 +320,15 @@ async function replay_opponent_move(){
             _score_ring_wait = 650;
             await sleep(_score_ring_wait);
 
-            // move picked ring on top (need for animation)
+            // move scoring ring on top (need for animation)
             const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == yinsh.delta.scoring_ring);
             reorder_rings(_ring_index_in_array);
 
-            // grab start (x,y) coordinates     
+            // grab start (x,y) coordinates   
             const _start = yinsh.objs.drop_zones.find(d => d.loc.index == yinsh.delta.scoring_ring);
             const _start_xy = {x:_start.loc.x, y:_start.loc.y};
 
-            // grab end coordinates -> these will be of the scoring slots for the opponent
+            // grab end coordinates -> these will be of the scoring slots for the opponent (hence input is false)
             const _slot_coord = get_coord_free_slot(false);
             const _end_xy = {x:_slot_coord.x, y:_slot_coord.y};    
 

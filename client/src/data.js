@@ -830,7 +830,7 @@ export function remove_ring_scoring(ring_loc_index){
     // update local working data ref
     yinsh.local_server_data_ref.rings = yinsh.local_server_data_ref.rings.filter(r => r.id != ring_loc_index);
     
-    console.log(`LOG - Ring removed from index: ${ring_loc_index}`);
+    console.log(`LOG - Ring removed from index ${ring_loc_index}`);
     
 };
     

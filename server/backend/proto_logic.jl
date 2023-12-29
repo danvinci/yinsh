@@ -2482,7 +2482,11 @@ function pick_scoring_move(_tree::Dict, _player_id::String)
 				_picked_start = start_m
 				_picked_end = end_m
 				_mk_sel = _score[:mk_sel]
-				_scoring_ring = rand(_rings)
+
+				# pick scoring ring at random
+				# BUT rings have changed due to the move -> swap p_start w/ p_end
+				_post_rings = replace(_rings, _picked_start => _picked_end)
+				_scoring_ring = rand(_post_rings)
 
 				break
 				
@@ -2856,7 +2860,7 @@ function msg_handler(ws, msg, msg_log)
 		catch e
 
 			# reply to client with error
-			msg_dispatcher(ws, _msg_id, _msg_code, Dict(:server_msg => "Error, something went wrong when handling request, $e"), false)
+			msg_dispatcher(ws, _msg_id, _msg_code, Dict(:server_msg => "Error when handling request, $e"), false)
 
 			println("ERROR in msg_handler - $e")
 
@@ -4355,10 +4359,10 @@ version = "1.4.1+0"
 # ╟─7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
 # ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
-# ╟─6a174abd-c9bc-4c3c-93f0-05a7d70db4af
+# ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 # ╟─14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 # ╟─4976c9c5-d60d-4b19-aa72-0e135ad37361
-# ╟─1c970cc9-de1f-48cf-aa81-684d209689e0
+# ╠═1c970cc9-de1f-48cf-aa81-684d209689e0
 # ╟─e6cc0cf6-617a-4231-826d-63f36d6136a5
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 # ╟─5ce26cae-4604-4ad8-8d15-15f0bfc9a81a
