@@ -17,8 +17,9 @@ import { save_first_server_response, save_next_server_response, get_game_id, get
 
 // how to reach endpoint
 
-const ws_complete_address = `ws://localhost:6091`; // local test address
-// const ws_complete_address = "wss://yinsh.net/api" 
+// const ws_complete_address = `ws://localhost:6091`; // local test address (script)
+// const ws_complete_address = `ws://localhost:80/api`; // local test address (docker)
+const ws_complete_address = "wss://yinsh.net/api" // prod deployment
 
 
 ///// COMMUNICATION CODES

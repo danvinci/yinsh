@@ -1587,8 +1587,8 @@ function gen_newGame(vs_ai=false)
 	white_ring = ring_id * white_id
 	black_ring = ring_id * black_id
 
-	# generate random game identifier
-	game_id = randstring(6)
+	# generate random game identifier (only uppercase letters)
+	game_id = randstring(['A':'Z'; '0':'9'], 6)
 
 	# pick the id of the originating vs joining player -> should be a setting
 	ORIG_player_id = rand([white_id, black_id]) 
