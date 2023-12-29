@@ -22,12 +22,13 @@ body, html {
     }
 
         .header_title {
-            color: rgba(40, 40, 40, 0.85);
+            color: rgb(69, 69, 69);
             padding-left: 1em;
             margin-top: 0px;
             margin-bottom: 0px;
-            font-weight: 600;
-            font-size: 1.3rem;
+            font-weight: 500;
+            font-size: 1.35rem;
+            cursor: default;
         }
 
         div.header_menu {
@@ -36,25 +37,38 @@ body, html {
             align-items: center;
         }
 
-            .header_link {
+            a.header_link {
                 display: grid;
                 grid-template-columns: auto auto;
                 text-decoration: none;
                 align-items: center;
                 margin-right: 20px;
+
             }
 
-                .header_link_img {
-                    height: 17px;
-                    width: 17px;
+                img.header_link_img {
+                    height: 18px;
+                    width: 18px;
                     margin-right: 4px;
                     filter: opacity(65%);
+                    transition: all .3s ease-in-out;
                 }
+
+                    /* picking parent element but applying transformation only to matching child*/
+                    a.header_link:hover .header_link_img {
+                        transform: rotate(10deg);
+                        filter: opacity(85%);
+                    }
 
                 .header_link_text {
                     color: rgba(40, 40, 40, 0.7);
                     font-size: small;
+                    transition: all .3s ease-in-out;
                 }
+
+                    a.header_link:hover .header_link_text {
+                        color: rgba(40, 40, 40, 0.85);
+                    }
 
     div.app_root {
         height: calc(100vh - 100px);
@@ -76,9 +90,12 @@ body, html {
         }
 
             div.canvas_parent {
-
                 background-color: white;
             }
+
+                div.canvas_parent:first-child {
+                    cursor: crosshair;
+                }
 
 
             div.side_panel {
@@ -90,7 +107,7 @@ body, html {
                 margin-right: 5%;
                 margin-left: 10%;
                 padding-top: 20%;
-                padding-bottom: 30%;
+                padding-bottom: 25%;
 
                 /*
                 border-style: solid;
@@ -122,8 +139,17 @@ body, html {
 
                     font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
 
-                    color: rgb(136, 136, 136);
+                    color: rgb(145, 145, 145);
+
+                    transition: all .1s ease-in-out;
                 }
+
+                    /* increasing contrast on hover */
+                    div.user_text_div:hover {
+                        background-color: rgb(253, 253, 253);
+                        border-color: rgb(245, 245, 245);
+                        color: rgb(102, 102, 102);
+                    }
 
         
                 /* wraps one or more buttons for the game controls*/
@@ -161,9 +187,12 @@ body, html {
                         margin-bottom: 8px;
 
                         box-sizing: border-box;
-                        width: 11vw; /* generic rule we overwrite later */
+                        width: 12vw; /* generic rule we overwrite later */
 
                         font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
+                        font-size: 12px;
+                        
+                        transition: all .1s ease-in-out;
 
                     }
 
@@ -172,7 +201,7 @@ body, html {
                         height: 6vh;
                         width: 10vw;
 
-                        border-radius: 10px;
+                        border-radius: 11px;
                         border-width: 4px;
 
                         font-size: 16px;
@@ -223,34 +252,34 @@ body, html {
 
                     }
 
-                    button.join_input_button_class {
+                        button.join_input_button_class {
 
-                        width: 4vw;
+                            width: 4vw;
 
-                        height: 100%;
-                        padding: 6px;
+                            height: 100%;
+                            padding: 6px;
 
-                        margin: 0px;
-                        margin-left: 7px;
-                    }
+                            margin: 0px;
+                            margin-left: 7px;
+                        }
 
-                    input.join_input_txt_class {
+                        input.join_input_txt_class {
 
-                        border-color: rgb(206, 206, 206);
-                        border-style: dashed;
-                        border-radius: 2px;
+                            border-color: rgb(206, 206, 206);
+                            border-style: dashed;
+                            border-radius: 2px;
 
-                        box-sizing: border-box;
-                        height: calc(100% - 2px);
-                        padding: 5px;
+                            box-sizing: border-box;
+                            height: calc(100% - 2px);
+                            padding: 5px;
 
-                        font-family: 'Roboto Mono', monospace;
-                        font-weight: 600;
+                            font-family: 'Roboto Mono', monospace;
+                            font-weight: 600;
 
-                        font-size: 11px;
-                        color: rgb(69, 69, 69);
+                            font-size: 11px;
+                            color: rgb(69, 69, 69);
 
-                    }
+                        }
 
                     input.join_input_txt_class:focus {
                         outline-width: 0;
@@ -265,15 +294,15 @@ body, html {
 
                         font-size: 16px;
 
-                        background-color: rgb(223, 223, 223);
-                        border-color: rgb(237, 236, 236);
+                        background-color: rgb(230, 230, 230);
+                        border-color: rgb(240, 240, 240);
                     }
 
                         button.exit_button:hover {
                             font-weight: 600;
 
-                            background-color: rgb(250, 144, 144);
-                            border-color: rgb(255, 197, 197);
+                            background-color: rgb(255, 126, 126);
+                            border-color: rgb(255, 191, 191);
                         }
 
                     div.exit_game_div {
@@ -295,7 +324,7 @@ body, html {
                         button.exit_button_back:hover {
                             font-weight: 600;
 
-                            background-color: rgb(188, 188, 188);
+                            background-color: rgb(206, 206, 206);
                         }
 
                     button.exit_button_confirm {
@@ -316,19 +345,73 @@ body, html {
                       
 
                 /* Block for controlling on/off audio and visual cues */
-                div.in_game_settings {
-                    font-size: small;
-                    padding-left: 5px;
-
-                    border-style: dashed;
-                    border-width: 1px;
-                    border-color: rgb(204, 204, 204);
-                    border-radius: 5px;
-
-                    color: rgb(189, 189, 189);
-
-                    font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
+                div.v_a_settings_wrapper {
+                    
+                    padding-left: 15px;
+                    box-sizing: border-box;
                 }
+
+                    div.v_a_settings_item {
+
+                        display: grid;
+                        grid-template-columns: max-content max-content;
+                        align-items: center;
+
+                        font-size: 12px;
+                        font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
+
+                        cursor: default;
+
+                    }
+
+                    img.va_set_img {
+                        height: 24px;
+                        width: 24px;
+                        margin-right: 4px;
+                    }
+
+                    /* setting transition time equal for both img and span */
+                    .sfx_on {
+                        transition: all .15s ease-in-out;
+                    }
+                    .sfx_off {
+                        transition: all .15s ease-in-out;
+                    }
+
+                        /* effect-anticipation <> click in both directions */
+                        span.sfx_on{
+                            color: rgb(140, 140, 140); 
+                        }
+
+                        img.sfx_on{
+                            filter: invert(50%) sepia(79%) saturate(465%) hue-rotate(157deg) brightness(88%) contrast(91%);
+                        }
+
+                            div.v_a_settings_item:hover span.sfx_on{ 
+                                color: rgb(160, 160, 160); 
+                            }
+
+                            div.v_a_settings_item:hover img.sfx_on{ 
+                                filter: invert(61%) sepia(36%) saturate(456%) hue-rotate(156deg) brightness(103%) contrast(93%);
+                            }
+
+                            div.v_a_settings_item:hover span.sfx_off {
+                                color: rgb(180, 180, 180);
+                            }
+                            div.v_a_settings_item:hover img.sfx_off {
+                                filter: invert(81%) sepia(2%) saturate(3%) hue-rotate(316deg) brightness(87%) contrast(86%);
+                            }
+                       
+                        span.sfx_off{
+                            color: rgb(200, 200, 200);
+                        }
+                        img.sfx_off{
+                            filter: invert(89%) sepia(1%) saturate(116%) hue-rotate(345deg) brightness(90%) contrast(97%);
+                        }
+
+                            
+
+                            
 
 
 

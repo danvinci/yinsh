@@ -39,7 +39,7 @@ The game can be played in two-players mode at [yinsh.net](https://yinsh.net/):
 - Make the AI less aggressive/dumb and more organic
 
 ## Credits
-- (some) Sounds by https://freesound.org/people/ProjectsU012/
+- Sounds sourced from https://freesound.org/
 
 ## License
 Work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)

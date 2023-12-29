@@ -432,7 +432,7 @@ function draw_rings(ring_spec = {}){
                 ctx.stroke(ring_path);
 
                 // outer border
-                ctx.strokeStyle = "#3D3F3D";
+                ctx.strokeStyle = "#474947";
                 ctx.lineWidth = ring_lineWidth/12; 
                 
                 let outerB_path = new Path2D()
@@ -440,7 +440,7 @@ function draw_rings(ring_spec = {}){
                 ctx.stroke(outerB_path);
 
                 // inner border
-                ctx.strokeStyle = "#3D3F3D";
+                ctx.strokeStyle = "#474947";
                 ctx.lineWidth = ring_lineWidth/12;  
 
                 let innerB_path = new Path2D()
@@ -492,7 +492,7 @@ function draw_markers(){
             // draw white marker
             } else if (m.player == player_white_id){ 
                 
-                ctx.strokeStyle = "#3D3F3D";
+                ctx.strokeStyle = "#474947";
                 ctx.fillStyle = "#F6F7F6";
                 ctx.lineWidth = marker_lineWidth/2;            
             
@@ -530,8 +530,9 @@ function draw_markers_halos(){
 
     const S = yinsh.drawing_params.S;
 
-    const hot_color = "#96ce96";
-    const cold_color = "#98C1D6";
+    // colors that work w/ alpha 0.75
+    const hot_color = "#5286ba";
+    const cold_color = "#8ab9d0";
 
     
     ctx.save();
@@ -539,7 +540,7 @@ function draw_markers_halos(){
         // to be checked only if any markers halos have been created
         // the whole function is called anyway at each refresh
 
-        ctx.globalAlpha = 0.7; 
+        ctx.globalAlpha = 0.75; 
         ctx.lineWidth = S/10; 
 
         // can paint hot/cold dynamically, for each specific halo's properties
@@ -570,13 +571,14 @@ function draw_rings_highlight(){
 
     const S = yinsh.drawing_params.S;
 
-    const hot_color = "#477cb2";
+    // colors that work w/ alpha 0.75
+    const hot_color = "#5286ba";
     const cold_color = "#8ab9d0";
 
     
     ctx.save();
 
-        ctx.globalAlpha = 0.7; 
+        ctx.globalAlpha = 0.75; 
 
         // can paint hot/cold dynamically, for each specific halo's properties
         for(const h of _r_high){

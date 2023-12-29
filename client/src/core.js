@@ -10,7 +10,7 @@ import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, ge
 import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
-import { ringDrop_play_sound, markersRemoved_play_sound } from './audio.js'
+import { ringDrop_playS, markersRemoved_player_playS, markersRemoved_oppon_playS, endGame_win_playS, endGame_lose_playS } from './sound.js'
 
 
 //////////// GLOBAL DEFINITIONS
@@ -66,6 +66,8 @@ export function draw_empty_game_board() {
     // bind and make canvas size match its parent -> redraw everything
     window_resize_handler();
 
+
+    disableInteraction();  // just in case
 }
 
 // window resizing -> impacts canvas, board, and objects (via drawing constants)
@@ -225,6 +227,9 @@ async function server_actions_handler (event) {
 
         // local player wins 
         if (winning_player == _player_id){
+
+            // play win sound
+            endGame_win_playS();
             
             // trigger winning animation (?)
 
@@ -235,6 +240,10 @@ async function server_actions_handler (event) {
             };
 
         } else {
+
+            // lose sound
+            endGame_lose_playS();
+
             ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You lose! :(` }));
         };
 
@@ -283,7 +292,7 @@ async function replay_opponent_move(){
             const _ring_move_wait = 800;
             await sleep(_ring_move_wait);
             await synthetic_ring_move_drop(yinsh.delta.moved_ring);
-            ringDrop_play_sound(); 
+            ringDrop_playS(); 
         
         // flipped markers 
             let _flip_wait = 0;
@@ -313,7 +322,7 @@ async function replay_opponent_move(){
             update_mk_halos(); // turn off markers highlight
             refresh_canvas_state(); // materialize changes on canvas
 
-            markersRemoved_play_sound(); // play sound
+            markersRemoved_oppon_playS(); // play sound
 
             //// RING SCORING
 
@@ -522,7 +531,7 @@ async function ringDrop_handler (event) {
 
         // re-draw everything and play sound
         refresh_canvas_state(); 
-        ringDrop_play_sound(); 
+        ringDrop_playS(); 
 
         // logging
         console.log(`LOG - Ring ${dropping_ring.player} moved to index ${drop_loc_index}`);
@@ -683,7 +692,7 @@ function mk_scoring_options_handler(event){
         refresh_canvas_state();
 
         // play sound
-        markersRemoved_play_sound();
+        markersRemoved_player_playS();
 
         // complete score handling task (success)
         const success_msg = mk_sel_picked_id; // value to be returned by completed task

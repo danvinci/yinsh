@@ -1,5 +1,6 @@
 import { createSignal, Show, Switch, Match, createResource, createEffect, on, onMount, onCleanup } from "solid-js";
 import { init_game_fromServer, draw_empty_game_board } from "./core.js";
+import { enableSound, disableSound } from "./sound.js";
 
 
 // event target for UI
@@ -207,15 +208,40 @@ export function GameSetup() {
 
 
 
-export function InGameSettings() {
-  // component for in-game settings (sound, visual cues)
+export function V_A_Settings() {
+  // component for visual (dark/light mode) and audio settings (sounds on/off)
+
+  // show/display "text field for entering code"
+  const [sound, set_sound] = createSignal(true); 
+  function toggle_sound () {
+
+    // this for swapping UI component
+    set_sound(!sound());
+
+    // flag audio on/off accordingly
+    sound() ? enableSound() : disableSound();
+    
+  };  
 
   return (
-    <div class="in_game_settings">
-      <p>Game settings (coming soon)</p>
+    <div class="v_a_settings_wrapper">
+      <Show
+      when={sound()}
+      fallback={
+        <div class="v_a_settings_item" onClick={toggle_sound}>
+          <img class="va_set_img sfx_off" src="/src/assets/sound-0.svg" height="24px" width="24px"></img>
+          <span class="sfx_off">Sound effects OFF</span>
+        </div>
+      }>
+        <div class="v_a_settings_item sfx_on" onClick={toggle_sound}>
+          <img class="va_set_img sfx_on" src="/src/assets/sound-2.svg" height="24px" width="24px"></img>
+          <span class="sfx_on">Sound effects ON</span>
+        </div>
+      </Show>  
     </div>
   );
 }
+
 
 
 // used to retrigger resource-wrapped fetch: if on -> off and then on again
