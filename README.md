@@ -38,5 +38,8 @@ The game can be played in two-players mode at [yinsh.net](https://yinsh.net/):
 - Add controls for game settings (mode, sounds)
 - Make the AI less aggressive/dumb and more organic
 
+## Credits
+- 8-bit coin sound by https://freesound.org/people/ProjectsU012/
+
 ## License
 Work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
