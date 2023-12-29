@@ -1,7 +1,8 @@
 import { createSignal, Show, Switch, Match, createResource, createEffect, on, onMount, onCleanup } from "solid-js";
 import { init_game_fromServer, draw_empty_game_board } from "./core.js";
 import { enableSound, disableSound } from "./sound.js";
-
+import svg_sound_OFF from "/src/assets/sound-0.svg";
+import svg_sound_ON from "/src/assets/sound-2.svg";
 
 // event target for UI
 globalThis.ui_et = new EventTarget(); 
@@ -229,12 +230,12 @@ export function V_A_Settings() {
       when={sound()}
       fallback={
         <div class="v_a_settings_item" onClick={toggle_sound}>
-          <img class="va_set_img sfx_off" src="/src/assets/sound-0.svg" height="24px" width="24px"></img>
+          <img class="va_set_img sfx_off" src={svg_sound_OFF} height="24px" width="24px"></img>
           <span class="sfx_off">Sound effects OFF</span>
         </div>
       }>
         <div class="v_a_settings_item sfx_on" onClick={toggle_sound}>
-          <img class="va_set_img sfx_on" src="/src/assets/sound-2.svg" height="24px" width="24px"></img>
+          <img class="va_set_img sfx_on" src={svg_sound_ON} height="24px" width="24px"></img>
           <span class="sfx_on">Sound effects ON</span>
         </div>
       </Show>  
