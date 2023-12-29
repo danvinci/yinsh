@@ -17,7 +17,7 @@ import { save_first_server_response, save_next_server_response, get_game_id, get
 
 // how to reach endpoint
 
-// const ws_complete_address = `ws://localhost:6091`; // local test address (script)
+// const ws_complete_address = `ws://localhost:6091`; // local test address (pluto)
 // const ws_complete_address = `ws://localhost:80/api`; // local test address (docker)
 const ws_complete_address = "wss://yinsh.net/api" // prod deployment
 
@@ -28,12 +28,13 @@ const CODE_new_game_human = "new_game_vs_human"
 const CODE_new_game_server = "new_game_vs_server"
 const CODE_join_game = "join_game"
 const CODE_advance_game = "advance_game" // clients asking to progress the game
+const CODE_resign_game = "resign_game" // clients asking to resign from game
 
 // server -> client codes
 const key_nextActionCode = "next_action_code"
 const CODE_action_play = "play" // the other player has joined -> move
 const CODE_action_wait = "wait"// the other player has yet to join -> wait 
-const CODE_end_game = "end_game" // someone won
+const CODE_end_game = "end_game" // someone won or other player resigned (we should also handle lost connections)
 
 // suffixes for code response type
 const sfx_CODE_OK = "_OK"
@@ -72,7 +73,7 @@ function push_messages_handler(event){
 
 // custom class for managing the lifecycle of messages
 class MessagePromise {
-    constructor(payload, msg_id, msg_time, timeout = 120000) {
+    constructor(payload, msg_id, msg_time, timeout = 300000) { // 5mins timeout
         this.payload = payload;
         this.msg_id = msg_id;
         this.msg_time = msg_time;
@@ -190,8 +191,9 @@ export async function init_ws () {
     });
 };
 
+
 /*
-// only invoked when connection is opened
+// only invoked when connection is opened, we don't need anything fancy to happen at that time
 function onOpen_handler (event) {
     console.log(`LOG - WebSocket - connection OPEN`);
 };
@@ -217,7 +219,6 @@ function onMessage_handler (event) {
 };
 
 
-
 function onError_handler (event) {
 
     console.log(`LOG - Websocket - ERROR`);
@@ -230,9 +231,6 @@ function onClose_handler (event) {
     console.log(`LOG - WebSocket - connection CLOSED - `, event.reason);
 
 };
-
-
-
 
 
 //////////////////////////// MESSAGE SENDERS (called by core)
@@ -266,11 +264,8 @@ export async function server_ws_genNewGame(){
         } else {
             throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
         };
-
     } catch (err) {
-
         console.log(err);
-
     };
 };
 
@@ -301,15 +296,11 @@ export async function server_ws_joinWithCode(input_game_id){
             console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
        
         } else {
-            
             throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
         };
         
-
     } catch (err) {
-
         console.log(err);
-
     };
 };
 
@@ -344,9 +335,7 @@ export async function server_ws_genNewGame_AI(){
         };
 
     } catch (err) {
-
         console.log(err);
-
     };
 };
 
@@ -378,17 +367,50 @@ export async function server_ws_advance_game(scenario_pick = false){
             // handle response (save + emit event)
             _handler_next_action_data(srv_response);
 
-
-        } else {
-            
+        } else {    
             throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
         };
         
-
     } catch (err) {
-
         console.log(err);
+    };
+};
 
+
+// Send message asking the server what to do (wait or move?)
+export async function server_ws_resign_game(){ 
+    
+    try {
+
+        // prepare message payload
+        const msg_code = CODE_resign_game;
+        const payload = {msg_code: msg_code, game_id: get_game_id(), player_id: get_player_id(), scenario_pick: false}; // note: we're keeping scenario_pick here to avoid handling exceptions inside the server game_runner
+
+        // package message, log it, send it
+        const [msg_time, msg_id] = fwd_outbound(payload)
+                            
+        // wait to receive a response
+        await msgPromise_lookup(msg_id);
+
+        const srv_response = messagePromises_log[msg_id].server_response;
+        const resp_code = srv_response.msg_code;
+        
+        // check server response
+        if (resp_code == msg_code.concat(sfx_CODE_OK)){
+
+            // log server response             
+            console.log(`LOG - Server response:`, srv_response);
+            console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
+
+            // handle response (save + emit event)
+            _handler_next_action_data(srv_response);
+
+        } else {    
+            throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
+        };
+        
+    } catch (err) {
+        console.log(err);
     };
 };
 
@@ -407,7 +429,6 @@ function _handler_next_action_data(server_response_data) {
 
     // dispatch event for core game logic
     core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: server_response_data }));
-
 
 };
 

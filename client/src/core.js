@@ -3,7 +3,7 @@
 
 
 //////////// IMPORTS
-import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_advance_game} from './server.js'
+import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_advance_game, server_ws_resign_game} from './server.js'
 import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_player_id, save_next_server_response } from './data.js'
 import { bind_adapt_canvas, reorder_rings, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
@@ -14,6 +14,9 @@ import { ringDrop_playS, markersRemoved_player_playS, markersRemoved_oppon_playS
 
 
 //////////// GLOBAL DEFINITIONS
+
+    // redefining console log function for production
+    // console.log = function() {};
 
     // inits global event target for core logic
     globalThis.core_et = new EventTarget(); // <- this semicolon is very important
@@ -828,20 +831,15 @@ function text_exec_from_ui_handler(){
 
 /////////// EXITING GAME - prompted by user via UI
 
-function game_exit_handler(event){
+export async function game_exit_handler(event){
 
     // disable any canvas interaction
     disableInteraction();
 
-    // interrupt game -> notify server --> other user is informed by server
+    // notify server (game is lost automatically) --> other user is informed by server
+    await server_ws_resign_game(); // server will acknowledge
 
-    // receives formal 'you lost' response from server ?
-        // display text to the UI
-        // ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You resigned and lost :(` }));
-
-    // inform UI that game is no longer in progress
-    ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
-
+    // receives formal 'you lost' response from server, handled by next_action_handler
 };
 
 
