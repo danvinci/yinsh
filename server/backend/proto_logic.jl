@@ -2064,33 +2064,6 @@ function is_game_vs_ai(game_id::String)::Bool
 
 end
 
-# ╔═╡ 903e103c-ec53-423f-9fe1-99abea55c28d
-function complete_turn!(game_code) # TO BE DELETED
-
-	# get more comfy handlers
-	_game = games_log_dict[game_code]
-	_turns = games_log_dict[game_code][:turns]
-	_pointer = games_log_dict[game_code][:turns][:pointer]
-	_status = games_log_dict[game_code][:turns][:data][_pointer][:status]
-	_player = games_log_dict[game_code][:turns][:data][_pointer][:moving_player]
-
-
-	# case: turn in progress -> mark as completed
-	if _status == :in_progress 
-
-		_new_status = :completed
-		_turns[:data][_pointer][:status] = _new_status
-
-		return _pointer, _turns[:data][_pointer][:moving_player], _new_status
-
-	# case: turn not_started or completed -> throw error
-	else
-		throw(error("ERROR: turn $_pointer in status $_status"))
-	end
-
-
-end
-
 # ╔═╡ ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 function whos_player(game_code::String, player_id::String)::Symbol
 
@@ -2602,156 +2575,6 @@ function mark_player_ready!(game_code::String, who::Symbol)
 
 end
 
-# ╔═╡ f479f1f8-d6fd-4e48-a0f3-447997bc0416
-function wannabe_orchestrator(msg_id, msg_code, msg_parsed)# TO BE DELETED
-
-	# printing calling arguments
-	println(msg_id)
-	println(msg_code)
-	println(msg_parsed)
-
-	# get info from payload
-	_game_code = msg_parsed[:game_id]
-	_player_id = msg_parsed[:player_id]
-	_scenario_pick = msg_parsed[:scenario_pick]
-
-	# get game type info
-	_game_type = games_log_dict[_game_code][:identity][:game_type]
-
-	# is this the originator or joiner? -> log accordingly
-	who_msg = whos_player(_game_code, _player_id)
-	where_log = (who_msg == :originator) ? :orig_player_comms : :join_player_comms
-
-	# save communication -> assumes is about player ready or turn completed
-	push!(games_log_dict[_game_code][:players][where_log], msg_parsed)
-	# log save action
-	println("LOG - Client msg logged - msg ID: $msg_id")
-
-	println("-- orch here 1")
-
-
-		# update player status
-		mark_player_ready!(_game_code, who_msg)
-		
-		# update player turn data -> should set turn to completed
-		# TODO
-
-	println("-- orch here 1a")
-	
-		# everyone ready? -> check turns
-		_status_orig = games_log_dict[_game_code][:players][:orig_player_status]
-		_status_join = games_log_dict[_game_code][:players][:join_player_status]
-
-	println("-- orch here 1b")
-
-	######
-
-	println("-- orch here 2")
-
-
-	## understand what's going on in the game
-	_pointer = games_log_dict[_game_code][:turns][:pointer]
-	_status = games_log_dict[_game_code][:turns][:data][_pointer][:status]
-
-
-	#### handling first turn / game start
-	if _pointer == 1 && _status == :not_started 
-		
-		if _status_orig == _status_join == :ready 
-	
-			# activate turn
-			turn_no, next_player, turn_status = activate_next_turn!(_game_code)
-	
-			# who moves next?
-			who_moves = whos_player(_game_code, next_player)
-	
-			if who_msg == who_moves
-
-				# codes should be defined up
-				_cli_response = Dict(:next_action_code => "move",
-									:turn_no => turn_no)
-				
-				# -> make move
-				return _cli_response
-	
-			elseif who_msg != who_moves
-
-			 	# AI should play turn 
-	
-				# -> wait for opponent's move
-				return Dict(:next_action_code => "wait")
-	
-			end
-	
-		else
-			throw(error("ERROR - players not ready"))
-		end
-	end
-
-	println("-- orch here 3")
-
-	## handling following turns
-	if _pointer >= 1 && _status == :in_progress
-
-		# check information from player
-		if !(_scenario_pick == false)
-		
-			# update server game state (with client move)
-			update_serverStates(_game_code, _player_id, _scenario_pick)
-
-			# complete turn (for client)
-			complete_turn!(_game_code)
-			
-			# compute next move if AI game 
-			if _game_type == :h_vs_ai
-
-				# create AI turn
-				activate_next_turn!(_game_code)
-
-				# activate AI turn
-				turn_no, next_player, turn_status = activate_next_turn!(_game_code)
-
-				# pick move
-				_pick = play_turn_AI(_game_code, next_player)
-
-				# update server game state and extract delta (from AI move)
-				update_serverStates(_game_code, next_player, _pick)
-
-				# complete AI turn
-				complete_turn!(_game_code)
-						
-				# create & activate turn (client)
-				activate_next_turn!(_game_code)
-				turn_no, next_player, turn_status = activate_next_turn!(_game_code)
-
-				# gen new game data for client
-				gen_new_clientPkg(_game_code, next_player)
-
-				# retrieve client package
-				_client_pkg = getLast_clientPkg(_game_code)
-
-				# retrieve states delta
-				_client_delta = getLast_clientDelta(_game_code)
-
-					# append delta to package for client
-					setindex!(_client_pkg, _client_delta, :delta)
-	
-					# add info on turn_no
-					setindex!(_client_pkg, turn_no, :turn_no)
-				
-
-println("-- orch here 4")
-				
-				return _client_pkg
-			end
-		
-		end
-
-	end
-
-
-end
-
 # ╔═╡ cd06cad4-4b47-48dd-913f-61028ebe8cb3
 function mark_player_resigned!(game_code::String, who::Symbol)
 
@@ -2932,7 +2755,7 @@ function game_runner(msg)
 
 		else # vs HUMAN, just handle payload swap - payload generated before
 
-			# if both players ready -> who starts ? -> reply accordingly
+			# if both players ready 
 			if check_both_players_ready(_game_code) 
 	
 				# check if the caller is who plays next
@@ -2942,8 +2765,15 @@ function game_runner(msg)
 				_caller_pld = _caller_plays ? _PLAY_payload : _WAIT_payload
 				_other_pld = _caller_plays ? _WAIT_payload : _PLAY_payload 
 			
+			elseif _msg_code == CODE_resign_game # if one resigned
+
+				# inform both players with same END payload (modified above)
+				_caller_pld = _END_payload
+				_other_pld = _END_payload
+				
 			else # both players not ready, tell the caller to wait
 				_caller_pld = _WAIT_payload
+				
 			end
 
 		end		
@@ -4386,8 +4216,6 @@ version = "1.4.1+0"
 # ╟─92a20829-9f0a-4ed2-9fd3-2d6560514e03
 # ╟─13eb72c7-ac24-4b93-8fd9-260b49940370
 # ╟─8929062f-0d97-41f9-99dd-99d51f01b664
-# ╟─903e103c-ec53-423f-9fe1-99abea55c28d
-# ╟─f479f1f8-d6fd-4e48-a0f3-447997bc0416
 # ╟─ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 # ╟─f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
@@ -4395,7 +4223,7 @@ version = "1.4.1+0"
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
 # ╟─20a8fbe0-5840-4a70-be33-b4103df291a1
 # ╟─7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
-# ╠═42e4b611-abe4-41c4-8f92-ea39bb928122
+# ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 # ╟─6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 # ╟─14aa5b7c-9065-4ca3-b0e9-19c104b1854d

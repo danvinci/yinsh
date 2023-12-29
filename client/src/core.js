@@ -228,27 +228,28 @@ async function server_actions_handler (event) {
         const win_reason = event.detail.won_why;
         const _player_id = get_player_id();
 
-        // local player wins 
-        if (winning_player == _player_id){
+            // local player wins 
+            if (winning_player == _player_id){
 
-            // play win sound
-            endGame_win_playS();
-            
-            // trigger winning animation (?)
+                // play win sound
+                endGame_win_playS();
+                
+                // trigger winning animation (?)
 
-            if (win_reason == "resign") {
-                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent resigned. You win! :)` }));
-            } else { // winning by score
-                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You win! :)` }));
+                if (win_reason == 'resign') { // winning as the other player resigns
+                    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent resigned. You win! :)` }));
+                } else { // winning by score
+                    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You win! :)` }));
+                };
+
+            // opponent wins
+            } else {
+
+                // lose sound
+                endGame_lose_playS();
+
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You lose! :(` }));
             };
-
-        } else {
-
-            // lose sound
-            endGame_lose_playS();
-
-            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You lose! :(` }));
-        };
 
         // reset UI
         ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));

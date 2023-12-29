@@ -17,9 +17,9 @@ import { save_first_server_response, save_next_server_response, get_game_id, get
 
 // how to reach endpoint
 
-// const ws_complete_address = `ws://localhost:6091`; // local test address (pluto)
+const ws_complete_address = `ws://localhost:6091`; // local test address (pluto)
 // const ws_complete_address = `ws://localhost:80/api`; // local test address (docker)
-const ws_complete_address = "wss://yinsh.net/api" // prod deployment
+// const ws_complete_address = "wss://yinsh.net/api" // prod deployment
 
 
 ///// COMMUNICATION CODES
@@ -49,7 +49,7 @@ globalThis.server_et = new EventTarget(); // <- this semicolon is very important
 // event listener
 server_et.addEventListener('new_push_message', push_messages_handler, false);
 
-// event handler
+// event handler for push messages: only events with a specific msg code are handled
 function push_messages_handler(event){
     
     // see if we have the field 
@@ -63,10 +63,14 @@ function push_messages_handler(event){
              // save data + trigger event towards core
             _handler_next_action_data(event.detail);
 
+        // game being resigned by other player
+        } else if (event.detail.msg_code == CODE_resign_game.concat(sfx_CODE_OK)) { 
+
+            _handler_next_action_data(event.detail);
         };
 
     } else {
-        console.log("LOG - Action code not found or other error on incoming msg");
+        console.log("ERROR - Action code not found in incoming push msg");
     };
 };
 
