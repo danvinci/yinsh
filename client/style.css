@@ -104,7 +104,7 @@ body, html {
                 display: grid;
                 grid-template-rows: auto 3fr 1fr;
 
-                margin-right: 5%;
+                margin-right: 6%;
                 margin-left: 10%;
                 padding-top: 20%;
                 padding-bottom: 25%;
@@ -122,10 +122,10 @@ body, html {
                 
                 /* Dialog of text for user */
                 div.user_text_div {
-                    background-color: rgb(252, 252, 252);
+                    background-color: rgb(253, 253, 253);
                     border-width: 2px;
-                    border-style: solid;
-                    border-color: rgb(243, 243, 243);
+                    border-style:solid;
+                    border-color: rgb(250, 250, 250);
                     
                     padding: 7px;
                     margin-bottom: 8px;
@@ -139,16 +139,14 @@ body, html {
 
                     font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
 
-                    color: rgb(145, 145, 145);
+                    color: rgb(170, 170, 170);
 
                     transition: all .1s ease-in-out;
                 }
 
                     /* increasing contrast on hover */
                     div.user_text_div:hover {
-                        background-color: rgb(253, 253, 253);
-                        border-color: rgb(245, 245, 245);
-                        color: rgb(102, 102, 102);
+                        color: rgb(125, 125, 125);
                     }
 
         
@@ -342,16 +340,15 @@ body, html {
                         color: rgb(126, 126, 126);
                     }
 
-                      
 
                 /* Block for controlling on/off audio and visual cues */
-                div.v_a_settings_wrapper {
+                div.sound_settings_wrapper {
                     
                     padding-left: 15px;
                     box-sizing: border-box;
                 }
 
-                    div.v_a_settings_item {
+                    div.sound_settings_item {
 
                         display: grid;
                         grid-template-columns: max-content max-content;
@@ -364,7 +361,7 @@ body, html {
 
                     }
 
-                    img.va_set_img {
+                    img.sset_img {
                         height: 24px;
                         width: 24px;
                         margin-right: 4px;
@@ -387,18 +384,18 @@ body, html {
                             filter: invert(50%) sepia(79%) saturate(465%) hue-rotate(157deg) brightness(88%) contrast(91%);
                         }
 
-                            div.v_a_settings_item:hover span.sfx_on{ 
+                            div.sound_settings_item:hover span.sfx_on{ 
                                 color: rgb(160, 160, 160); 
                             }
 
-                            div.v_a_settings_item:hover img.sfx_on{ 
+                            div.sound_settings_item:hover img.sfx_on{ 
                                 filter: invert(61%) sepia(36%) saturate(456%) hue-rotate(156deg) brightness(103%) contrast(93%);
                             }
 
-                            div.v_a_settings_item:hover span.sfx_off {
+                            div.sound_settings_item:hover span.sfx_off {
                                 color: rgb(180, 180, 180);
                             }
-                            div.v_a_settings_item:hover img.sfx_off {
+                            div.sound_settings_item:hover img.sfx_off {
                                 filter: invert(81%) sepia(2%) saturate(3%) hue-rotate(316deg) brightness(87%) contrast(86%);
                             }
                        

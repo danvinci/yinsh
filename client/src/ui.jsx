@@ -178,7 +178,7 @@ export function GameSetup() {
                 <button type="button" onClick={triggerRequest_newVSfriend}>NEW game vs Friend</button>
                 <button type="button" onClick={toggle_joinClick}>JOIN game vs Friend</button> 
                 <button type="button" onClick={triggerRequest_joinVS_AI}>NEW game vs AI</button> 
-                {/*<button type="button" onClick={trigger_test_fn}>- test button -</button> */}
+                <button type="button" onClick={trigger_test_fn}>- test button -</button> 
               </>}>
 
               <>
@@ -208,12 +208,12 @@ export function GameSetup() {
 }
 
 
+// component for sounds on/off
+export function SoundSettings() {
 
-export function V_A_Settings() {
-  // component for visual (dark/light mode) and audio settings (sounds on/off)
-
-  // show/display "text field for entering code"
   const [sound, set_sound] = createSignal(true); 
+  
+  // toggle that calls functions exported by sound module
   function toggle_sound () {
 
     // this for swapping UI component
@@ -225,17 +225,17 @@ export function V_A_Settings() {
   };  
 
   return (
-    <div class="v_a_settings_wrapper">
+    <div class="sound_settings_wrapper">
       <Show
       when={sound()}
       fallback={
-        <div class="v_a_settings_item" onClick={toggle_sound}>
-          <img class="va_set_img sfx_off" src={svg_sound_OFF} height="24px" width="24px"></img>
+        <div class="sound_settings_item sfx_off" onClick={toggle_sound}>
+          <img class="sset_img sfx_off" src={svg_sound_OFF} height="24px" width="24px"></img>
           <span class="sfx_off">Sound effects OFF</span>
         </div>
       }>
-        <div class="v_a_settings_item sfx_on" onClick={toggle_sound}>
-          <img class="va_set_img sfx_on" src={svg_sound_ON} height="24px" width="24px"></img>
+        <div class="sound_settings_item sfx_on" onClick={toggle_sound}>
+          <img class="sset_img sfx_on" src={svg_sound_ON} height="24px" width="24px"></img>
           <span class="sfx_on">Sound effects ON</span>
         </div>
       </Show>  

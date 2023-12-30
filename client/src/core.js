@@ -25,6 +25,7 @@ import { ringDrop_playS, markersRemoved_player_playS, markersRemoved_oppon_playS
     core_et.addEventListener('ring_picked', ringPicked_handler, false);
     core_et.addEventListener('ring_moved', ringMoved_handler, false);
     core_et.addEventListener('ring_drop', ringDrop_handler, false);
+    core_et.addEventListener('marker_moved', markerMoved_handler, false);
    
     // server comms
     core_et.addEventListener('srv_next_action', server_actions_handler, false);
@@ -233,14 +234,15 @@ async function server_actions_handler (event) {
 
                 // play win sound
                 endGame_win_playS();
-                
-                // trigger winning animation (?)
 
                 if (win_reason == 'resign') { // winning as the other player resigns
                     ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent resigned. You win! :)` }));
                 } else { // winning by score
                     ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You win! :)` }));
                 };
+
+                // trigger winning animation 
+                await win_animation();
 
             // opponent wins
             } else {
@@ -275,105 +277,109 @@ class Task {
 async function replay_opponent_move(){
 
     // do something only if we have delta data
-    // dispatch should be smarter
-    if (typeof yinsh.delta !== "undefined") {
+    if (typeof yinsh.delta_array !== 'undefined') {
 
-        console.log(`USER - Replaying opponent's move`);
+        console.log(`USER - Replaying opponent's moves`);
         ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent is moving` }));
 
         const replay_start_time = Date.now();
 
-        console.log(`LOG - Delta: `, yinsh.delta);
+        console.log(`LOG - Delta: `, yinsh.delta_array);
 
-        // add opponent's marker
-            const _marker_add_wait = 800;
-            await sleep(_marker_add_wait);
-            const _added_mk_index = yinsh.delta.added_marker.cli_index;
-            add_marker(_added_mk_index, true); // -> as opponent
-            refresh_canvas_state();
+        // iterate over all deltas in the array, removing them as processed
+        for(const delta of yinsh.delta_array) {
 
-        // move and drop ring
-            const _ring_move_wait = 800;
-            await sleep(_ring_move_wait);
-            await synthetic_ring_move_drop(yinsh.delta.moved_ring);
-            ringDrop_playS(); 
-        
-        // flipped markers 
-            let _flip_wait = 0;
-            if (yinsh.delta.flip_flag == true) {
-
-                _flip_wait = 150;
-                await sleep(_flip_wait);
-                flip_markers(yinsh.delta.markers_toFlip);
+            // add opponent's marker
+                const _marker_add_wait = 800;
+                await sleep(_marker_add_wait);
+                const _added_mk_index = delta.added_marker.cli_index;
+                add_marker(_added_mk_index, true); // -> as opponent
                 refresh_canvas_state();
-            };
+
+            // move and drop ring
+                const _ring_move_wait = 800;
+                await sleep(_ring_move_wait);
+                await synthetic_ring_move_drop(delta.moved_ring);
+                ringDrop_playS(); 
             
-        // opponent's scoring
-        let _score_mk_wait = 0;
-        let _score_ring_wait = 0;
-        if (yinsh.delta.score_handled){
-            
-            // markers
-            _score_mk_wait = 600;
-            await sleep(_score_mk_wait);
-            
-            update_mk_halos(yinsh.delta.markers_toRemove, true); // highlight markers
-            refresh_canvas_state();
-            
-            await sleep(_score_mk_wait); // wait to let user see visual changes
+            // flipped markers 
+                let _flip_wait = 0;
+                if (delta.flip_flag == true) {
 
-            remove_markers(yinsh.delta.markers_toRemove); // remove markers
-            update_mk_halos(); // turn off markers highlight
-            refresh_canvas_state(); // materialize changes on canvas
+                    _flip_wait = 150;
+                    await sleep(_flip_wait);
+                    flip_markers(delta.markers_toFlip);
+                    refresh_canvas_state();
+                };
+                
+            // opponent's scoring
+                let _score_mk_wait = 0;
+                let _score_ring_wait = 0;
+                if (delta.score_handled){
+                    
+                    // markers
+                    _score_mk_wait = 600;
+                    await sleep(_score_mk_wait);
+                    
+                    update_mk_halos(delta.markers_toRemove, true); // highlight markers
+                    refresh_canvas_state();
+                    
+                    await sleep(_score_mk_wait); // wait to let user see visual changes
 
-            markersRemoved_oppon_playS(); // play sound
+                    remove_markers(delta.markers_toRemove); // remove markers
+                    update_mk_halos(); // turn off markers highlight
+                    refresh_canvas_state(); // materialize changes on canvas
 
-            //// RING SCORING
+                    markersRemoved_oppon_playS(); // play sound
 
-            _score_ring_wait = 650;
-            await sleep(_score_ring_wait);
+                    //// RING SCORING
 
-            // move scoring ring on top (need for animation)
-            const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == yinsh.delta.scoring_ring);
-            reorder_rings(_ring_index_in_array);
+                    _score_ring_wait = 650;
+                    await sleep(_score_ring_wait);
 
-            // grab start (x,y) coordinates   
-            const _start = yinsh.objs.drop_zones.find(d => d.loc.index == yinsh.delta.scoring_ring);
-            const _start_xy = {x:_start.loc.x, y:_start.loc.y};
+                    // move scoring ring on top (need for animation)
+                    const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == delta.scoring_ring);
+                    reorder_rings(_ring_index_in_array);
 
-            // grab end coordinates -> these will be of the scoring slots for the opponent (hence input is false)
-            const _slot_coord = get_coord_free_slot(false);
-            const _end_xy = {x:_slot_coord.x, y:_slot_coord.y};    
+                    // grab start (x,y) coordinates   
+                    const _start = yinsh.objs.drop_zones.find(d => d.loc.index == delta.scoring_ring);
+                    const _start_xy = {x:_start.loc.x, y:_start.loc.y};
 
-            // animate ring move via synthetic mouse event
-            await syn_ring_move(_start_xy, _end_xy, 45, 15);
-            
-            // increases player's score by one and mark scoring slot as filled
-            const new_opponent_score = increase_opponent_score();
-            console.log(`LOG - New opponent score: ${new_opponent_score}`);
+                    // grab end coordinates -> these will be of the scoring slots for the opponent (hence input is false)
+                    const _slot_coord = get_coord_free_slot(false);
+                    const _end_xy = {x:_slot_coord.x, y:_slot_coord.y};    
 
-            // remove ring from rings array 
-            remove_ring_scoring(yinsh.delta.scoring_ring); // remove ring (scoring ring id)
+                    // animate ring move via synthetic mouse event
+                    await syn_object_move(_start_xy, _end_xy, 45, 15);
+                    
+                    // increases player's score by one and mark scoring slot as filled
+                    const new_opponent_score = increase_opponent_score();
+                    console.log(`LOG - New opponent score: ${new_opponent_score}`);
 
-            // refresh canvas (ring is drawn in scoring slot now)
-            refresh_canvas_state();
+                    // remove ring from rings array 
+                    remove_ring_scoring(delta.scoring_ring); // remove ring (scoring ring id)
 
-            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
+                    // refresh canvas (ring is drawn in scoring slot now)
+                    refresh_canvas_state();
+
+                    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
+
+                };
+                
+            // total sleep time
+                const _tot_sleep_time = array_sum([_marker_add_wait, _ring_move_wait, _flip_wait, _score_mk_wait, _score_mk_wait, _score_ring_wait])
+                const _tot_time = Date.now() - replay_start_time;
+                const _net_time = _tot_time - _tot_sleep_time
+
+            // log replay done
+                console.log(`LOG - Move replay time - Total: ${_tot_time}ms - Net: ${_net_time}ms`);
 
         };
-            
-        // total sleep time
-        const _tot_sleep_time = array_sum([_marker_add_wait, _ring_move_wait, _flip_wait, _score_mk_wait, _score_mk_wait, _score_ring_wait])
-        const _tot_time = Date.now() - replay_start_time;
-        const _net_time = _tot_time - _tot_sleep_time
-
-        // log replay done
-        console.log(`LOG - Move replay time - Total: ${_tot_time}ms - Net: ${_net_time}ms`);
 
         // wipe clean delta data once used
         // avoids issues when replaying_opponent_move in winning scenarios: serverJS only saves new data if it has delta, so on winning move it will mess up trying to replay past delta
-        delete yinsh.delta;
-
+        delete yinsh.delta_array;
+        
     };
 };
 
@@ -431,7 +437,7 @@ async function synthetic_ring_move_drop(moved_ring_details) {
         const end = {x:_drop_end.loc.x, y:_drop_end.loc.y};
 
     // animate move via synthetic mouse event
-    await syn_ring_move(start, end, 30, 15);
+    await syn_object_move(start, end, 30, 15);
 
     // update dropping ring loc information 
     updateLoc_last_ring(_drop_end.loc);
@@ -485,15 +491,53 @@ function ringPicked_handler (event) {
 // listens to a ring being moved -> updates ring location & triggers re-draw
 function ringMoved_handler (event) {
 
-    // event.detail -> mousePos
+    // event.detail.coord -> mousePos as {x, y}
 
-    // the last ring in the array is the one being moved
-    const id_picked_ring = getIndex_last_ring();
+    // if index of ring in rings array is given, use it (multi-ring animation)
+    if ('id_in_array' in event.detail) {
+        
+        // updates x and y ring location
+        yinsh.objs.rings[event.detail.id_in_array].loc.x = event.detail.coord.x;
+        yinsh.objs.rings[event.detail.id_in_array].loc.y = event.detail.coord.y;
+    
+    } else { // pick last ring 
+
+        // the last ring in the array is the one being moved (drawn last / on top)
+        const id_picked_ring = getIndex_last_ring();
 
         // updates x and y ring location
-        yinsh.objs.rings[id_picked_ring].loc.x = event.detail.x;
-        yinsh.objs.rings[id_picked_ring].loc.y = event.detail.y;
+        yinsh.objs.rings[id_picked_ring].loc.x = event.detail.coord.x;
+        yinsh.objs.rings[id_picked_ring].loc.y = event.detail.coord.y;
 
+    };
+    
+    // redraw everything
+    refresh_canvas_state();
+
+};
+
+function markerMoved_handler (event) {
+
+    // event.detail.coord -> mousePos as {x, y}
+
+    // if index of marker in array is given, use it (multi-markers animation)
+    if ('id_in_array' in event.detail) {
+        
+        // updates x and y ring location
+        yinsh.objs.markers[event.detail.id_in_array].loc.x = event.detail.coord.x;
+        yinsh.objs.markers[event.detail.id_in_array].loc.y = event.detail.coord.y;
+    
+    } else { // pick last marker 
+
+        // the last marker in the array is the one being moved (drawn last / on top)
+        const id_last_marker = yinsh.objs.markers.length-1;
+
+        // updates x and y ring location
+        yinsh.objs.markers[id_last_marker].loc.x = event.detail.coord.x;
+        yinsh.objs.markers[id_last_marker].loc.y = event.detail.coord.y;
+
+    };
+    
     // redraw everything
     refresh_canvas_state();
 
@@ -594,7 +638,7 @@ async function ringDrop_handler (event) {
                     scoring_mk_sel_picked = await mk_scoring.promise // wait for mk to be picked -> return value of loc_id
 
                     // highlight rings - need to pass player own rings ids to the function
-                    await sleep(200);
+                    await sleep(300);
                     const _player_rings_ids = yinsh.objs.rings.filter((ring) => (ring.player == player_id)).map(ring => ring.loc.index);;
                     core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', {detail: {player_rings: _player_rings_ids}}));
                     
@@ -769,7 +813,7 @@ async function ring_scoring_handler (event) {
     const _end_xy = {x:_slot_coord.x, y:_slot_coord.y};    
 
     // animate ring move via synthetic mouse event
-    await syn_ring_move(_start_xy, _end_xy, 30, 15);
+    await syn_object_move(_start_xy, _end_xy, 30, 15);
     
     // increases player's score by one and fill scoring slot
     const new_player_score = increase_player_score();
@@ -816,22 +860,199 @@ function ring_sel_hover_handler (event) {
     };
 };
 
-function text_exec_from_ui_handler(){
+async function text_exec_from_ui_handler(){
 
-    enableInteraction();
+    /* 
+    //// TEST 1 - ring scoring (hover effect + animation)
 
-    console.log('LOG - Test triggered');
+        console.log('LOG - Test triggered - Ring scoring');
+        
+        enableInteraction();
 
-    // mark ring selection as true
-    yinsh.objs.current_mk_scoring.in_progress = false;
-    yinsh.objs.current_ring_scoring.in_progress = true;
+        // mark ring selection as true
+        yinsh.objs.current_mk_scoring.in_progress = false;
+        yinsh.objs.current_ring_scoring.in_progress = true;
 
-    // interaction JS should work its magic here
+        // interaction JS should work its magic from now on
+    */ 
 
-}
+    
+    //// TEST 2 - testing win game animation
 
-/////////// EXITING GAME - prompted by user via UI
+        console.log('LOG - Test triggered - Win game animation');
 
+        const win_anim_start_time = Date.now();
+
+        // init new game (just to have elements on the board)
+        // await init_game_fromServer(true);
+        
+        disableInteraction();
+
+        endGame_win_playS();
+
+        await sleep(150);
+
+        // loop over every object (rings + markers)
+        // pick a different one every 50ms or so
+        // accelerate it downwards beyond 900 of height
+
+
+        // RINGS
+        // as we'll pick rings from last in array to the end (easier), we keep track of the virtual array length
+        let _rings_vir_len = yinsh.objs.rings.length;
+        let _syn_RINGS_moves_prom_array = [];
+
+        while (_rings_vir_len > 0) {
+
+            // pick last ring in array, no need to re-order it
+            const r_index_no = _rings_vir_len - 1 ; 
+            const r_loc = structuredClone(yinsh.objs.rings[r_index_no].loc); 
+
+            const _start = {x: r_loc.x, y:r_loc.y};
+            const _end = {x: r_loc.x, y:r_loc.y + 900};
+
+            const syn_move_prom = syn_object_move(_start, _end, 30, 15, 'ring', r_index_no); // we trigger it but don't await for it to finish, we move onto other objects
+            _syn_RINGS_moves_prom_array.push(syn_move_prom);
+            await sleep(50);
+
+            _rings_vir_len -= 1; // decrement virtual len 
+
+        };
+
+        // MARKERS
+        let _markers_vir_len = yinsh.objs.markers.length;
+        let _syn_MARKERS_moves_prom_array = [];
+
+        while (_markers_vir_len > 0) {
+
+            // pick last marker in array
+            const mk_index_no = _markers_vir_len - 1 ; 
+            const mk_loc = structuredClone(yinsh.objs.markers[mk_index_no].loc); 
+
+            const _start = {x: mk_loc.x, y:mk_loc.y};
+            const _end = {x: mk_loc.x, y:mk_loc.y + 900};
+
+            const syn_move_prom = syn_object_move(_start, _end, 30, 15, 'marker', mk_index_no); // we trigger it but don't await for it to finish, we move onto other objects
+            _syn_MARKERS_moves_prom_array.push(syn_move_prom);
+            await sleep(50);
+
+            _markers_vir_len -= 1; // decrement virtual len 
+
+        };
+
+        // to prevent weird things happening due to a resize, wipe objects data when all moves are done
+            // RINGS
+            await Promise.all(_syn_RINGS_moves_prom_array);
+            yinsh.objs.rings = [];
+            yinsh.local_server_data_ref.rings = [];
+        
+            // MARKERS
+            await Promise.all(_syn_MARKERS_moves_prom_array);
+            yinsh.objs.markers = [];
+            yinsh.local_server_data_ref.markers = [];
+
+        // wipe scoring slots
+        yinsh.objs.scoring_slots = [];
+        refresh_canvas_state();
+
+        // win animation complete
+        console.log(`LOG - Test win animation time: ${Date.now() - win_anim_start_time}ms`);
+    
+    /*
+    //// TEST 3 - rotate elements on canvas
+
+        console.log(`LOG - Test canvas rotation started`);
+
+        let i = 0;
+        while (i < 50){
+
+            ctx.rotate(5 * Math.PI / 180)
+            refresh_canvas_state();
+            i++;
+
+        };
+        */
+};
+
+async function win_animation() {
+
+    console.log('LOG - Win game animation triggered');
+
+    const win_anim_start_time = Date.now();
+    
+    disableInteraction();
+
+    await sleep(150);
+
+    // loop over every object (rings + markers)
+    // pick a different one every 50ms or so
+    // accelerate it downwards beyond 900 of height
+
+    // RINGS
+    // as we'll pick rings from last in array to the end (easier), we keep track of the virtual array length
+    let _rings_vir_len = yinsh.objs.rings.length;
+    let _syn_RINGS_moves_prom_array = [];
+
+        while (_rings_vir_len > 0) {
+
+            // pick last ring in array, no need to re-order it
+            const r_index_no = _rings_vir_len - 1 ; 
+            const r_loc = structuredClone(yinsh.objs.rings[r_index_no].loc); 
+
+            const _start = {x: r_loc.x, y:r_loc.y};
+            const _end = {x: r_loc.x, y:r_loc.y + + canvas.height + 100};
+
+            const syn_move_prom = syn_object_move(_start, _end, 35, 15, 'ring', r_index_no); // we trigger it but don't await for it to finish, we move onto other objects
+            _syn_RINGS_moves_prom_array.push(syn_move_prom);
+            await sleep(50);
+
+            _rings_vir_len -= 1; // decrement virtual len 
+
+        };
+
+    // MARKERS
+    let _markers_vir_len = yinsh.objs.markers.length;
+    let _syn_MARKERS_moves_prom_array = [];
+
+        while (_markers_vir_len > 0) {
+
+            // pick last marker in array
+            const mk_index_no = _markers_vir_len - 1 ; 
+            const mk_loc = structuredClone(yinsh.objs.markers[mk_index_no].loc); 
+
+            const _start = {x: mk_loc.x, y:mk_loc.y};
+            const _end = {x: mk_loc.x, y:mk_loc.y + canvas.height + 100};
+
+            const syn_move_prom = syn_object_move(_start, _end, 35, 15, 'marker', mk_index_no); // we trigger it but don't await for it to finish, we move onto other objects
+            _syn_MARKERS_moves_prom_array.push(syn_move_prom);
+            await sleep(50);
+
+            _markers_vir_len -= 1; // decrement virtual len 
+
+        };
+
+    // to prevent weird things happening due to a resize, wipe objects data when all moves are done
+        // RINGS
+        await Promise.all(_syn_RINGS_moves_prom_array);
+        yinsh.objs.rings = [];
+        yinsh.local_server_data_ref.rings = [];
+    
+        // MARKERS
+        await Promise.all(_syn_MARKERS_moves_prom_array);
+        yinsh.objs.markers = [];
+        yinsh.local_server_data_ref.markers = [];
+
+    // wipe scoring slots
+    yinsh.objs.scoring_slots = [];
+    refresh_canvas_state();
+
+    // win animation complete
+    console.log(`LOG - Win animation time: ${Date.now() - win_anim_start_time}ms`);
+
+};
+
+
+/////////// EXITING GAME - prompted by user via resign action, mediated by server
 export async function game_exit_handler(event){
 
     // disable any canvas interaction
@@ -847,7 +1068,7 @@ export async function game_exit_handler(event){
 // HELPER FUNCTION
 // animate last ring (ie. on top of canvas) to move between start and end points
 // as the ring is moved, it triggers redraw of the canvas
-async function syn_ring_move(start, end, no_steps, sleep_ms){
+async function syn_object_move(start, end, no_steps, sleep_ms, obj = 'ring', id_in_array = -1){
 
     let _progress = 0;
 
@@ -866,8 +1087,29 @@ async function syn_ring_move(start, end, no_steps, sleep_ms){
 
         await sleep(sleep_ms);
 
-        const synthetic_mouse_move = {x:_new_x, y:_new_y};
-        core_et.dispatchEvent(new CustomEvent('ring_moved', { detail: synthetic_mouse_move }));
+        const synthetic_mouse_coord = {x:_new_x, y:_new_y};
+
+        // we use OBJ parameter to detemine which event we want to dispatch (ring vs marker)
+
+        if (obj == 'ring') {
+
+            // for animating multiple rings, we need to avoid re-shuffling them in the array
+            // with the last parameter, we pass directly the ring index in the array, so the handler doesn't reshuffle it
+            if (id_in_array == -1) {
+                core_et.dispatchEvent(new CustomEvent('ring_moved', { detail: {coord: synthetic_mouse_coord }}));
+            } else {
+                core_et.dispatchEvent(new CustomEvent('ring_moved', { detail: {coord: synthetic_mouse_coord, id_in_array: id_in_array }}));
+            };
+
+        } else if (obj == 'marker') {
+            
+            if (id_in_array == -1) {
+                core_et.dispatchEvent(new CustomEvent('marker_moved', { detail: {coord: synthetic_mouse_coord }}));
+            } else {
+                core_et.dispatchEvent(new CustomEvent('marker_moved', { detail: {coord: synthetic_mouse_coord, id_in_array: id_in_array }}));
+            };
+
+        };
 
     };
 };

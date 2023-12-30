@@ -13,25 +13,25 @@ export function refresh_canvas_state(){
         // clear canvas (assumes canvas already binded)
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw board
-        draw_board();
+            // Draw board
+            draw_board();
 
-        // keep drop zones up
-        draw_drop_zones();
+            // keep drop zones up
+            draw_drop_zones();
 
-        // scoring slots (TEST ONLY)
-        draw_scoring_slots();
+            // scoring slots (TEST ONLY)
+            draw_scoring_slots();
 
-        // draw cues for legal moves
-        draw_legal_moves_cues();
+            // draw cues for legal moves
+            draw_legal_moves_cues();
 
-        // Re-draw all rings and markers
-        draw_markers();
-        draw_rings();
-        
-        // Draw markers halos (score handling)
-        draw_markers_halos();
-        draw_rings_highlight();
+            // Re-draw all rings and markers
+            draw_markers();
+            draw_rings();
+            
+            // Draw markers halos (score handling)
+            draw_markers_halos();
+            draw_rings_highlight();
 
         // logging time 
         //console.log(`LOG - Drawing time: ${Date.now() - painting_start_time}ms`);
@@ -99,11 +99,13 @@ function draw_board(){
     // this points to globalThis.ctx
     ctx.save();
 
+        // http://diveintohtml5.info/canvas.html#pixel-madness
+
         // drawing settings -> these should go to the DB too at some point
         ctx.lineJoin = "round";
         ctx.strokeStyle = '#1e52b7';
         ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.35;
+        ctx.globalAlpha = 0.4;
 
         /* RECIPE
         - get to first starting point for column

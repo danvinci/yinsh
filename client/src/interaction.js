@@ -125,7 +125,7 @@ function mouseMove_handler (event) {
         if (move_in_progress == true){
 
             // create and dispatch event for mouse moving while move is active
-            core_et.dispatchEvent(new CustomEvent('ring_moved', {detail: mousePos}));
+            core_et.dispatchEvent(new CustomEvent('ring_moved', {detail: {coord: mousePos} }));
             
         };
 

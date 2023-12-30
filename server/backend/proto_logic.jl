@@ -1642,12 +1642,12 @@ function gen_newGame(vs_ai=false)
 		
 		### package data for client
 		_cli_pkg = Dict(:game_id => game_id,
-							:orig_player_id => ORIG_player_id,
-							:join_player_id => JOIN_player_id,
-							:rings => rings,
-							# no markers yet
-							:scenarioTree => scenario_tree,
-							:turn_no => 1) # first game turn
+						:orig_player_id => ORIG_player_id,
+						:join_player_id => JOIN_player_id,
+						:rings => rings,
+						# no markers yet
+						:scenarioTree => scenario_tree,
+						:turn_no => 1) # first game turn
 
 		_first_turn = Dict(:turn_no => 1,
 							:status => :open,
@@ -2335,7 +2335,7 @@ end
 function update_game_end!(game_id::String)::Dict
 # checks if game is over or not, either by scoring or resign by one of the players
 # marks reason in game log - who won, reason (score vs resign), and end time 
-
+	
 	_def_ret = Dict(:end_flag => false)
 
 	_end_check_by_score = is_game_over_by_score(game_id)
@@ -2352,7 +2352,7 @@ function update_game_end!(game_id::String)::Dict
 		
 		return _end_check_by_score
 
-	elseif _end_check_by_resign[:end_flag] 
+	elseif _end_check_by_resign[:end_flag]  
 
 		games_log_dict[game_id][:identity][:won_by] = _end_check_by_resign[:won_by]
 		games_log_dict[game_id][:identity][:won_why] = :resign
@@ -4158,7 +4158,7 @@ version = "1.4.1+0"
 # ╠═33707130-7703-4aa0-84e6-23ab387c0c4d
 # ╠═9d153cf1-3e3b-49c0-abe7-ebd0f524557c
 # ╟─52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
-# ╠═8f2e4816-b60d-40eb-a9d8-acf4240c646a
+# ╟─8f2e4816-b60d-40eb-a9d8-acf4240c646a
 # ╠═c67154cb-c8cc-406c-90a8-0ea8241d8571
 # ╠═c2797a4c-81d3-4409-9038-117fe50540a8
 # ╟─53dec9b0-dac1-47a6-b242-9696ff45b91b
@@ -4217,7 +4217,7 @@ version = "1.4.1+0"
 # ╟─13eb72c7-ac24-4b93-8fd9-260b49940370
 # ╟─8929062f-0d97-41f9-99dd-99d51f01b664
 # ╟─ebd8e962-2150-4ada-8ebd-3eba6e29c12e
-# ╟─f55bb88f-ecce-4c14-b9ac-4fc975c3592e
+# ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b

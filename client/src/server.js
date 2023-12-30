@@ -17,9 +17,9 @@ import { save_first_server_response, save_next_server_response, get_game_id, get
 
 // how to reach endpoint
 
-// const ws_complete_address = `ws://localhost:6091`; // local test address (pluto)
+const ws_complete_address = `ws://localhost:6091`; // local test address (pluto)
 // const ws_complete_address = `ws://localhost:80/api`; // local test address (docker)
-const ws_complete_address = "wss://yinsh.net/api" // prod deployment
+// const ws_complete_address = "wss://yinsh.net/api" // prod deployment
 
 
 ///// COMMUNICATION CODES
@@ -423,8 +423,9 @@ export async function server_ws_resign_game(){
 
 function _handler_next_action_data(server_response_data) {
 
-    // save/overwrite data only if we have turn information data 
-    if ("delta" in server_response_data) {
+    // save/overwrite data only if we have delta information data 
+    const has_delta = Object.keys(server_response_data).includes('delta_array');
+    if (has_delta) {
         save_next_server_response(server_response_data);
     };
 

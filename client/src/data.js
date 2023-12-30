@@ -247,8 +247,8 @@ export function save_next_server_response(srv_response_input){
     yinsh.next_server_data = structuredClone(_server_response);
 
     // save delta data if present
-    const has_delta = Object.keys(srv_response_input).includes('delta');
-    yinsh.delta = has_delta ? structuredClone(srv_response_input.delta) : undefined;
+    const has_delta = Object.keys(srv_response_input).includes('delta_array');
+    yinsh.delta_array = has_delta ? structuredClone(srv_response_input.delta_array) : undefined;
 
     console.log('LOG - Next turn data from server saved');
     
@@ -1011,7 +1011,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
                     let h_path = new Path2D()
 
                     const hot_flag = (r_id == sel_ring) ? true : false;
-                    const shape_diam = (r_id == sel_ring) ? S*0.19 : S*0.13;
+                    const shape_diam = (r_id == sel_ring) ? S*0.2 : S*0.14;
 
                     h_path.arc(d_zone.loc.x, d_zone.loc.y, shape_diam, 0, 2*Math.PI);
 
