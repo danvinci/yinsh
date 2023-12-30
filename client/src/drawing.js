@@ -3,7 +3,7 @@
 import {get_player_id, get_opponent_id} from './data.js'
 
 // glue function called by orchestrator after data manipulation
-export function refresh_canvas_state(){
+export function refresh_canvas_state(alpha_param = 1, scale_param = 1, line_param = 1, offset_param = {x:0, y:0}, board_flag = false){
 
     // https://docs.solidjs.com/references/api-reference/lifecycles/onMount
 
@@ -14,13 +14,18 @@ export function refresh_canvas_state(){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // Draw board
-            draw_board();
-
+            // pass params onto board only w/ flag enabled, otherwise only affects scoring_slots
+            if (board_flag) {
+                draw_board(alpha_param, scale_param, line_param, offset_param);
+            } else {
+                draw_board();
+            };
+            
             // keep drop zones up
             draw_drop_zones();
 
-            // scoring slots (TEST ONLY)
-            draw_scoring_slots();
+            // scoring slots 
+            draw_scoring_slots(alpha_param);
 
             // draw cues for legal moves
             draw_legal_moves_cues();
@@ -67,12 +72,16 @@ export function refresh_canvas_state(){
     */
 
 // game board
-function draw_board(){
+function draw_board(alpha_param = 1, scale_param = 1, line_param = 1, offset_param = {x:0, y:0}){
 
     // const painting_start_time = Date.now()
 
     // this whole function should be simplified at some point -> re-using premade paths?
 
+    // function arguments - used for animations involving the board
+    // alpha_param -> transparency 0 -> 1
+    // scale_param -> ref size 1 -> N
+    // offset_param -> {x, y} -> drawing starting position
 
     // retrieve constants + drawing params
     // recovering constants
@@ -81,16 +90,12 @@ function draw_board(){
     const mm_points_cols = yinsh.constant_params.mm_points_cols;
 
     // recovering S & H constants for drawing
-    const S = yinsh.drawing_params.S;
-    const H = yinsh.drawing_params.H;
+    const S = yinsh.drawing_params.S*scale_param;
+    const H = yinsh.drawing_params.H*scale_param;
  
      // recover offset values for starting to draw (centering board and zones)
-     const _offset_x = yinsh.drawing_params.x_offset;
-     const _offset_y = yinsh.drawing_params.y_offset;
-
-    // canvas parameters
-    const _width = canvas.width;
-    const _height = canvas.height;
+     const _offset_x = yinsh.drawing_params.x_offset+offset_param.x;
+     const _offset_y = yinsh.drawing_params.y_offset+offset_param.y;
 
     // hardcoding triangles to be drawn for each column (fn call results in silent error)
     const triangles_toPaint_byCol = {0:3, 1:6, 2:7, 3:8, 4:9, 5:8, 6:9, 7:8, 8:7, 9:6, 10:3};
@@ -103,9 +108,9 @@ function draw_board(){
 
         // drawing settings -> these should go to the DB too at some point
         ctx.lineJoin = "round";
-        ctx.strokeStyle = '#1e52b7';
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.4;
+        ctx.strokeStyle = '#4b85c3';
+        ctx.lineWidth = 2*line_param;
+        ctx.globalAlpha = 0.4*alpha_param;
 
         /* RECIPE
         - get to first starting point for column
@@ -258,13 +263,12 @@ function draw_drop_zones(){
 
 // drop zones for scoring rings // TESTING-ONLY, to see how to define boundary with rings
 // is the array is non-empty all the time, we can also draw them on the empty board
-function draw_scoring_slots(){
+function draw_scoring_slots(alpha_param = 1){
+
+    // alpha_param can  be used for progressive fading, as the function is invoked w/ a lower value over time
 
     // retrieve scoring slots data
     const _scoring_slots = yinsh.objs.scoring_slots;
-
-    const player_black_id = yinsh.constant_params.player_black_id;
-    const player_white_id = yinsh.constant_params.player_white_id;
 
     const _local_player = "this_player";
     const _oppon_player = "opponent";
@@ -281,7 +285,7 @@ function draw_scoring_slots(){
             // drawing
             ctx.save();
 
-                ctx.globalAlpha = 0.15; 
+                ctx.globalAlpha = 0.15*alpha_param; 
                 ctx.fillStyle = _empty_score_color;
 
                 ctx.fill(slot.path);
@@ -297,13 +301,13 @@ function draw_scoring_slots(){
             if (slot.player == _local_player) {
 
                 // draw ring  
-                const _ring_spec = {x: slot.x, y: slot.y, id: _local_color_id}
+                const _ring_spec = {x: slot.x, y: slot.y, id: _local_color_id, alpha:0.8*alpha_param}
                 draw_rings(_ring_spec);
 
             } else {
                 
                 // draw ring  
-                const _ring_spec = {x: slot.x, y: slot.y, id: _oppon_color_id}
+                const _ring_spec = {x: slot.x, y: slot.y, id: _oppon_color_id, alpha:0.8*alpha_param}
                 draw_rings(_ring_spec);
 
             };
@@ -405,12 +409,13 @@ function draw_rings(ring_spec = {}){
         const _ring_x = ring_spec.x;
         const _ring_y = ring_spec.y;
         const _ring_id = ring_spec.id;
+        const _ring_alpha = ring_spec.alpha;
 
         // starts painting - special flow using ring specification from scoring slot function
         ctx.save();
 
             // rings in scoring slots should look not look available for interaction - playing w/ transparency, not sure if it's good
-            ctx.globalAlpha = 0.8;
+            ctx.globalAlpha = _ring_alpha;
 
             // draw black ring
             if (_ring_id == player_black_id){ 

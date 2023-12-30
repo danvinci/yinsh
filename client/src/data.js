@@ -203,7 +203,7 @@ export function save_first_server_response(srv_response_input, joiner=false){
         _server_response.rings = srv_response_input.rings; 
 
          // initial markers setup (empty array)
-         _server_response.markers = []; 
+         _server_response.markers = srv_response_input.markers; 
 
         // pre-computed scenario tree for each possible move (except pick/drop in same location)
         _server_response.scenarioTree = srv_response_input.scenarioTree;
@@ -498,7 +498,7 @@ function init_drop_zones(){
 };
 
 // initialize scoring slots (for rings)
-function init_scoring_slots(){
+export function init_scoring_slots(){
 
     // this function depends on having already determined who is who
 
@@ -515,11 +515,10 @@ function init_scoring_slots(){
     const _start_BL_point = yinsh.drawing_params.start_BL;
     const _start_TR_point = yinsh.drawing_params.start_TR;
 
-    // init temp empty array for drop zones
+    // init temp empty array for scoring slots
     let _scoring_slots = [];
 
     /* RECIPE
-    - check canvas size
     - pick top/right point and draw 3 in a row, leftward (other player)
     - pick bottom/left point and draw 3 in a row, rightward (this player)
     */

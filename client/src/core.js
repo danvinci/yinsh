@@ -7,7 +7,7 @@ import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNew
 import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_player_id, save_next_server_response } from './data.js'
 import { bind_adapt_canvas, reorder_rings, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
-import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score} from './data.js' 
+import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
 import { ringDrop_playS, markersRemoved_player_playS, markersRemoved_oppon_playS, endGame_win_playS, endGame_lose_playS } from './sound.js'
@@ -638,7 +638,7 @@ async function ringDrop_handler (event) {
                     scoring_mk_sel_picked = await mk_scoring.promise // wait for mk to be picked -> return value of loc_id
 
                     // highlight rings - need to pass player own rings ids to the function
-                    await sleep(300);
+                    await sleep(350);
                     const _player_rings_ids = yinsh.objs.rings.filter((ring) => (ring.player == player_id)).map(ring => ring.loc.index);;
                     core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', {detail: {player_rings: _player_rings_ids}}));
                     
@@ -878,6 +878,7 @@ async function text_exec_from_ui_handler(){
 
     
     //// TEST 2 - testing win game animation
+    /*
 
         console.log('LOG - Test triggered - Win game animation');
 
@@ -909,11 +910,11 @@ async function text_exec_from_ui_handler(){
             const r_loc = structuredClone(yinsh.objs.rings[r_index_no].loc); 
 
             const _start = {x: r_loc.x, y:r_loc.y};
-            const _end = {x: r_loc.x, y:r_loc.y + 900};
+            const _end = {x: r_loc.x, y:r_loc.y + canvas.height};
 
             const syn_move_prom = syn_object_move(_start, _end, 30, 15, 'ring', r_index_no); // we trigger it but don't await for it to finish, we move onto other objects
             _syn_RINGS_moves_prom_array.push(syn_move_prom);
-            await sleep(50);
+            await sleep(45);
 
             _rings_vir_len -= 1; // decrement virtual len 
 
@@ -930,11 +931,11 @@ async function text_exec_from_ui_handler(){
             const mk_loc = structuredClone(yinsh.objs.markers[mk_index_no].loc); 
 
             const _start = {x: mk_loc.x, y:mk_loc.y};
-            const _end = {x: mk_loc.x, y:mk_loc.y + 900};
+            const _end = {x: mk_loc.x, y:mk_loc.y + canvas.height};
 
             const syn_move_prom = syn_object_move(_start, _end, 30, 15, 'marker', mk_index_no); // we trigger it but don't await for it to finish, we move onto other objects
             _syn_MARKERS_moves_prom_array.push(syn_move_prom);
-            await sleep(50);
+            await sleep(45);
 
             _markers_vir_len -= 1; // decrement virtual len 
 
@@ -951,47 +952,88 @@ async function text_exec_from_ui_handler(){
             yinsh.objs.markers = [];
             yinsh.local_server_data_ref.markers = [];
 
-        // wipe scoring slots
-        yinsh.objs.scoring_slots = [];
-        refresh_canvas_state();
+        // handle scoring slots - draw them more transparent over time and then delete them
+            let _alpha = 1;
+            do {
+                await sleep(15);
+                _alpha = (_alpha < 0.15) ? 0 : _alpha -= 0.1;
+                
+                refresh_canvas_state(_alpha);
+
+            } while(_alpha != 0);
+            yinsh.objs.scoring_slots = [];
+            yinsh.objs.player_score = 0;
+            yinsh.objs.opponent_score = 0;
+            
+
+        // BOARD -  fade out & zoom
+        await sleep(300);
+        _alpha = 1;
+        let _scale = 1;
+        let _line = 1;
+        let _offset = {x:0, y:0};
+        
+        do {
+            await sleep(20);
+            _alpha = (_alpha < 0.03) ? 0 : _alpha -= 0.02;
+            // increase scale over time
+            _line += 0.8;
+            _scale += 0.1;
+            _offset.x += -30;
+            _offset.y += -30;
+            refresh_canvas_state(_alpha, _scale, _line, _offset, true);
+
+        } while(_alpha != 0);
+
+        // BOARD - fade-in
+        init_scoring_slots(); // regenerate empty scoring slots (scores set to zero)
+        
+        await sleep(400);
+        
+        _line = 1;
+        _scale = 1;
+        _offset.x = 0;
+        _offset.y = 0;
+
+        do {
+            await sleep(20);
+            _alpha = (_alpha > 0.95) ? 1 : _alpha += 0.03;
+            
+            refresh_canvas_state(_alpha, _scale, _line, _offset, true);
+
+        } while(_alpha != 1);
 
         // win animation complete
         console.log(`LOG - Test win animation time: ${Date.now() - win_anim_start_time}ms`);
+
+    */
     
-    /*
-    //// TEST 3 - rotate elements on canvas
-
-        console.log(`LOG - Test canvas rotation started`);
-
-        let i = 0;
-        while (i < 50){
-
-            ctx.rotate(5 * Math.PI / 180)
-            refresh_canvas_state();
-            i++;
-
-        };
-        */
 };
 
 async function win_animation() {
 
-    console.log('LOG - Win game animation triggered');
+    console.log('LOG - Test triggered - Win game animation');
 
-    const win_anim_start_time = Date.now();
-    
-    disableInteraction();
+        const win_anim_start_time = Date.now();
 
-    await sleep(150);
+        // init new game (just to have elements on the board)
+        // await init_game_fromServer(true);
+        
+        disableInteraction();
 
-    // loop over every object (rings + markers)
-    // pick a different one every 50ms or so
-    // accelerate it downwards beyond 900 of height
+        endGame_win_playS();
 
-    // RINGS
-    // as we'll pick rings from last in array to the end (easier), we keep track of the virtual array length
-    let _rings_vir_len = yinsh.objs.rings.length;
-    let _syn_RINGS_moves_prom_array = [];
+        await sleep(150);
+
+        // loop over every object (rings + markers)
+        // pick a different one every 50ms or so
+        // accelerate it downwards beyond 900 of height
+
+
+        // RINGS
+        // as we'll pick rings from last in array to the end (easier), we keep track of the virtual array length
+        let _rings_vir_len = yinsh.objs.rings.length;
+        let _syn_RINGS_moves_prom_array = [];
 
         while (_rings_vir_len > 0) {
 
@@ -1000,19 +1042,19 @@ async function win_animation() {
             const r_loc = structuredClone(yinsh.objs.rings[r_index_no].loc); 
 
             const _start = {x: r_loc.x, y:r_loc.y};
-            const _end = {x: r_loc.x, y:r_loc.y + + canvas.height + 100};
+            const _end = {x: r_loc.x, y:r_loc.y + canvas.height};
 
-            const syn_move_prom = syn_object_move(_start, _end, 35, 15, 'ring', r_index_no); // we trigger it but don't await for it to finish, we move onto other objects
+            const syn_move_prom = syn_object_move(_start, _end, 30, 15, 'ring', r_index_no); // we trigger it but don't await for it to finish, we move onto other objects
             _syn_RINGS_moves_prom_array.push(syn_move_prom);
-            await sleep(50);
+            await sleep(45);
 
             _rings_vir_len -= 1; // decrement virtual len 
 
         };
 
-    // MARKERS
-    let _markers_vir_len = yinsh.objs.markers.length;
-    let _syn_MARKERS_moves_prom_array = [];
+        // MARKERS
+        let _markers_vir_len = yinsh.objs.markers.length;
+        let _syn_MARKERS_moves_prom_array = [];
 
         while (_markers_vir_len > 0) {
 
@@ -1021,33 +1063,80 @@ async function win_animation() {
             const mk_loc = structuredClone(yinsh.objs.markers[mk_index_no].loc); 
 
             const _start = {x: mk_loc.x, y:mk_loc.y};
-            const _end = {x: mk_loc.x, y:mk_loc.y + canvas.height + 100};
+            const _end = {x: mk_loc.x, y:mk_loc.y + canvas.height};
 
-            const syn_move_prom = syn_object_move(_start, _end, 35, 15, 'marker', mk_index_no); // we trigger it but don't await for it to finish, we move onto other objects
+            const syn_move_prom = syn_object_move(_start, _end, 30, 15, 'marker', mk_index_no); // we trigger it but don't await for it to finish, we move onto other objects
             _syn_MARKERS_moves_prom_array.push(syn_move_prom);
-            await sleep(50);
+            await sleep(45);
 
             _markers_vir_len -= 1; // decrement virtual len 
 
         };
 
-    // to prevent weird things happening due to a resize, wipe objects data when all moves are done
-        // RINGS
-        await Promise.all(_syn_RINGS_moves_prom_array);
-        yinsh.objs.rings = [];
-        yinsh.local_server_data_ref.rings = [];
-    
-        // MARKERS
-        await Promise.all(_syn_MARKERS_moves_prom_array);
-        yinsh.objs.markers = [];
-        yinsh.local_server_data_ref.markers = [];
+        // to prevent weird things happening due to a resize, wipe objects data when all moves are done
+            // RINGS
+            await Promise.all(_syn_RINGS_moves_prom_array);
+            yinsh.objs.rings = [];
+            yinsh.local_server_data_ref.rings = [];
+        
+            // MARKERS
+            await Promise.all(_syn_MARKERS_moves_prom_array);
+            yinsh.objs.markers = [];
+            yinsh.local_server_data_ref.markers = [];
 
-    // wipe scoring slots
-    yinsh.objs.scoring_slots = [];
-    refresh_canvas_state();
+        // handle scoring slots - draw them more transparent over time and then delete them
+            let _alpha = 1;
+            do {
+                await sleep(15);
+                _alpha = (_alpha < 0.15) ? 0 : _alpha -= 0.1;
+                
+                refresh_canvas_state(_alpha);
 
-    // win animation complete
-    console.log(`LOG - Win animation time: ${Date.now() - win_anim_start_time}ms`);
+            } while(_alpha != 0);
+            yinsh.objs.scoring_slots = [];
+            yinsh.objs.player_score = 0;
+            yinsh.objs.opponent_score = 0;
+            
+
+        // BOARD -  fade out & zoom
+        await sleep(300);
+        _alpha = 1;
+        let _scale = 1;
+        let _line = 1;
+        let _offset = {x:0, y:0};
+        
+        do {
+            await sleep(20);
+            _alpha = (_alpha < 0.03) ? 0 : _alpha -= 0.02;
+            // increase scale over time
+            _line += 0.8;
+            _scale += 0.1;
+            _offset.x += -30;
+            _offset.y += -30;
+            refresh_canvas_state(_alpha, _scale, _line, _offset, true);
+
+        } while(_alpha != 0);
+
+        // BOARD - fade-in
+        init_scoring_slots(); // regenerate empty scoring slots (scores set to zero)
+        
+        await sleep(400);
+        
+        _line = 1;
+        _scale = 1;
+        _offset.x = 0;
+        _offset.y = 0;
+
+        do {
+            await sleep(20);
+            _alpha = (_alpha > 0.95) ? 1 : _alpha += 0.03;
+            
+            refresh_canvas_state(_alpha, _scale, _line, _offset, true);
+
+        } while(_alpha != 1);
+
+        // win animation complete
+        console.log(`LOG - Test win animation time: ${Date.now() - win_anim_start_time}ms`);
 
 };
 
@@ -1061,7 +1150,9 @@ export async function game_exit_handler(event){
     // notify server (game is lost automatically) --> other user is informed by server
     await server_ws_resign_game(); // server will acknowledge
 
-    // receives formal 'you lost' response from server, handled by next_action_handler
+    // we receive formal 'you lost' response from server, handled by next_action_handler
+    // we should handle if/when communication w/ server fails, (eg. websocket timeout) so we trigger the game ending anyway and UI can be reset
+
 };
 
 

@@ -1449,30 +1449,30 @@ _no_scoring_def_server = CartesianIndex(0,0)
 	_return = Dict()
 
 
-	if _scoring_handled
-		_return = Dict(:new_game_state_srv => new_gs, 
-						:flip_flag => flip_flag,
-						:markers_toFlip_srv => markers_toFlip,
-						:markers_toFlip_cli => reshape_out(markers_toFlip),
-						:added_marker_cli => added_marker,
-						:moved_ring_cli => moved_ring,
-						:score_handled => true,
-						:markers_toRemove_srv => _mk_to_remove,
-						:markers_toRemove_cli => reshape_out(_mk_to_remove),
-						:scoring_ring_srv => score_ring_index,
-						:scoring_ring_cli => reshape_out(score_ring_index)
-						)
-	else
-		_return = Dict(:new_game_state_srv => new_gs, 
-						:flip_flag => flip_flag,
-						:markers_toFlip_srv => markers_toFlip,
-						:markers_toFlip_cli => reshape_out(markers_toFlip),
-						:added_marker_cli => added_marker,
-						:moved_ring_cli => moved_ring,
-						:score_handled => false
-						)
-
-	end
+		if _scoring_handled
+			_return = Dict(:new_game_state_srv => new_gs, 
+							:flip_flag => flip_flag,
+							:markers_toFlip_srv => markers_toFlip,
+							:markers_toFlip_cli => reshape_out(markers_toFlip),
+							:added_marker_cli => added_marker,
+							:moved_ring_cli => moved_ring,
+							:score_handled => true,
+							:markers_toRemove_srv => _mk_to_remove,
+							:markers_toRemove_cli => reshape_out(_mk_to_remove),
+							:scoring_ring_srv => score_ring_index,
+							:scoring_ring_cli => reshape_out(score_ring_index)
+							)
+		else
+			_return = Dict(:new_game_state_srv => new_gs, 
+							:flip_flag => flip_flag,
+							:markers_toFlip_srv => markers_toFlip,
+							:markers_toFlip_cli => reshape_out(markers_toFlip),
+							:added_marker_cli => added_marker,
+							:moved_ring_cli => moved_ring,
+							:score_handled => false
+							)
+	
+		end
 
 	return _return
 
@@ -1645,7 +1645,7 @@ function gen_newGame(vs_ai=false)
 						:orig_player_id => ORIG_player_id,
 						:join_player_id => JOIN_player_id,
 						:rings => rings,
-						# no markers yet
+						:markers => [], # no markers yet
 						:scenarioTree => scenario_tree,
 						:turn_no => 1) # first game turn
 
@@ -1823,7 +1823,7 @@ function msg_dispatcher(ws, msg_id, msg_code, payload = Dict(), _status::Bool = 
 	setindex!(_response, msg_id, :msg_id)
 	setindex!(_response, _sfx_msg_code, :msg_code)
 
-	# add statusCode 200 (for AWS API Gateway)
+	# add statusCode 200 
 	setindex!(_response, 200, :statusCode)
 
 	# send response
@@ -2207,6 +2207,7 @@ function update_serverStates!(_game_code, _player_id, _scenario_pick)
 
 
 	# extract delta to be logged and passed onto client
+	_array_delta_client = Dict[] # array, for multiple deltas/replays
 	_delta_client = Dict()
 
 	# differentiate response based on scoring being handled (it sucks, to be cleaned)
@@ -2230,9 +2231,10 @@ function update_serverStates!(_game_code, _player_id, _scenario_pick)
 		
 	end
 
+	push!(_array_delta_client, _delta_client)
 
-	# save delta for client
-	push!(games_log_dict[_game_code][:client_delta], _delta_client)
+	# save delta array for client
+	push!(games_log_dict[_game_code][:client_delta], _array_delta_client)
 	
 
 	println("LOG - Server game state and delta updated")
@@ -2265,10 +2267,10 @@ function fn_nextPlaying_payload(game_code::String)
 		_pkg = getLast_clientPkg(game_code)
 	
 		# retrieve states delta
-		_client_delta = getLast_clientDelta(game_code)
+		_client_delta_array = getLast_clientDelta(game_code)
 	
 			# append delta to package for client
-			setindex!(_pkg, _client_delta, :delta)
+			setindex!(_pkg, _client_delta_array, :delta_array)
 
 	
 		return _pkg::Dict
@@ -4180,8 +4182,8 @@ version = "1.4.1+0"
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╠═1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╠═3f1506ff-525b-4b36-9f16-13d3a7d95d8b
-# ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
-# ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
+# ╠═1f021cc5-edb0-4515-b8c9-6a2395bc9547
+# ╠═aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╠═761fb8d7-0c7d-4428-ad48-707d219582c0
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
@@ -4208,7 +4210,7 @@ version = "1.4.1+0"
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╠═ca346015-b2c9-45da-8c1e-17493274aca2
 # ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
-# ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
+# ╠═a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
 # ╟─5d6e868b-50a9-420b-8533-5db4c5d8f72c
 # ╟─c77607ad-c11b-4fd3-bac9-6c43d71ae932
