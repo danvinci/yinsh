@@ -243,6 +243,7 @@ async function server_actions_handler (event) {
 
                 // trigger winning animation 
                 await win_animation();
+                ui_et.dispatchEvent(new CustomEvent('reset_dialog')); // clean up dialog only if we win (?)
 
             // opponent wins
             } else {
@@ -255,6 +256,7 @@ async function server_actions_handler (event) {
 
         // reset UI
         ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
+        
         console.log("LOG - GAME COMPLETED");
 
     };
@@ -708,7 +710,7 @@ function mk_scoring_options_handler(event){
 
         console.log("USER - Pick a marker to indicate the row!");
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You scored a point! Pick a row of markers` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You scored! Pick a row of markers` }));
 
         // retrieve scoring options
         const scoring_options = get_scoring_options();
@@ -878,7 +880,8 @@ async function text_exec_from_ui_handler(){
 
     
     //// TEST 2 - testing win game animation
-    /*
+    
+        /*
 
         console.log('LOG - Test triggered - Win game animation');
 
@@ -953,37 +956,40 @@ async function text_exec_from_ui_handler(){
             yinsh.local_server_data_ref.markers = [];
 
         // handle scoring slots - draw them more transparent over time and then delete them
-            let _alpha = 1;
-            do {
-                await sleep(15);
-                _alpha = (_alpha < 0.15) ? 0 : _alpha -= 0.1;
-                
-                refresh_canvas_state(_alpha);
-
-            } while(_alpha != 0);
+            
+            const _f_alpha_array = Array(25).fill().map((_, i) => (i)/25).reverse(); // 0.96 -> 0 values
+            for (let i = 0; i < _f_alpha_array.length; i++) {
+                await sleep(5);
+                refresh_canvas_state(_f_alpha_array[i]);
+            };
             yinsh.objs.scoring_slots = [];
             yinsh.objs.player_score = 0;
             yinsh.objs.opponent_score = 0;
             
 
         // BOARD -  fade out & zoom
-        await sleep(300);
-        _alpha = 1;
+        await sleep(200);
         let _scale = 1;
         let _line = 1;
         let _offset = {x:0, y:0};
-        
-        do {
-            await sleep(20);
-            _alpha = (_alpha < 0.03) ? 0 : _alpha -= 0.02;
+
+        for (let i = 0; i < _f_alpha_array.length; i++) {
+            
+            await sleep(30);
+
+            const _alpha = _f_alpha_array[i];
             // increase scale over time
-            _line += 0.8;
+            _line += 0.7;
             _scale += 0.1;
-            _offset.x += -30;
-            _offset.y += -30;
+            
+            // move start drawing point up left as we zoom in - note: these values are okayish only for desktop
+            _offset.x += -canvas.width/33; 
+            _offset.y += -canvas.height/25;
+
             refresh_canvas_state(_alpha, _scale, _line, _offset, true);
 
-        } while(_alpha != 0);
+        };
+        
 
         // BOARD - fade-in
         init_scoring_slots(); // regenerate empty scoring slots (scores set to zero)
@@ -995,24 +1001,27 @@ async function text_exec_from_ui_handler(){
         _offset.x = 0;
         _offset.y = 0;
 
-        do {
-            await sleep(20);
-            _alpha = (_alpha > 0.95) ? 1 : _alpha += 0.03;
+        const _n_alpha_array = Array(25).fill().map((_, i) => (i)/25); // 0 -> 0.96 values
+        for (let i = 0; i < _n_alpha_array.length; i++) {
+            
+            await sleep(25);
+            const _alpha = _n_alpha_array[i];
             
             refresh_canvas_state(_alpha, _scale, _line, _offset, true);
 
-        } while(_alpha != 1);
+        };
+        refresh_canvas_state(); // calling refresh for last alpha step 0.96 -> 1
 
         // win animation complete
         console.log(`LOG - Test win animation time: ${Date.now() - win_anim_start_time}ms`);
 
-    */
+        */
     
 };
 
 async function win_animation() {
 
-    console.log('LOG - Test triggered - Win game animation');
+    console.log('LOG - Win game animation started');
 
         const win_anim_start_time = Date.now();
 
@@ -1085,37 +1094,39 @@ async function win_animation() {
             yinsh.local_server_data_ref.markers = [];
 
         // handle scoring slots - draw them more transparent over time and then delete them
-            let _alpha = 1;
-            do {
-                await sleep(15);
-                _alpha = (_alpha < 0.15) ? 0 : _alpha -= 0.1;
-                
-                refresh_canvas_state(_alpha);
-
-            } while(_alpha != 0);
+            
+            const _f_alpha_array = Array(25).fill().map((_, i) => (i)/25).reverse(); // 0.96 -> 0 values
+            for (let i = 0; i < _f_alpha_array.length; i++) {
+                await sleep(5);
+                refresh_canvas_state(_f_alpha_array[i]);
+            };
             yinsh.objs.scoring_slots = [];
             yinsh.objs.player_score = 0;
             yinsh.objs.opponent_score = 0;
             
 
         // BOARD -  fade out & zoom
-        await sleep(300);
-        _alpha = 1;
+        await sleep(150);
         let _scale = 1;
         let _line = 1;
         let _offset = {x:0, y:0};
-        
-        do {
-            await sleep(20);
-            _alpha = (_alpha < 0.03) ? 0 : _alpha -= 0.02;
-            // increase scale over time
-            _line += 0.8;
-            _scale += 0.1;
-            _offset.x += -30;
-            _offset.y += -30;
+
+        for (let i = 0; i < _f_alpha_array.length; i++) {
+            
+            await sleep(30);
+
+            const _alpha = _f_alpha_array[i];
+            _line += 0.7;
+            _scale += 0.1; // increase scale over time
+            
+            // move start drawing point up left as we zoom in - note: these values are okayish only for desktop
+            _offset.x += -canvas.width/33; 
+            _offset.y += -canvas.height/25;
+
             refresh_canvas_state(_alpha, _scale, _line, _offset, true);
 
-        } while(_alpha != 0);
+        };
+        
 
         // BOARD - fade-in
         init_scoring_slots(); // regenerate empty scoring slots (scores set to zero)
@@ -1127,16 +1138,19 @@ async function win_animation() {
         _offset.x = 0;
         _offset.y = 0;
 
-        do {
-            await sleep(20);
-            _alpha = (_alpha > 0.95) ? 1 : _alpha += 0.03;
+        const _n_alpha_array = Array(25).fill().map((_, i) => (i)/25); // 0 -> 0.96 values
+        for (let i = 0; i < _n_alpha_array.length; i++) {
+            
+            await sleep(25);
+            const _alpha = _n_alpha_array[i];
             
             refresh_canvas_state(_alpha, _scale, _line, _offset, true);
 
-        } while(_alpha != 1);
+        };
+        refresh_canvas_state(); // calling refresh for last alpha step 0.96 -> 1
 
         // win animation complete
-        console.log(`LOG - Test win animation time: ${Date.now() - win_anim_start_time}ms`);
+        console.log(`LOG - Win animation done in: ${Date.now() - win_anim_start_time}ms`);
 
 };
 

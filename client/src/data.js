@@ -609,7 +609,7 @@ function init_legal_moves_cues(){
 
             // create shape + coordinates and push to array
             let cue_path = new Path2D()
-                cue_path.arc(d_zone.loc.x, d_zone.loc.y, S*0.09, 0, 2*Math.PI);
+                cue_path.arc(d_zone.loc.x, d_zone.loc.y, S*0.08, 0, 2*Math.PI);
             
             _legal_moves_cues.push({path: cue_path, loc: structuredClone(d_zone.loc), on: false});
         

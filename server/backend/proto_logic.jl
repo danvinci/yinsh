@@ -2781,7 +2781,6 @@ function game_runner(msg)
 		end		
 
 
-
 	# return CALLER and OTHER payload
 	return _caller_pld, _other_pld
 

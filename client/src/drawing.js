@@ -275,8 +275,8 @@ function draw_scoring_slots(alpha_param = 1){
 
     const S = yinsh.drawing_params.S;
 
+    // ref color
     const _empty_score_color = "#d3dbf0";
-    // const _filled_score_color = "#2d4d89"; // not used anymore, we draw ring in place
 
     for(const slot of _scoring_slots){
 
@@ -285,7 +285,7 @@ function draw_scoring_slots(alpha_param = 1){
             // drawing
             ctx.save();
 
-                ctx.globalAlpha = 0.15*alpha_param; 
+                ctx.globalAlpha = 0.16*alpha_param; 
                 ctx.fillStyle = _empty_score_color;
 
                 ctx.fill(slot.path);
@@ -330,6 +330,11 @@ function draw_rings(ring_spec = {}){
     const inner = S*0.38;
     const ring_lineWidth = inner/3;
 
+    // ref colors
+    const _black_col = "#1e1e1e";
+    const _white_col = "#f8f8f8";
+    const _lgray_col = "#a2aba2";
+
     // check for valid input to decide which flow to enact
     const _ring_spec_flag = ring_spec.hasOwnProperty('x'); 
 
@@ -348,7 +353,7 @@ function draw_rings(ring_spec = {}){
                 // draw black ring
                 if (ring.player == player_black_id){ 
                     
-                    ctx.strokeStyle = "#1A1A1A";
+                    ctx.strokeStyle = _black_col;
                     ctx.lineWidth = ring_lineWidth;            
                     
                     let ring_path = new Path2D()
@@ -361,8 +366,8 @@ function draw_rings(ring_spec = {}){
                 // draw white ring
                 } else if (ring.player == player_white_id){
 
-                    //inner white ~ light gray
-                    ctx.strokeStyle = "#F6F7F6";
+                    //inner almost white
+                    ctx.strokeStyle = _white_col;
                     ctx.lineWidth = ring_lineWidth*0.9;            
                     
                     let ring_path = new Path2D()
@@ -370,7 +375,7 @@ function draw_rings(ring_spec = {}){
                     ctx.stroke(ring_path);
 
                     // outer border
-                    ctx.strokeStyle = "#3D3F3D";
+                    ctx.strokeStyle = _lgray_col;
                     ctx.lineWidth = ring_lineWidth/12; 
                     
                     let outerB_path = new Path2D()
@@ -380,7 +385,7 @@ function draw_rings(ring_spec = {}){
                     ring_path.addPath(outerB_path);
 
                     // inner border
-                    ctx.strokeStyle = "#3D3F3D";
+                    ctx.strokeStyle = _lgray_col;
                     ctx.lineWidth = ring_lineWidth/12;  
 
                     let innerB_path = new Path2D()
@@ -420,7 +425,7 @@ function draw_rings(ring_spec = {}){
             // draw black ring
             if (_ring_id == player_black_id){ 
                     
-                ctx.strokeStyle = "#1A1A1A";
+                ctx.strokeStyle = _black_col;
                 ctx.lineWidth = ring_lineWidth;            
                 
                 let ring_path = new Path2D()
@@ -430,8 +435,8 @@ function draw_rings(ring_spec = {}){
             // draw white ring
             } else if (_ring_id == player_white_id){
 
-                //inner white ~ light gray
-                ctx.strokeStyle = "#F6F7F6";
+                //inner white 
+                ctx.strokeStyle = _white_col;
                 ctx.lineWidth = ring_lineWidth*0.9;            
                 
                 let ring_path = new Path2D()
@@ -439,7 +444,7 @@ function draw_rings(ring_spec = {}){
                 ctx.stroke(ring_path);
 
                 // outer border
-                ctx.strokeStyle = "#474947";
+                ctx.strokeStyle = _lgray_col;
                 ctx.lineWidth = ring_lineWidth/12; 
                 
                 let outerB_path = new Path2D()
@@ -447,7 +452,7 @@ function draw_rings(ring_spec = {}){
                 ctx.stroke(outerB_path);
 
                 // inner border
-                ctx.strokeStyle = "#474947";
+                ctx.strokeStyle = _lgray_col;
                 ctx.lineWidth = ring_lineWidth/12;  
 
                 let innerB_path = new Path2D()
@@ -474,6 +479,11 @@ function draw_markers(){
 
     const S = yinsh.drawing_params.S;
 
+    // ref colors
+    const _black_col = "#1e1e1e";
+    const _white_col = "#f8f8f8";
+    const _lgray_col = "#a2aba2";
+
     // drawing
     ctx.save();
 
@@ -486,7 +496,7 @@ function draw_markers(){
             // draw black marker
             if (m.player == player_black_id){ 
 
-                ctx.fillStyle = "#13191b";
+                ctx.fillStyle = _black_col;
                 
                 let marker_path = new Path2D()
                     marker_path.arc(m.loc.x, m.loc.y, inner, 0, 2*Math.PI);
@@ -499,8 +509,8 @@ function draw_markers(){
             // draw white marker
             } else if (m.player == player_white_id){ 
                 
-                ctx.strokeStyle = "#474947";
-                ctx.fillStyle = "#F6F7F6";
+                ctx.strokeStyle = _lgray_col;
+                ctx.fillStyle = _white_col;
                 ctx.lineWidth = marker_lineWidth/2;            
             
                 let marker_path = new Path2D()
@@ -525,9 +535,7 @@ function draw_markers(){
 
 };
 
-// highlight markers in scoring row
-
-// to rewrite to check for array length first
+// highlight markers in scoring row 
 function draw_markers_halos(){
 
     // const painting_start_time = Date.now()
@@ -569,6 +577,7 @@ function draw_markers_halos(){
     
 };
 
+// cues for picking score ring
 function draw_rings_highlight(){
 
     // const painting_start_time = Date.now()
@@ -621,9 +630,8 @@ function draw_legal_moves_cues(){
     ctx.save();
 
 
-        ctx.globalAlpha = 1; 
-        ctx.strokeStyle = "#4890b6";
-        ctx.fillStyle = "#8ebbd2";
+        ctx.globalAlpha = 0.8; 
+        ctx.fillStyle = "#80b3ce";
         ctx.lineWidth = 0.5;
 
         for(const cue of _legal_moves_cues){
@@ -632,7 +640,6 @@ function draw_legal_moves_cues(){
             if (cue.on == true) {
 
                 ctx.fill(cue.path); 
-                ctx.stroke(cue.path); 
 
             };
         };        

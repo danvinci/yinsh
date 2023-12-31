@@ -79,10 +79,10 @@ body, html {
             height: 100%;
 
             display: grid;
-            grid-template-columns: 5fr 2fr;
+            grid-template-columns: 6fr 2fr;
             
             margin-left: 1%;
-            margin-right: 5%;
+            margin-right: 6%;
             margin-top: 20px;
             
             background-color: white;
@@ -105,7 +105,7 @@ body, html {
                 grid-template-rows: auto 3fr 1fr;
 
                 margin-right: 6%;
-                margin-left: 10%;
+                margin-left: 7%;
                 padding-top: 20%;
                 padding-bottom: 25%;
 
