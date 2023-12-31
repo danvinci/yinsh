@@ -10,5 +10,8 @@ node_modules
 # temp storage, not used now 
 *.jld2
 
+# profiling data 
+*.pb.gz
+
 # certificates in /certs must be copied to the server for NGiNX to work
 *.pem

@@ -6,8 +6,10 @@ ENV workdir_name=/yinsh
 WORKDIR ${workdir_name}
 
 # copy selected files to destination (workdir) 
+# prod packages only (dev packages in commented line)
 COPY proto_logic.jl ${workdir_name}
-RUN julia -t auto -e 'using Pkg; Pkg.add.(["Dates", "HTTP", "JSON3", "PlotThemes", "Plots", "PlutoUI", "Random", "StatsBase", "MbedTLS"]); Pkg.precompile()'
+RUN julia -t auto -e 'using Pkg; Pkg.add.(["Dates", "HTTP", "JSON3", "Random", "StatsBase"]);'
+# RUN julia -t auto -e 'using Pkg; Pkg.add.(["PlotThemes", "Plots", "PlutoUI"]);'
 
 # expose port for communication
 EXPOSE 6091

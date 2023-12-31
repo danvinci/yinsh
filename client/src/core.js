@@ -243,7 +243,6 @@ async function server_actions_handler (event) {
 
                 // trigger winning animation 
                 await win_animation();
-                ui_et.dispatchEvent(new CustomEvent('reset_dialog')); // clean up dialog only if we win (?)
 
             // opponent wins
             } else {
