@@ -4,16 +4,6 @@
 using Markdown
 using InteractiveUtils
 
-# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
-macro bind(def, element)
-    quote
-        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
-        local el = $(esc(element))
-        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
-        el
-    end
-end
-
 # ╔═╡ 6f0ad323-1776-4efd-bf1e-667e8a834f41
 using Random
 
@@ -28,9 +18,6 @@ using HTTP, JSON3
 
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
-
-# ╔═╡ cff87557-3a42-4649-831e-17b792acd493
-using PlutoUI
 
 # ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
 # prod packages
@@ -1277,27 +1264,6 @@ function save_new_clientPkg!(games_log_ref, game_id, _client_pkg)
 	
 end
 
-# ╔═╡ c5a9d1af-118d-4cba-99bd-722e7176ae02
-games_log_dict
-
-# ╔═╡ 45e5f072-5717-4d29-9dce-db799e806d23
-ex_gm = games_log_dict["X6JP08"][:server_states][begin]
-
-# ╔═╡ 240dd9d0-5d65-4d4a-b165-fb05d1d79dc1
-tsc = Dict(
-			:id => Dict(:player_id => "W"), 
-			:move_action => Dict(:start => reshape_in(156), :end => reshape_in(138))
-)
-
-# ╔═╡ aa4d7d14-10dc-4800-9c58-1bf2a2dc0598
-@bind i_id Slider(1:length(games_log_dict["YDZPU7"][:server_states]), show_value=true)
-
-# ╔═╡ 28124dd1-7559-4ec4-bae8-86a1573c63df
-ex_gm_n = games_log_dict["YDZPU7"][:server_states][i_id]
-
-# ╔═╡ 0fea5b09-dfbb-4b69-ba47-897a34647e80
-ex_gm_n[9,1] = "MB" # manually altered so we have a score in place
-
 # ╔═╡ 18f8a5d6-c775-44a3-9490-cd11352c4a63
 function set_nested!(dict::Dict, val, first_key, second_key)
 # adds values to a dictionary following a first_key -> second_key -> value structure
@@ -1317,14 +1283,18 @@ function set_nested!(dict::Dict, val, first_key, second_key)
 end
 
 # ╔═╡ 67b8c557-1cf2-465d-a888-6b77f3940f39
-function reshape_out_fields(in_data::Dict)::Dict
+function reshape_out_fields(srv_dict::Dict)::Dict
 # takes dict in input -> reshapes out any field that is of type CI or CI[]
+# will reshape CI keys as well if it finds any
 # used to translate any server-like coordinates to client format
 
-	_ret = Dict{Symbol, Any}()
+	_ret = Dict{Any, Any}() # keys can be symbols or int
 
-	for (k,v) in in_data
+	for (k,v) in srv_dict
 
+		# is the key a CI?
+		_nk = isa(k, CartesianIndex) ? reshape_out(k) : k
+		
 		# is this either a CI or an array?
 		_flag_CI = isa(v, CartesianIndex)
 		_flag_array = isa(v, Array)
@@ -1340,18 +1310,18 @@ function reshape_out_fields(in_data::Dict)::Dict
 
 		if _flag_CI || _flag_array_CI
 			_new_v = reshape_out(v) # reshape works w/ both
-			setindex!(_ret, _new_v, k)
+			setindex!(_ret, _new_v, _nk)
 
 		elseif _flag_dict # recursion
 			_new_v = reshape_out_fields(v)
-			setindex!(_ret, _new_v, k)
+			setindex!(_ret, _new_v, _nk)
 
 		elseif _flag_array_dict # recursion x broadcasting
 			_new_v = reshape_out_fields.(v)
-			setindex!(_ret, _new_v, k)
+			setindex!(_ret, _new_v, _nk)
 			
 		else # leave value as-is
-			setindex!(_ret, v, k)
+			setindex!(_ret, v, _nk)
 			
 		end
 
@@ -1801,9 +1771,6 @@ function gen_newGame(vs_ai=false)
 	
 end
 
-# ╔═╡ 43477aed-4b13-44f4-92db-f3e8a97c022f
-_res_old = gen_scenarioTree(ex_gm_n, "B")
-
 # ╔═╡ a27e0adf-aa09-42ee-97f5-ede084a9edc3
 function sim_new_gameState(ex_game_state::Matrix, sc::Dict, fn_mode::Symbol)::Dict
 	
@@ -1827,7 +1794,7 @@ Making sense of move/flip data depends on the mode the function was called in.
 	! id
 		! player_id -> B/W
 		! player_score -> 0...3
-		() opp_score -> 0...3 # it can't increase until after the opp acts on choice
+		() opp_score -> 0...3 # it can't increase until after opponent scores
 		() game_mode -> classic (3) vs quick (1)
 		() game_id / turn_no / scenario_id -> have a single id for N choices and read changes from DB ?
 
@@ -2022,12 +1989,6 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 end
 
-# ╔═╡ 62878cb5-e01d-427a-97d6-e1816e3e3bc9
-_tres = sim_new_gameState(ex_gm, tsc, :move)
-
-# ╔═╡ d535db36-c2c7-4460-aa04-e758dcf79a59
-reshape_out_fields(_tres)
-
 # ╔═╡ 156c508f-2026-4619-9632-d679ca2cae50
 function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::Int)
 # takes as input an ex game state (server format) and info of next moving player
@@ -2040,14 +2001,13 @@ function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::
 
 	#= SCENARIO TREE structure
 
-		:start => input data (re-interp for client?)
+		!  :summary => global flags (used by AI)
 	
-		:pre-move => :summary, :options [], :new_player_score
+		() :score_preMove_avail => [ options ] 
 	
-		:move => :gs_array [(:gs_id, :gs, :tree)] (located by mk_sel & ring_score of premove or -1,-1 def)
-								(re-interp for client w/ rings, markers, scores?)
+		() :game_trees => [(:gs_id, :gs, :tree)] (id is mk_sel & ring_score of premove or absent if only 1 branch)
 	
-			:tree => :summary, (:start => :end => flags/deltas)
+			:tree => ( :start => :end => flags/deltas)
 
 	=#
 	
@@ -2065,11 +2025,8 @@ function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::
 	_inspect_res = sim_new_gameState(ex_gs, _pms_id, :inspect)
 	flag_pms = haskey(_inspect_res, :score_avail_player)
 
-	# TEMP
-	setindex!(scenario_tree, _inspect_res, :inspect)
-
-	# act on opp score if present
-	_gs_array = []
+	# act on score opportunity if present
+	_g_trees_array = []
 	if flag_pms
 
 		# there could be multiple choices for opp_score -> array of new game states
@@ -2106,9 +2063,9 @@ function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::
 				# identifying each by means of the action taken
 				# client knows which tree to pick depending on pre-move score action
 				_gs_id = Dict( :mk_sel => s_choice[:mk_sel], :ring_score => r) 
-				_pms_gs_packet = Dict(:gs_id => _gs_id, :gs => _pms_replay_gs)
+				_pms_gs_start = Dict(:gs_id => _gs_id, :gs => _pms_replay_gs)
 
-				push!(_gs_array, _pms_gs_packet)
+				push!(_g_trees_array, _pms_gs_start)
 			
 			end
 		end
@@ -2116,31 +2073,29 @@ function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::
 		# increase player score as pre-move score took place
 		nx_player_score += 1
 
-	else # save only available starting game state (no pre move) w/ defaults
+	else # save only available starting game state (no pre move) 
 
-		_gs_id = Dict( :mk_sel => -1, :ring_score => -1) 
-		_pms_gs_packet = Dict(:gs_id => _gs_id, :gs => ex_gs)
-
-		push!(_gs_array, _pms_gs_packet)
+		push!(_g_trees_array, Dict{Symbol, Any}(:gs => ex_gs))
 		
 	end
 
 
-	# ex_gs -> [score_preMove_avail] -> [post_pms_gs_array] -> [moves] -> [scenarios]
+	# ex_gs -> [score_preMove_avail] -> [_g_trees_array] -> [moves] -> [scenarios]
 
-	#= 	post_pms_gs_array = [Dict( 	:gs_id => score_action_preMove
-										:gs => game_state)				] =#
+	#= 	_g_trees_array = [Dict( 	:gs_id => score_action_preMove
+									:gs => game_state
+									:tree => () 						)] =#
 
 	# NOTE: if the game ends at the pre-move score, we should indicate it, so we skip tree generation
 	
 	# iterate over all the possible starting game states
-	for gs_item in _gs_array
+	for g_branch in _g_trees_array
 
 		# prep empty tree for each game state
-		gs_tree = Dict()
+		g_tree = Dict()
 
 		# extract gs details
-		gs = gs_item[:gs]
+		gs = g_branch[:gs]
 		
 		# find all rings for next moving player in this game state
 		rings = findall(i -> isequal(i, "R"*nx_player_id), gs)
@@ -2183,109 +2138,34 @@ function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::
 					# prune unnecessary data (maybe done downstream before push to client?)
 					
 					## save scenario in tree (start -> end -> scenario)
-					set_nested!(gs_tree, sim_res, move_start, move_end)
+					set_nested!(g_tree, sim_res, move_start, move_end)
 					
 				end
 			end
 		end
 
-		# save tree in returning object
-		setindex!(gs_item, gs_tree, :tree)
+		# save tree in 
+		setindex!(g_branch, g_tree, :tree)
 
 	end
 	
 
-	# save array of game states
-	setindex!(scenario_tree, _gs_array, :move_gs_array)
-	
-#=
-	
-	
-	# for each move start
-	for move_start in collect(keys(next_legalMoves))
-	
-		# for each move end
-		for move_end in next_legalMoves[move_start]
-	
-			if move_end == move_start # nothing happens
-				continue
-			else # something happens
-	
-				# generate new game state for start/end combination
-				# new state will have ring in new location and markers flipped
-				# saves if markers need to flip and which IDs
-				new_gs_delta = gen_New_gameState(ex_game_state, move_start, move_end)
-	
-					new_game_state = new_gs_delta[:new_game_state_srv]
-					flip_flag = new_gs_delta[:flip_flag]
-					markers_toFlip = new_gs_delta[:markers_toFlip_srv]
-	
-				# checks scoring opportunities
-				scoring_rows, scores_toHandle = static_score_lookup(new_game_state)
-				score_flag = (scoring_rows[:tot] >= 1) ? true : false	
-				
-				# save all in a single scenario -> for client consumption
-				s_first_key = reshape_out(move_start) # linear indexes
-				s_second_key = reshape_out(move_end)
-				s_value = Dict()
-	
-				## make scenario data lighter -> only write extra data if flags true
-				# scoring details
-				setindex!(s_value, score_flag, :score_flag)
-				if score_flag
-	
-					# log in summary
-					scenario_tree[:summary][:global_score_flag] = true
-					push!(scenario_tree[:summary][:scoring_moves], Dict(:start => s_first_key, :end => s_second_key))
-	
-					# reshape for client consumption
-					for (row_id, row) in enumerate(scores_toHandle)
-						scores_toHandle[row_id][:mk_locs] = reshape_out(row[:mk_locs])
-						scores_toHandle[row_id][:mk_sel] = reshape_out(row[:mk_sel])
-					end
-						
-						setindex!(s_value, scores_toHandle, :scores_toHandle)
-				end
-				
-				# markers details
-				setindex!(s_value, flip_flag, :flip_flag)
-				if flip_flag
-	
-					# log in summary
-					scenario_tree[:summary][:global_flip_flag] = true
-					push!(scenario_tree[:summary][:flipping_moves], Dict(:start => s_first_key, :end => s_second_key))
-					
-					# saving reshaped indexes
-					setindex!(s_value, reshape_out(markers_toFlip), :markers_toFlip)
-				end
-				
-				## save scenario in tree (first_key -> second_key -> scenario)
-				# test if root branch already created
-				if haskey(scenario_tree, s_first_key)
-	
-					setindex!(scenario_tree[s_first_key], s_value, s_second_key)
-				
-				else #create root branch first
-					setindex!(scenario_tree, Dict(s_second_key => s_value), s_first_key)
-				end
-				
-			end
-		end
-	end
+	# save tree of possible game moves for each starting game state
+	setindex!(scenario_tree, _g_trees_array, :move_trees)
+
+	# save summary (NOT BEING FULLY UPDATED YET)
+	setindex!(scenario_tree, summary, :turn_summary)
 	
 
-=#
-
-
-		setindex!(scenario_tree, summary, :summary)
-	
-
-return scenario_tree
+	return scenario_tree
 
 end
 
-# ╔═╡ 316a1fae-a140-4bb8-84f8-07fc21e17be2
-_res = sim_scenarioTree(ex_gm_n, "B", 0)
+# ╔═╡ e91849bb-32f5-405f-98bd-cae73e3ed1d7
+_res_tw = sim_scenarioTree(ex_gm_n, "B", 3)
+
+# ╔═╡ 77f4387b-63e9-4f2f-bd23-3a820378541e
+reshape_out_fields(_res_tw)
 
 # ╔═╡ cf587261-6193-4e7a-a3e8-e24ba27929c7
 function getLast_clientPkg(game_id)
@@ -2352,18 +2232,6 @@ function print_gameState(server_game_state)
 print(mm_to_print)
 
 end
-
-# ╔═╡ 17677613-d05a-475b-9383-ff11b480b508
-print_gameState(ex_gm_n)
-
-# ╔═╡ d312f582-0d32-45cf-8898-0eef6894674c
-print_gameState(ex_gm_n)
-
-# ╔═╡ 7a6bfe59-711f-4400-9a27-8e5332dc4fcc
-print_gameState(_res[:inspect][:new_game_state])
-
-# ╔═╡ 8fb24754-901c-4c65-864e-e6e597daf581
-print_gameState(_res[:post_pms_gs_array][5][:gs])
 
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
@@ -3803,14 +3671,12 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 HTTP = "~1.9.15"
 JSON3 = "~1.13.2"
-PlutoUI = "~0.7.54"
 StatsBase = "~0.34.0"
 """
 
@@ -3820,17 +3686,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "6a4bee06fc3710a8ff5ebb261c91541c9aa3390b"
-
-[[deps.AbstractPlutoDingetjes]]
-deps = ["Pkg"]
-git-tree-sha1 = "793501dcd3fa7ce8d375a2c878dca2296232686e"
-uuid = "6e696c72-6542-2067-7265-42206c756150"
-version = "1.2.2"
-
-[[deps.ArgTools]]
-uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
-version = "1.1.1"
+project_hash = "72975cf3b7f1104ee482fae1a25cd20fdbd10245"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -3848,12 +3704,6 @@ deps = ["TranscodingStreams", "Zlib_jll"]
 git-tree-sha1 = "02aa26a4cf76381be7f66e020a3eddeb27b0a092"
 uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
 version = "0.7.2"
-
-[[deps.ColorTypes]]
-deps = ["FixedPointNumbers", "Random"]
-git-tree-sha1 = "eb7f0f8307f71fac7c606984ea5fb2817275d6e4"
-uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
-version = "0.11.4"
 
 [[deps.Compat]]
 deps = ["UUIDs"]
@@ -3897,49 +3747,17 @@ git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.9.3"
 
-[[deps.Downloads]]
-deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
-uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
-version = "1.6.0"
-
 [[deps.ExceptionUnwrapping]]
 deps = ["Test"]
 git-tree-sha1 = "e90caa41f5a86296e014e148ee061bd6c3edec96"
 uuid = "460bff9d-24e4-43bc-9d9f-a8973cb893f4"
 version = "0.1.9"
 
-[[deps.FileWatching]]
-uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
-
-[[deps.FixedPointNumbers]]
-deps = ["Statistics"]
-git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
-uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
-version = "0.8.4"
-
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
 git-tree-sha1 = "19e974eced1768fb46fd6020171f2cec06b1edb5"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 version = "1.9.15"
-
-[[deps.Hyperscript]]
-deps = ["Test"]
-git-tree-sha1 = "8d511d5b81240fc8e6802386302675bdf47737b9"
-uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
-version = "0.0.4"
-
-[[deps.HypertextLiteral]]
-deps = ["Tricks"]
-git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
-uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
-version = "0.9.5"
-
-[[deps.IOCapture]]
-deps = ["Logging", "Random"]
-git-tree-sha1 = "d75853a0bdbfb1ac815478bacd89cd27b550ace6"
-uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
-version = "0.2.3"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -3956,27 +3774,11 @@ git-tree-sha1 = "7e5d6779a1e09a36db2a7b6cff50942a0a7d0fca"
 uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
 version = "1.5.0"
 
-[[deps.JSON]]
-deps = ["Dates", "Mmap", "Parsers", "Unicode"]
-git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
-uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-version = "0.21.4"
-
 [[deps.JSON3]]
 deps = ["Dates", "Mmap", "Parsers", "PrecompileTools", "StructTypes", "UUIDs"]
 git-tree-sha1 = "95220473901735a0f4df9d1ca5b171b568b2daa3"
 uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 version = "1.13.2"
-
-[[deps.LibCURL]]
-deps = ["LibCURL_jll", "MozillaCACerts_jll"]
-uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
-version = "0.6.4"
-
-[[deps.LibCURL_jll]]
-deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
-uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "8.4.0+0"
 
 [[deps.LibGit2]]
 deps = ["Base64", "LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
@@ -4023,11 +3825,6 @@ deps = ["Dates", "Logging"]
 git-tree-sha1 = "0d097476b6c381ab7906460ef1ef1638fbce1d91"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.0.2"
-
-[[deps.MIMEs]]
-git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
-uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
-version = "0.1.4"
 
 [[deps.Markdown]]
 deps = ["Base64"]
@@ -4089,17 +3886,6 @@ git-tree-sha1 = "716e24b21538abc91f6205fd1d8363f39b442851"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.7.2"
 
-[[deps.Pkg]]
-deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
-uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.10.0"
-
-[[deps.PlutoUI]]
-deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
-git-tree-sha1 = "bd7c69c7f7173097e7b5e1be07cee2b8b7447f51"
-uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.54"
-
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
 git-tree-sha1 = "03b4c25b43cb84cee5c90aa9b5ea0a78fd848d2f"
@@ -4116,18 +3902,9 @@ version = "1.4.0"
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
-[[deps.REPL]]
-deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
-uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
-
 [[deps.Random]]
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-
-[[deps.Reexport]]
-git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
-uuid = "189a3867-3050-52da-a836-e630ba90ab69"
-version = "1.2.2"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -4188,11 +3965,6 @@ deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 version = "1.0.3"
 
-[[deps.Tar]]
-deps = ["ArgTools", "SHA"]
-uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.0"
-
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -4202,11 +3974,6 @@ deps = ["Random", "Test"]
 git-tree-sha1 = "9a6ae7ed916312b41236fcef7e0af564ef934769"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.9.13"
-
-[[deps.Tricks]]
-git-tree-sha1 = "eae1bb484cd63b36999ee58be2de6c178105112f"
-uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
-version = "0.1.8"
 
 [[deps.URIs]]
 git-tree-sha1 = "b7a5e99f24892b6824a954199a45e9ffcc1c70f0"
@@ -4229,16 +3996,6 @@ version = "1.2.13+1"
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
 version = "5.8.0+1"
-
-[[deps.nghttp2_jll]]
-deps = ["Artifacts", "Libdl"]
-uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.52.0+1"
-
-[[deps.p7zip_jll]]
-deps = ["Artifacts", "Libdl"]
-uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.4.0+2"
 """
 
 # ╔═╡ Cell order:
@@ -4306,25 +4063,12 @@ version = "17.4.0+2"
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╠═1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╠═1f021cc5-edb0-4515-b8c9-6a2395bc9547
-# ╠═aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
-# ╠═c5a9d1af-118d-4cba-99bd-722e7176ae02
-# ╠═45e5f072-5717-4d29-9dce-db799e806d23
-# ╠═cff87557-3a42-4649-831e-17b792acd493
-# ╠═240dd9d0-5d65-4d4a-b165-fb05d1d79dc1
-# ╠═62878cb5-e01d-427a-97d6-e1816e3e3bc9
-# ╠═28124dd1-7559-4ec4-bae8-86a1573c63df
-# ╠═17677613-d05a-475b-9383-ff11b480b508
-# ╠═aa4d7d14-10dc-4800-9c58-1bf2a2dc0598
-# ╠═0fea5b09-dfbb-4b69-ba47-897a34647e80
-# ╠═d312f582-0d32-45cf-8898-0eef6894674c
-# ╠═316a1fae-a140-4bb8-84f8-07fc21e17be2
-# ╠═43477aed-4b13-44f4-92db-f3e8a97c022f
-# ╠═7a6bfe59-711f-4400-9a27-8e5332dc4fcc
-# ╠═8fb24754-901c-4c65-864e-e6e597daf581
+# ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╠═156c508f-2026-4619-9632-d679ca2cae50
-# ╠═18f8a5d6-c775-44a3-9490-cd11352c4a63
-# ╠═d535db36-c2c7-4460-aa04-e758dcf79a59
-# ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
+# ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
+# ╠═e91849bb-32f5-405f-98bd-cae73e3ed1d7
+# ╠═77f4387b-63e9-4f2f-bd23-3a820378541e
+# ╠═67b8c557-1cf2-465d-a888-6b77f3940f39
 # ╠═a27e0adf-aa09-42ee-97f5-ede084a9edc3
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
