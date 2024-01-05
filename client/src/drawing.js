@@ -333,7 +333,7 @@ function draw_rings(ring_spec = {}){
     // ref colors
     const _black_col = "#1e1e1e";
     const _white_col = "#f8f8f8";
-    const _lgray_col = "#a2aba2";
+    const _lgray_col = "#828e82";
 
     // check for valid input to decide which flow to enact
     const _ring_spec_flag = ring_spec.hasOwnProperty('x'); 
@@ -482,7 +482,7 @@ function draw_markers(){
     // ref colors
     const _black_col = "#1e1e1e";
     const _white_col = "#f8f8f8";
-    const _lgray_col = "#a2aba2";
+    const _lgray_col = "#828e82";
 
     // drawing
     ctx.save();

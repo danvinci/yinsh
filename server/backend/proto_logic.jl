@@ -4,6 +4,16 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
 # ╔═╡ 6f0ad323-1776-4efd-bf1e-667e8a834f41
 using Random
 
@@ -18,6 +28,9 @@ using HTTP, JSON3
 
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
+
+# ╔═╡ cff87557-3a42-4649-831e-17b792acd493
+using PlutoUI
 
 # ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
 # prod packages
@@ -741,7 +754,7 @@ function keepValid(state, input_array)
 end
 
 # ╔═╡ 9d153cf1-3e3b-49c0-abe7-ebd0f524557c
-function _search_legal_srv(ref_state, start_index::CartesianIndex)
+function _search_legal_srv(ref_state::Matrix, start_index::CartesianIndex)
 # returns sub-array of valid moves
 # this function is used by the server to compute allowable moves in advance 
 # using server types (matrix, cartesian indexes) both in input and output
@@ -1264,6 +1277,90 @@ function save_new_clientPkg!(games_log_ref, game_id, _client_pkg)
 	
 end
 
+# ╔═╡ c5a9d1af-118d-4cba-99bd-722e7176ae02
+games_log_dict
+
+# ╔═╡ 45e5f072-5717-4d29-9dce-db799e806d23
+ex_gm = games_log_dict["X6JP08"][:server_states][begin]
+
+# ╔═╡ 240dd9d0-5d65-4d4a-b165-fb05d1d79dc1
+tsc = Dict(
+			:id => Dict(:player_id => "W"), 
+			:move_action => Dict(:start => reshape_in(156), :end => reshape_in(138))
+)
+
+# ╔═╡ aa4d7d14-10dc-4800-9c58-1bf2a2dc0598
+@bind i_id Slider(1:length(games_log_dict["YDZPU7"][:server_states]), show_value=true)
+
+# ╔═╡ 28124dd1-7559-4ec4-bae8-86a1573c63df
+ex_gm_n = games_log_dict["YDZPU7"][:server_states][i_id]
+
+# ╔═╡ 0fea5b09-dfbb-4b69-ba47-897a34647e80
+ex_gm_n[9,1] = "MB" # manually altered so we have a score in place
+
+# ╔═╡ 18f8a5d6-c775-44a3-9490-cd11352c4a63
+function set_nested!(dict::Dict, val, first_key, second_key)
+# adds values to a dictionary following a first_key -> second_key -> value structure
+# checks if the first key exists before saving
+# it doesn't return anything, it alters the input dictionary
+	
+	if haskey(dict, first_key) # test if start branch exists
+		
+		setindex!(dict[first_key], val, second_key)
+		
+	else # save while creating start branch
+		
+		setindex!(dict, Dict(second_key => val), first_key)
+
+	end
+
+end
+
+# ╔═╡ 67b8c557-1cf2-465d-a888-6b77f3940f39
+function reshape_out_fields(in_data::Dict)::Dict
+# takes dict in input -> reshapes out any field that is of type CI or CI[]
+# used to translate any server-like coordinates to client format
+
+	_ret = Dict{Symbol, Any}()
+
+	for (k,v) in in_data
+
+		# is this either a CI or an array?
+		_flag_CI = isa(v, CartesianIndex)
+		_flag_array = isa(v, Array)
+
+			# if an array, is the array made of CI?
+			_flag_array_CI = _flag_array && isa(v[begin], CartesianIndex)
+
+		# is this a dict?
+		_flag_dict = isa(v, Dict)
+
+			# is this an array of dicts?
+			_flag_array_dict = _flag_array && isa(v[begin], Dict)
+
+		if _flag_CI || _flag_array_CI
+			_new_v = reshape_out(v) # reshape works w/ both
+			setindex!(_ret, _new_v, k)
+
+		elseif _flag_dict # recursion
+			_new_v = reshape_out_fields(v)
+			setindex!(_ret, _new_v, k)
+
+		elseif _flag_array_dict # recursion x broadcasting
+			_new_v = reshape_out_fields.(v)
+			setindex!(_ret, _new_v, k)
+			
+		else # leave value as-is
+			setindex!(_ret, v, k)
+			
+		end
+
+	end
+
+	return _ret
+	
+end
+
 # ╔═╡ 5da79176-7005-4afe-91b7-accaac0bd7b5
 function static_score_lookup(state)
 	# look at the game state to check if there are scoring opportunities
@@ -1389,17 +1486,22 @@ function gen_New_gameState(ex_game_state, start_move, end_move, mk_sel = Cartesi
 # assumes start/end are valid moves AND in cartesian indexes
 # works with game state in server-side format (matrix)
 
-_no_scoring_def_server = CartesianIndex(0,0)
-	
+	# return game state delta (used later to replay moves)
+	_return = Dict()
 
+	# baseline game state that we'll modify and return later
 	new_gs = deepcopy(ex_game_state)
-	_scoring_handled = (mk_sel != _no_scoring_def_server && 
+
+	# check which case of game update we're dealing with
+		# score handled
+		_no_scoring_def_server = CartesianIndex(0,0)
+
+		_scoring_handled = (mk_sel != _no_scoring_def_server && 
 						score_ring_index != _no_scoring_def_server) ? true : false
-
 	
-	if start_move == end_move # ring dropped where picked
-
-		return ex_game_state
+	if start_move == end_move # ring dropped where picked, nothing happens
+		
+			return ex_game_state
 
 	else # ring moved elsewhere -> game state changed
 
@@ -1470,12 +1572,10 @@ _no_scoring_def_server = CartesianIndex(0,0)
 			end
 	end
 
-	# return game state delta (used later to replay moves)
-	_return = Dict()
 
 
 		if _scoring_handled
-			_return = Dict(:new_game_state_srv => new_gs, 
+			_return = Dict( :new_game_state_srv => new_gs, 
 							:flip_flag => flip_flag,
 							:markers_toFlip_srv => markers_toFlip,
 							:markers_toFlip_cli => reshape_out(markers_toFlip),
@@ -1487,8 +1587,9 @@ _no_scoring_def_server = CartesianIndex(0,0)
 							:scoring_ring_srv => score_ring_index,
 							:scoring_ring_cli => reshape_out(score_ring_index)
 							)
-		else
-			_return = Dict(:new_game_state_srv => new_gs, 
+
+		else 
+			_return = Dict( :new_game_state_srv => new_gs, 
 							:flip_flag => flip_flag,
 							:markers_toFlip_srv => markers_toFlip,
 							:markers_toFlip_cli => reshape_out(markers_toFlip),
@@ -1499,6 +1600,7 @@ _no_scoring_def_server = CartesianIndex(0,0)
 	
 		end
 
+	
 	return _return
 
 end
@@ -1699,9 +1801,491 @@ function gen_newGame(vs_ai=false)
 	
 end
 
-# ╔═╡ 761fb8d7-0c7d-4428-ad48-707d219582c0
-## NEED FUNCTION TO HANDLE MESSAGES FROM CLIENT (NEXT MOVES), UPDATE STATE, SEND CHANGERS BACK TO OTHER PLAYER -> AND IDENTIFY OTHER PLAYER (HOW?)
-# FROM THE ID OF THE PLAYER/SOCKET, WE SHOULD ALSO BE ABLE TO HANDLE RECONNECTS (UPDATING IDS)
+# ╔═╡ 43477aed-4b13-44f4-92db-f3e8a97c022f
+_res_old = gen_scenarioTree(ex_gm_n, "B")
+
+# ╔═╡ a27e0adf-aa09-42ee-97f5-ede084a9edc3
+function sim_new_gameState(ex_game_state::Matrix, sc::Dict, fn_mode::Symbol)::Dict
+	
+#=
+This function has three modes of use:
+- :replay - reflect a client's moves in the game state (opp scoring, move, scoring)
+- :inspect - surface flip/scoring/opp_scoring potential as-is
+- :move - surface flip/scoring/opp_scoring potential for a given move (start -> end)
+
+
+The function assumes all coordinate ids are in server-side format (cartIndexes).
+It will return its calling mode, the modified gameState, and relevant deltas.
+The presence of a key/dict acts as a true flag in its own right.
+
+All data is returned in srv-side format.
+Making sense of move/flip data depends on the mode the function was called in.
+
+=# 
+#= > INPUT format for SC (Scenario)
+
+	! id
+		! player_id -> B/W
+		! player_score -> 0...3
+		() opp_score -> 0...3 # it can't increase until after the opp acts on choice
+		() game_mode -> classic (3) vs quick (1)
+		() game_id / turn_no / scenario_id -> have a single id for N choices and read changes from DB ?
+
+	-- all data in dicts below can be reshaped-in/out as a whole, only coordinates --
+
+	# scoring options can be multiple, we read mks_removed data
+	() score_action_preMove -> opponent scored for player at the end of their turn
+			mk_sel
+			mk_locs
+			ring_score
+	
+	() move_action  
+	  		start 
+			end
+
+	() score_action
+			mk_sel
+			mk_locs
+			ring_score
+
+=#
+
+	## extract relevant flags from input (given by presence of keys in dict)
+	_f_score_action_preMove = haskey(sc, :score_action_preMove)
+	_f_move_action = haskey(sc, :move_action)
+	_f_score_action = haskey(sc, :score_action)
+
+	# extract player_id (B/W)
+	_player_id = sc[:id][:player_id]
+	_opp_id = _player_id == "W" ? "B" : "W"
+
+	# baseline game state that we'll modify and return later
+	new_gs = copy(ex_game_state)
+	new_player_score = sc[:id][:player_score]
+	# new_opp_score = sc[:id][:opp_score] # it won't be touched
+
+	# dict to return w/ game state delta - used for replay or add leaves to the tree
+	_return = Dict()
+
+	#= OUTPUT structure
+	
+		:score_preMove_done => (:mk_locs => CI[], :ring_score => CI) 
+		:move_done => (:mk_add => (loc, player), :ring_move = (start, end, player))
+		:mk_flip => CI[]
+		:score_done => (:mk_locs => CI[], :ring_score => CI) 
+		:score_avail_opp => Dict[] # (mk_locs, mk_sel, player)
+		:score_avail_player => Dict[] # (mk_locs, mk_sel, player)
+
+		+ :new_game_state, :mode added before return
+		+ :new_player_score, :new_opp_score
+
+		note: mk_locs => mks_remove could be removed
+
+	=#
+	
+	################## EDITING unctions
+
+	function score_preMove_do!() # pre-move scoring - ie. opp scored for player
+	
+		# remove markers from game state
+		pms_mks_locs = sc[:score_action_preMove][:mk_locs]
+		foreach(mk_id -> new_gs[mk_id] = "", pms_mks_locs)
+
+		# remove ring
+		pms_ring_loc = sc[:score_action_preMove][:ring_score]
+		new_gs[pms_ring_loc] = ""
+
+		# update player score
+		new_player_score += 1
+
+		# update global dict
+			_pms = Dict(:mk_locs => pms_mks_locs, :ring_score => pms_ring_loc)
+			setindex!(_return, _pms, :score_preMove_done)
+		
+	end
+
+	function move_do!() # ring moved -> mk placement -> flipping
+
+		_start_move_id = sc[:move_action][:start]
+		_end_move_id = sc[:move_action][:end]
+
+		# get ring details
+		moved_ring = ex_game_state[_start_move_id]
+		_ring_color = moved_ring[end] # B || W
+
+		# marker placed in start_move (same color as picked ring / player_id)
+		new_gs[_start_move_id] = "M"*_ring_color 
+		
+		# ring placed in end_move 
+		new_gs[_end_move_id] = moved_ring
+
+		# flip markers in the moving direction
+
+		# retrieve search space for the starting point, ie. ring directions
+		r_dirs = locs_searchSpace[_start_move_id]
+
+		# spot direction/array that contains the ring 
+		dir_no = findfirst(rd -> (_end_move_id in rd), r_dirs)
+	
+		# return flag + ids of markers to flip in direction of movement
+		flip_flag, mks_toFlip = markers_toFlip_search(new_gs, r_dirs[dir_no])
+
+		if flip_flag # flip markers in game state
+			for m_id in mks_toFlip
+				if contains(new_gs[m_id], "M")
+					new_gs[m_id] = (new_gs[m_id] == "MW") ? "MB" : "MW" 
+				end
+			end
+		end
+
+		# update global dict
+			mk_add = Dict(:index => _start_move_id, :player_id => _ring_color)
+			ring_move = Dict(:start => _start_move_id, :end => _end_move_id, :player_id => _ring_color)
+			
+			_md = Dict(:mk_add => mk_add, :ring_move => ring_move)
+		
+			setindex!(_return, _md, :move_done)	
+			flip_flag && setindex!(_return, mks_toFlip, :mk_flip)	
+
+	end
+
+	function score_do!() # post-move scoring
+
+		# remove markers from game state
+		sd_mks_locs = sc[:score_action][:mk_locs]
+		foreach(mk_id -> new_gs[mk_id] = "", sd_mks_locs)
+
+		# remove ring
+		sd_ring_loc = sc[:score_action][:ring_score]
+		new_gs[sd_ring_loc] = ""
+
+		# update player score
+		new_player_score += 1
+
+		# update global dict
+			_sd = Dict(:mk_locs => sd_mks_locs, :ring_score => sd_ring_loc)
+			setindex!(_return, _sd, :score_done)
+
+	end
+
+	function score_check!() # post-move scoring
+
+		# check scoring options
+		score_rows, score_det = static_score_lookup(new_gs)
+
+		# check scoring ops
+		_f_score_player = (score_rows[Symbol(_player_id)] >= 1) ? true : false
+		_f_score_opp = (score_rows[Symbol(_opp_id)] >= 1) ? true : false
+
+		player_scores = Dict[] #[(mk_locs, mk_sel, player)]
+		opp_scores = Dict[]
+
+		append!(player_scores, filter(s -> s[:player] == _player_id, score_det))
+		append!(opp_scores, filter(s -> s[:player] == _opp_id, score_det))
+
+		# update global dict -> is there a score available for either player or opp?
+			_f_score_player && setindex!(_return, player_scores, :score_avail_player)
+			_f_score_opp && setindex!(_return, opp_scores, :score_avail_opp)
+
+	end
+	
+
+	################## ACTING on input mode
+	if fn_mode == :replay 
+		
+		_f_score_action_preMove && score_preMove_do!() 
+		_f_move_action && move_do!()
+		_f_score_action && score_do!()
+
+	elseif fn_mode == :move
+
+		_f_move_action && move_do!()
+		score_check!()
+	
+	elseif fn_mode == :inspect
+
+		score_check!()
+
+	end
+
+	# add updated player score
+	setindex!(_return, new_player_score, :new_player_score)
+	# add opp score as-is
+	# setindex!(_return, new_opp_score, :new_opp_score)
+
+	# add last game state and calling mode to _return
+	setindex!(_return, new_gs, :new_game_state)
+	setindex!(_return, fn_mode, :mode)
+	
+
+	return _return
+
+end
+
+# ╔═╡ 62878cb5-e01d-427a-97d6-e1816e3e3bc9
+_tres = sim_new_gameState(ex_gm, tsc, :move)
+
+# ╔═╡ d535db36-c2c7-4460-aa04-e758dcf79a59
+reshape_out_fields(_tres)
+
+# ╔═╡ 156c508f-2026-4619-9632-d679ca2cae50
+function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::Int)
+# takes as input an ex game state (server format) and info of next moving player
+# computes results for all possible moves of next moving player
+
+# () output is reshaped for client's consumption --> TO BE RECHECKED
+	
+	# scenario tree to be returned
+	scenario_tree = Dict()
+
+	#= SCENARIO TREE structure
+
+		:start => input data (re-interp for client?)
+	
+		:pre-move => :summary, :options [], :new_player_score
+	
+		:move => :gs_array [(:gs_id, :gs, :tree)] (located by mk_sel & ring_score of premove or -1,-1 def)
+								(re-interp for client w/ rings, markers, scores?)
+	
+			:tree => :summary, (:start => :end => flags/deltas)
+
+	=#
+	
+	
+	# add summary to tree, will be edited along the function and only added in the end
+	summary = Dict( :f_score_preMove_avail => false, 
+					:f_flip => false,
+					:f_score => false)
+	
+
+	# identify any pre-move score to be acted on - ie. left by previous player
+	_pms_id = Dict(:id => Dict( :player_id => nx_player_id, 
+								:player_score => nx_player_score))
+	
+	_inspect_res = sim_new_gameState(ex_gs, _pms_id, :inspect)
+	flag_pms = haskey(_inspect_res, :score_avail_player)
+
+	# TEMP
+	setindex!(scenario_tree, _inspect_res, :inspect)
+
+	# act on opp score if present
+	_gs_array = []
+	if flag_pms
+
+		# there could be multiple choices for opp_score -> array of new game states
+		_pms_choices = _inspect_res[:score_avail_player]
+
+		# save choices in tree to be returned
+		setindex!(scenario_tree, _pms_choices, :score_preMove_avail)
+
+		# mark ops score opportunity
+		summary[:f_score_preMove_avail] = true
+		
+		for s_choice in _pms_choices
+			
+			# gen new game state for the opp scoring opportunity
+			# branch further on the picked ring
+
+			_player_rings = findall(i -> isequal(i, "R"*nx_player_id), ex_gs)
+
+			for r in _player_rings
+
+				# describe pre-move score action
+				_pms_action = Dict( :mk_sel => s_choice[:mk_sel],
+									:mk_locs => s_choice[:mk_locs], 
+									:ring_score => r) 
+
+				_sc = Dict( :id => Dict(:player_id => nx_player_id, 
+										:player_score => nx_player_score),
+							:score_action_preMove => _pms_action)
+			
+				# replay move and get new game state
+				_pms_replay_gs = sim_new_gameState(ex_gs, _sc, :replay)[:new_game_state]
+				
+				# save each of the possible game states
+				# identifying each by means of the action taken
+				# client knows which tree to pick depending on pre-move score action
+				_gs_id = Dict( :mk_sel => s_choice[:mk_sel], :ring_score => r) 
+				_pms_gs_packet = Dict(:gs_id => _gs_id, :gs => _pms_replay_gs)
+
+				push!(_gs_array, _pms_gs_packet)
+			
+			end
+		end
+
+		# increase player score as pre-move score took place
+		nx_player_score += 1
+
+	else # save only available starting game state (no pre move) w/ defaults
+
+		_gs_id = Dict( :mk_sel => -1, :ring_score => -1) 
+		_pms_gs_packet = Dict(:gs_id => _gs_id, :gs => ex_gs)
+
+		push!(_gs_array, _pms_gs_packet)
+		
+	end
+
+
+	# ex_gs -> [score_preMove_avail] -> [post_pms_gs_array] -> [moves] -> [scenarios]
+
+	#= 	post_pms_gs_array = [Dict( 	:gs_id => score_action_preMove
+										:gs => game_state)				] =#
+
+	# NOTE: if the game ends at the pre-move score, we should indicate it, so we skip tree generation
+	
+	# iterate over all the possible starting game states
+	for gs_item in _gs_array
+
+		# prep empty tree for each game state
+		gs_tree = Dict()
+
+		# extract gs details
+		gs = gs_item[:gs]
+		
+		# find all rings for next moving player in this game state
+		rings = findall(i -> isequal(i, "R"*nx_player_id), gs)
+
+		# find legal moves for each of the rings start loc and save them
+		nx_legal_moves = Dict()
+		foreach(r -> setindex!(nx_legal_moves, _search_legal_srv(gs, r), r), rings)
+
+		# for each start
+		for move_start in rings # keys of the nx_legal_moves dict anyway
+
+			# for each move end
+			for move_end in nx_legal_moves[move_start]
+				if move_start != move_end # -> ring not dropped in-place
+
+					# simulate new game state for start/end combination
+					_move = Dict(:id => Dict( 	:player_id => nx_player_id, 
+												:player_score => nx_player_score),
+								 :move_action => Dict( 	:start => move_start,
+								 						:end => move_end))
+					
+					sim_res = sim_new_gameState(gs, _move, :move)
+
+
+					# save what can happen
+					
+					#= old function was returning these
+					flip_flag = new_gs_delta[:flip_flag]
+					markers_toFlip = new_gs_delta[:markers_toFlip_srv]
+
+					
+					:flip_done -> mks to flip
+					:score_avail_player -> scoring ops
+					:move_done[:mk_add]
+					=#
+
+					# log global flags (used by AI)
+					#scenario_tree[:summary][:global_score_flag] = true
+
+					# prune unnecessary data (maybe done downstream before push to client?)
+					
+					## save scenario in tree (start -> end -> scenario)
+					set_nested!(gs_tree, sim_res, move_start, move_end)
+					
+				end
+			end
+		end
+
+		# save tree in returning object
+		setindex!(gs_item, gs_tree, :tree)
+
+	end
+	
+
+	# save array of game states
+	setindex!(scenario_tree, _gs_array, :move_gs_array)
+	
+#=
+	
+	
+	# for each move start
+	for move_start in collect(keys(next_legalMoves))
+	
+		# for each move end
+		for move_end in next_legalMoves[move_start]
+	
+			if move_end == move_start # nothing happens
+				continue
+			else # something happens
+	
+				# generate new game state for start/end combination
+				# new state will have ring in new location and markers flipped
+				# saves if markers need to flip and which IDs
+				new_gs_delta = gen_New_gameState(ex_game_state, move_start, move_end)
+	
+					new_game_state = new_gs_delta[:new_game_state_srv]
+					flip_flag = new_gs_delta[:flip_flag]
+					markers_toFlip = new_gs_delta[:markers_toFlip_srv]
+	
+				# checks scoring opportunities
+				scoring_rows, scores_toHandle = static_score_lookup(new_game_state)
+				score_flag = (scoring_rows[:tot] >= 1) ? true : false	
+				
+				# save all in a single scenario -> for client consumption
+				s_first_key = reshape_out(move_start) # linear indexes
+				s_second_key = reshape_out(move_end)
+				s_value = Dict()
+	
+				## make scenario data lighter -> only write extra data if flags true
+				# scoring details
+				setindex!(s_value, score_flag, :score_flag)
+				if score_flag
+	
+					# log in summary
+					scenario_tree[:summary][:global_score_flag] = true
+					push!(scenario_tree[:summary][:scoring_moves], Dict(:start => s_first_key, :end => s_second_key))
+	
+					# reshape for client consumption
+					for (row_id, row) in enumerate(scores_toHandle)
+						scores_toHandle[row_id][:mk_locs] = reshape_out(row[:mk_locs])
+						scores_toHandle[row_id][:mk_sel] = reshape_out(row[:mk_sel])
+					end
+						
+						setindex!(s_value, scores_toHandle, :scores_toHandle)
+				end
+				
+				# markers details
+				setindex!(s_value, flip_flag, :flip_flag)
+				if flip_flag
+	
+					# log in summary
+					scenario_tree[:summary][:global_flip_flag] = true
+					push!(scenario_tree[:summary][:flipping_moves], Dict(:start => s_first_key, :end => s_second_key))
+					
+					# saving reshaped indexes
+					setindex!(s_value, reshape_out(markers_toFlip), :markers_toFlip)
+				end
+				
+				## save scenario in tree (first_key -> second_key -> scenario)
+				# test if root branch already created
+				if haskey(scenario_tree, s_first_key)
+	
+					setindex!(scenario_tree[s_first_key], s_value, s_second_key)
+				
+				else #create root branch first
+					setindex!(scenario_tree, Dict(s_second_key => s_value), s_first_key)
+				end
+				
+			end
+		end
+	end
+	
+
+=#
+
+
+		setindex!(scenario_tree, summary, :summary)
+	
+
+return scenario_tree
+
+end
+
+# ╔═╡ 316a1fae-a140-4bb8-84f8-07fc21e17be2
+_res = sim_scenarioTree(ex_gm_n, "B", 0)
 
 # ╔═╡ cf587261-6193-4e7a-a3e8-e24ba27929c7
 function getLast_clientPkg(game_id)
@@ -1769,6 +2353,18 @@ print(mm_to_print)
 
 end
 
+# ╔═╡ 17677613-d05a-475b-9383-ff11b480b508
+print_gameState(ex_gm_n)
+
+# ╔═╡ d312f582-0d32-45cf-8898-0eef6894674c
+print_gameState(ex_gm_n)
+
+# ╔═╡ 7a6bfe59-711f-4400-9a27-8e5332dc4fcc
+print_gameState(_res[:inspect][:new_game_state])
+
+# ╔═╡ 8fb24754-901c-4c65-864e-e6e597daf581
+print_gameState(_res[:post_pms_gs_array][5][:gs])
+
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
 # returns random locations for 5 + 5 rings
@@ -1801,6 +2397,9 @@ begin
 	ws_port = 6091
 
 end
+
+# ╔═╡ 2ccc880f-805e-47e3-af9e-eae4f5fa261d
+games_log_dict
 
 # ╔═╡ f9949a92-f4f8-4bbb-81d0-650ff218dd1c
 #HTTP.forceclose(ws_servers_ref[end])
@@ -1863,6 +2462,12 @@ function msg_dispatcher(ws, msg_id, msg_code, payload = Dict(), _status::Bool = 
 
 
 end
+
+# ╔═╡ 4cb9af27-b7c2-4b76-8c67-dd5221240de6
+ws_messages_log
+
+# ╔═╡ f6cb0643-d60c-4a64-baf1-8afbff17f582
+games_log_dict
 
 # ╔═╡ 612a1121-b672-4bc7-9eee-f7989ac27346
 function update_ws_handler!(game_id::String, ws, is_orig_player::Bool)
@@ -2194,8 +2799,8 @@ function update_serverStates!(_game_code, _player_id, _scenario_pick)
 
 	_no_scoring_default = -1
 
-	_mk_sel_pick_cli = get(_scenario_pick, :mk_sel_pick, _no_scoring_default)
-	_ring_removed_cli = get(_scenario_pick, :ring_removed, _no_scoring_default) 
+		_mk_sel_pick_cli = get(_scenario_pick, :mk_sel_pick, _no_scoring_default)
+		_ring_removed_cli = get(_scenario_pick, :ring_removed, _no_scoring_default) 
 
 	# false if either the keys are missing (AI -> -1) or returned as -1 by the client
 	_scoring_handled = (_mk_sel_pick_cli != _no_scoring_default && 
@@ -2407,6 +3012,27 @@ function get_last_turn_details(game_code::String)
 
 end
 
+# ╔═╡ 7b090d5d-cce2-415b-8621-fbdc11b54f77
+function pick_adv_scoring(g_state::Matrix, _scoring_details::Array, _player_id::String)::Dict
+## act on score opportunity created by human player
+# function called when there's at least one scoring ops for player_id
+# for now everything is in client-side coordinates (indexes)
+
+	# pick random scoring opportunity within array, among the ones for player
+	_adv_scoring_ops = rand(filter(s -> s[:player] == _player_id, _scoring_details))
+
+	# all player rings locations (cart index) -> pick ring to remove
+	gs_rings_locs = findall(i -> contains(i, "R"*_player_id), g_state)
+	_scoring_ring_pick = reshape_out(rand(gs_rings_locs))
+
+
+	return Dict(:mk_sel_pick => _adv_scoring_ops[:mk_sel], 
+				:mk_locs_remove => _adv_scoring_ops[:mk_locs],
+				:ring_removed => _scoring_ring_pick)
+
+
+end
+
 # ╔═╡ 4976c9c5-d60d-4b19-aa72-0e135ad37361
 function pick_flipping_move(_ex_game_state, _tree::Dict, _player_id::String)
 ## filter flipping options for specific player
@@ -2508,7 +3134,7 @@ end
 function scenario_choice(_ex_game_state, _tree::Dict, ai_moving_player_id::String)
 	# value function for picking moves
 	# works with depth-1 game scenario trees
-	# important to pass id of player so that it picks with more context
+	# important to pass id of player so that it picks with context
 	# returned values/ids are in client-format
 	# it should return a move as long as at least one is listed in the tree
 
@@ -2572,9 +3198,25 @@ end
 # ╔═╡ 6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 function play_turn_AI(game_code::String, ai_moving_player_id::String)
 
+	#_adv_flag = false # keep track if we scored due to an adv point
+
 	# get last game state and id of moving player
 	# assumes turns are updated and moving player is AI
 	_ex_game_state = get_last_srv_gameState(game_code)
+
+		#= check if human player made a point for us
+		_num_scoring_rows, _scoring_details = static_score_lookup(_ex_game_state)
+			
+		if _num_scoring_rows[Symbol(ai_moving_player_id)] > 0 # [:B || :W] 
+			# if so, score point for ai player
+			_adv_score = pick_adv_scoring(_ex_game_state, _scoring_details, ai_moving_player_id)
+
+			# update game state
+			# if point is final, return here
+			# otherwise continue
+		# update game state and gen delta -> inform via pick
+		end
+		=#
 
 	# generate scenarios
 	_scenarios = gen_scenarioTree(_ex_game_state, ai_moving_player_id)
@@ -2947,7 +3589,7 @@ function start_ws_server(ws_array, _log)
 		# saves server handler in array
 		push!(ws_array, ws_server)
 
-		println("WebSocket server started at $(now())")
+		println("WebSocket server $(objectid(ws_server.task)) START at $(now())")
 
 	catch e
 		println("ERROR starting server - $e")
@@ -2968,11 +3610,17 @@ function reactive_start_server(ws_array, _msg_log)
 
 		start_ws_server(ws_array, _msg_log)
 
-	# otherwise, close existing and start new one
+	# otherwise, close all open ones existing and start a new one
 	else
+
+		# check task status 
+		_open_ws = filter(ws -> !istaskdone(ws.task), ws_array)
 		
-		HTTP.forceclose(ws_array[end])
-		println("WebSocket server stop $(now())")
+		for ws in _open_ws
+			HTTP.forceclose(ws)
+			println("WebSocket server $(objectid(ws.task)) STOP at $(now())")
+		end
+		
 		
 		sleep(0.025)
 		start_ws_server(ws_array, _msg_log)
@@ -3045,6 +3693,49 @@ function test_ws_client()
 
 end
 
+# ╔═╡ db1ce9bc-0593-4dd7-b905-a14295d47533
+md"### Adv scoring refactoring"
+
+# ╔═╡ 63cf005b-e631-4de4-8927-085c3f982803
+#=
+
+for AI server:
+- replay client changes
+- if won -> flag game, inform client
+- if not
+-- check if adv scoring -> pick score
+-- check if won -> inform in case
+- prep payload
+
+
+for client:
+- replay changes
+- if won/not (server tells)
+- in case of adv scoring allow for choice (server tell)
+-- server will also tell if this was final move
+-- resume game (diff scenario trees depending X scored row(s) - rings stay unmoved )
+--- but only if not final move ahead
+
+
+for h vs h:
+- replay changes
+- check for adv scoring options
+- expose/surface options in payload
+- gen different scenario trees for every option (diff markers being removed)
+
+TODO
+-- revise data handling & structures
+- function to check if adv scoring took place
+- if adv scoring, deal w/ multiple scenario trees depending on picked scoring ring
+- detect and highlight adv scoring and allow for handling in client
+- detect early win/lose and emit/handle events accordingly
+
+-- check srv function dependencies to refactor
+-- eval search, if mask search is a perf option
+-- think scenarios + ways of reproducing them quickly for testing
+
+=#
+
 # ╔═╡ 5ce26cae-4604-4ad8-8d15-15f0bfc9a81a
 md"#### Open issues "
 
@@ -3052,12 +3743,15 @@ md"#### Open issues "
 #=
 
 - game history
-- TEST with ngrok
 - opponent scoring for other
 - uniform handling/naming of originator vs joiner
 - way too many hardcoded values everywhere
 - AI is too annoying  -> could add rule about placing something first, or experiment with RL and self-play ??
 - clients disconnecting / non-responsive are not handled
+- websocket disconneting
+- should I use a DB?
+- perf optimizations
+- revise github readme + add note for suggestions -> or alt text/hover on page?
 
 =#
 
@@ -3109,20 +3803,13 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-PProf = "e4faabce-9ead-11e9-39d9-4379958e3056"
-PlotThemes = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
-Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 HTTP = "~1.9.15"
 JSON3 = "~1.13.2"
-PProf = "~3.1.0"
-PlotThemes = "~3.1.0"
-Plots = "~1.39.0"
 PlutoUI = "~0.7.54"
 StatsBase = "~0.34.0"
 """
@@ -3133,18 +3820,13 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "41b889b097000835e93a1b6d2020ad8b724c8c0f"
+project_hash = "6a4bee06fc3710a8ff5ebb261c91541c9aa3390b"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
 git-tree-sha1 = "793501dcd3fa7ce8d375a2c878dca2296232686e"
 uuid = "6e696c72-6542-2067-7265-42206c756150"
 version = "1.2.2"
-
-[[deps.AbstractTrees]]
-git-tree-sha1 = "faa260e4cb5aba097a73fab382dd4b5819d8ec8c"
-uuid = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
-version = "0.4.4"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -3161,58 +3843,17 @@ git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
 uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
 version = "0.1.7"
 
-[[deps.BufferedStreams]]
-git-tree-sha1 = "4ae47f9a4b1dc19897d3743ff13685925c5202ec"
-uuid = "e1450e63-4bb3-523b-b2a4-4ffa8c0fd77d"
-version = "1.2.1"
-
-[[deps.Bzip2_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
-uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+0"
-
-[[deps.Cairo_jll]]
-deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "4b859a208b2397a7a623a03449e4636bdb17bcf2"
-uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
-version = "1.16.1+1"
-
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
 git-tree-sha1 = "02aa26a4cf76381be7f66e020a3eddeb27b0a092"
 uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
 version = "0.7.2"
 
-[[deps.ColorSchemes]]
-deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
-git-tree-sha1 = "67c1f244b991cad9b0aa4b7540fb758c2488b129"
-uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.24.0"
-
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
 git-tree-sha1 = "eb7f0f8307f71fac7c606984ea5fb2817275d6e4"
 uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
 version = "0.11.4"
-
-[[deps.ColorVectorSpace]]
-deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "Requires", "Statistics", "TensorCore"]
-git-tree-sha1 = "a1f44953f2382ebb937d60dafbe2deea4bd23249"
-uuid = "c3611d14-8923-5661-9e6a-0046d554d3a4"
-version = "0.10.0"
-
-    [deps.ColorVectorSpace.extensions]
-    SpecialFunctionsExt = "SpecialFunctions"
-
-    [deps.ColorVectorSpace.weakdeps]
-    SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
-
-[[deps.Colors]]
-deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
-git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
-uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
-version = "0.12.10"
 
 [[deps.Compat]]
 deps = ["UUIDs"]
@@ -3235,11 +3876,6 @@ git-tree-sha1 = "5372dbbf8f0bdb8c700db5367132925c0771ef7e"
 uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
 version = "2.2.1"
 
-[[deps.Contour]]
-git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
-uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
-version = "0.6.2"
-
 [[deps.DataAPI]]
 git-tree-sha1 = "8da84edb865b0b5b0100c0666a9bc9a0b71c553c"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
@@ -3255,16 +3891,6 @@ version = "0.18.15"
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 
-[[deps.DelimitedFiles]]
-deps = ["Mmap"]
-git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
-uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
-version = "1.9.1"
-
-[[deps.Distributed]]
-deps = ["Random", "Serialization", "Sockets"]
-uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
-
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
 git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
@@ -3276,46 +3902,11 @@ deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 version = "1.6.0"
 
-[[deps.EnumX]]
-git-tree-sha1 = "bdb1942cd4c45e3c678fd11569d5cccd80976237"
-uuid = "4e289a0a-7415-4d19-859d-a7e5c4648b56"
-version = "1.0.4"
-
-[[deps.EpollShim_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "8e9441ee83492030ace98f9789a654a6d0b1f643"
-uuid = "2702e6a9-849d-5ed8-8c21-79e8b8f9ee43"
-version = "0.0.20230411+0"
-
 [[deps.ExceptionUnwrapping]]
 deps = ["Test"]
 git-tree-sha1 = "e90caa41f5a86296e014e148ee061bd6c3edec96"
 uuid = "460bff9d-24e4-43bc-9d9f-a8973cb893f4"
 version = "0.1.9"
-
-[[deps.Expat_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "4558ab818dcceaab612d1bb8c19cee87eda2b83c"
-uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
-version = "2.5.0+0"
-
-[[deps.FFMPEG]]
-deps = ["FFMPEG_jll"]
-git-tree-sha1 = "b57e3acbe22f8484b4b5ff66a7499717fe1a9cc8"
-uuid = "c87230d0-a227-11e9-1b43-d7ebe4e7570a"
-version = "0.4.1"
-
-[[deps.FFMPEG_jll]]
-deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Pkg", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
-git-tree-sha1 = "74faea50c1d007c85837327f6775bea60b5492dd"
-uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
-version = "4.4.2+2"
-
-[[deps.FileIO]]
-deps = ["Pkg", "Requires", "UUIDs"]
-git-tree-sha1 = "299dc33549f68299137e51e6d49a13b5b1da9673"
-uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
-version = "1.16.1"
 
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
@@ -3326,94 +3917,11 @@ git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
 uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
 version = "0.8.4"
 
-[[deps.FlameGraphs]]
-deps = ["AbstractTrees", "Colors", "FileIO", "FixedPointNumbers", "IndirectArrays", "LeftChildRightSiblingTrees", "Profile"]
-git-tree-sha1 = "bd1aaf448be998ea427b1c7213b8acf2e278498b"
-uuid = "08572546-2f56-4bcf-ba4e-bab62c3a3f89"
-version = "1.0.0"
-
-[[deps.Fontconfig_jll]]
-deps = ["Artifacts", "Bzip2_jll", "Expat_jll", "FreeType2_jll", "JLLWrappers", "Libdl", "Libuuid_jll", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "21efd19106a55620a188615da6d3d06cd7f6ee03"
-uuid = "a3f928ae-7b40-5064-980b-68af3947d34b"
-version = "2.13.93+0"
-
-[[deps.Formatting]]
-deps = ["Printf"]
-git-tree-sha1 = "8339d61043228fdd3eb658d86c926cb282ae72a8"
-uuid = "59287772-0a20-5a39-b81b-1366585eb4c0"
-version = "0.4.2"
-
-[[deps.FreeType2_jll]]
-deps = ["Artifacts", "Bzip2_jll", "JLLWrappers", "Libdl", "Zlib_jll"]
-git-tree-sha1 = "d8db6a5a2fe1381c1ea4ef2cab7c69c2de7f9ea0"
-uuid = "d7e528f0-a631-5988-bf34-fe36492bcfd7"
-version = "2.13.1+0"
-
-[[deps.FriBidi_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "aa31987c2ba8704e23c6c8ba8a4f769d5d7e4f91"
-uuid = "559328eb-81f9-559d-9380-de523a88c83c"
-version = "1.0.10+0"
-
-[[deps.GLFW_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Libglvnd_jll", "Xorg_libXcursor_jll", "Xorg_libXi_jll", "Xorg_libXinerama_jll", "Xorg_libXrandr_jll"]
-git-tree-sha1 = "ff38ba61beff76b8f4acad8ab0c97ef73bb670cb"
-uuid = "0656b61e-2033-5cc2-a64a-77c0f6c09b89"
-version = "3.3.9+0"
-
-[[deps.GR]]
-deps = ["Artifacts", "Base64", "DelimitedFiles", "Downloads", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Pkg", "Preferences", "Printf", "Random", "Serialization", "Sockets", "TOML", "Tar", "Test", "UUIDs", "p7zip_jll"]
-git-tree-sha1 = "27442171f28c952804dede8ff72828a96f2bfc1f"
-uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.72.10"
-
-[[deps.GR_jll]]
-deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "FreeType2_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Qt6Base_jll", "Zlib_jll", "libpng_jll"]
-git-tree-sha1 = "025d171a2847f616becc0f84c8dc62fe18f0f6dd"
-uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
-version = "0.72.10+0"
-
-[[deps.Gettext_jll]]
-deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]
-git-tree-sha1 = "9b02998aba7bf074d14de89f9d37ca24a1a0b046"
-uuid = "78b55507-aeef-58d4-861c-77aaff3498b1"
-version = "0.21.0+0"
-
-[[deps.Glib_jll]]
-deps = ["Artifacts", "Gettext_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE2_jll", "Zlib_jll"]
-git-tree-sha1 = "e94c92c7bf4819685eb80186d51c43e71d4afa17"
-uuid = "7746bdde-850d-59dc-9ae8-88ece973131d"
-version = "2.76.5+0"
-
-[[deps.Graphite2_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "344bf40dcab1073aca04aa0df4fb092f920e4011"
-uuid = "3b182d85-2403-5c21-9c21-1e1f0cc25472"
-version = "1.3.14+0"
-
-[[deps.Graphviz_jll]]
-deps = ["Artifacts", "Cairo_jll", "Expat_jll", "JLLWrappers", "Libdl", "Pango_jll", "Pkg"]
-git-tree-sha1 = "a5d45833dda71048117e8a9828bef75c03b18b1c"
-uuid = "3c863552-8265-54e4-a6dc-903eb78fde85"
-version = "2.50.0+1"
-
-[[deps.Grisu]]
-git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
-uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
-version = "1.0.2"
-
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
 git-tree-sha1 = "19e974eced1768fb46fd6020171f2cec06b1edb5"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 version = "1.9.15"
-
-[[deps.HarfBuzz_jll]]
-deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
-git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
-uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
-version = "2.8.1+1"
 
 [[deps.Hyperscript]]
 deps = ["Test"]
@@ -3433,11 +3941,6 @@ git-tree-sha1 = "d75853a0bdbfb1ac815478bacd89cd27b550ace6"
 uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
 version = "0.2.3"
 
-[[deps.IndirectArrays]]
-git-tree-sha1 = "012e604e1c7458645cb8b436f8fba789a51b257f"
-uuid = "9b13fd28-a010-5f03-acff-a1bbcff69959"
-version = "1.0.0"
-
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -3446,12 +3949,6 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.2.2"
-
-[[deps.JLFzf]]
-deps = ["Pipe", "REPL", "Random", "fzf_jll"]
-git-tree-sha1 = "a53ebe394b71470c7f97c2e7e170d51df21b17af"
-uuid = "1019f520-868f-41f5-a6de-eb00f4b6a39c"
-version = "0.1.7"
 
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
@@ -3470,61 +3967,6 @@ deps = ["Dates", "Mmap", "Parsers", "PrecompileTools", "StructTypes", "UUIDs"]
 git-tree-sha1 = "95220473901735a0f4df9d1ca5b171b568b2daa3"
 uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 version = "1.13.2"
-
-[[deps.JpegTurbo_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "60b1194df0a3298f460063de985eae7b01bc011a"
-uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
-version = "3.0.1+0"
-
-[[deps.LAME_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "f6250b16881adf048549549fba48b1161acdac8c"
-uuid = "c1c5ebd0-6772-5130-a774-d5fcae4a789d"
-version = "3.100.1+0"
-
-[[deps.LERC_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "bf36f528eec6634efc60d7ec062008f171071434"
-uuid = "88015f11-f218-50d7-93a8-a6af411a945d"
-version = "3.0.0+1"
-
-[[deps.LLVMOpenMP_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "d986ce2d884d49126836ea94ed5bfb0f12679713"
-uuid = "1d63c593-3942-5779-bab2-d838dc0a180e"
-version = "15.0.7+0"
-
-[[deps.LZO_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "e5b909bcf985c5e2605737d2ce278ed791b89be6"
-uuid = "dd4b983a-f0e5-5f8d-a1b7-129d4a5fb1ac"
-version = "2.10.1+0"
-
-[[deps.LaTeXStrings]]
-git-tree-sha1 = "50901ebc375ed41dbf8058da26f9de442febbbec"
-uuid = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
-version = "1.3.1"
-
-[[deps.Latexify]]
-deps = ["Formatting", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "OrderedCollections", "Printf", "Requires"]
-git-tree-sha1 = "f428ae552340899a935973270b8d98e5a31c49fe"
-uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
-version = "0.16.1"
-
-    [deps.Latexify.extensions]
-    DataFramesExt = "DataFrames"
-    SymEngineExt = "SymEngine"
-
-    [deps.Latexify.weakdeps]
-    DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-    SymEngine = "123dc426-2d89-5057-bbad-38513e3affd8"
-
-[[deps.LeftChildRightSiblingTrees]]
-deps = ["AbstractTrees"]
-git-tree-sha1 = "fb6803dafae4a5d62ea5cab204b1e657d9737e7f"
-uuid = "1d6d02ad-be62-4b6b-8a6d-2f90e265016e"
-version = "0.2.0"
 
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
@@ -3552,54 +3994,6 @@ version = "1.11.0+1"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
-
-[[deps.Libffi_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "0b4a5d71f3e5200a7dff793393e09dfc2d874290"
-uuid = "e9f186c6-92d2-5b65-8a66-fee21dc1b490"
-version = "3.2.2+1"
-
-[[deps.Libgcrypt_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgpg_error_jll", "Pkg"]
-git-tree-sha1 = "64613c82a59c120435c067c2b809fc61cf5166ae"
-uuid = "d4300ac3-e22c-5743-9152-c294e39db1e4"
-version = "1.8.7+0"
-
-[[deps.Libglvnd_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll", "Xorg_libXext_jll"]
-git-tree-sha1 = "6f73d1dd803986947b2c750138528a999a6c7733"
-uuid = "7e76a0d4-f3c7-5321-8279-8d96eeed0f29"
-version = "1.6.0+0"
-
-[[deps.Libgpg_error_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "c333716e46366857753e273ce6a69ee0945a6db9"
-uuid = "7add5ba3-2f88-524e-9cd5-f83b8a55f7b8"
-version = "1.42.0+0"
-
-[[deps.Libiconv_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "f9557a255370125b405568f9767d6d195822a175"
-uuid = "94ce4f54-9a6c-5748-9c1c-f9c7231a4531"
-version = "1.17.0+0"
-
-[[deps.Libmount_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "9c30530bf0effd46e15e0fdcf2b8636e78cbbd73"
-uuid = "4b2f31a3-9ecc-558c-b454-b3730dcb73e9"
-version = "2.35.0+0"
-
-[[deps.Libtiff_jll]]
-deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "LERC_jll", "Libdl", "XZ_jll", "Zlib_jll", "Zstd_jll"]
-git-tree-sha1 = "2da088d113af58221c52828a80378e16be7d037a"
-uuid = "89763e89-9b03-5906-acba-b20f662cd828"
-version = "4.5.1+1"
-
-[[deps.Libuuid_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "7f3efec06033682db852f8b3bc3c1d2b0a0ab066"
-uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
-version = "2.36.0+0"
 
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
@@ -3635,12 +4029,6 @@ git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
 uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
 version = "0.1.4"
 
-[[deps.MacroTools]]
-deps = ["Markdown", "Random"]
-git-tree-sha1 = "b211c553c199c111d998ecdaf7623d1b89b69f93"
-uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-version = "0.5.12"
-
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
@@ -3656,11 +4044,6 @@ deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
 version = "2.28.2+1"
 
-[[deps.Measures]]
-git-tree-sha1 = "c13304c81eec1ed3af7fc20e75fb6b26092a1102"
-uuid = "442fdcdd-2543-5da2-b0f3-8c86c306513e"
-version = "0.3.2"
-
 [[deps.Missings]]
 deps = ["DataAPI"]
 git-tree-sha1 = "f66bdc5de519e8f8ae43bdc598782d35a25b1272"
@@ -3674,31 +4057,14 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 version = "2023.1.10"
 
-[[deps.NaNMath]]
-deps = ["OpenLibm_jll"]
-git-tree-sha1 = "0877504529a3e5c3343c6f8b4c0381e57e4387e4"
-uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
-version = "1.0.2"
-
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
-
-[[deps.Ogg_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "887579a3eb005446d514ab7aeac5d1d027658b8f"
-uuid = "e7412a2a-1a6e-54c0-be00-318e2571c051"
-version = "1.3.5+1"
 
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 version = "0.3.23+2"
-
-[[deps.OpenLibm_jll]]
-deps = ["Artifacts", "Libdl"]
-uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+2"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
@@ -3712,33 +4078,10 @@ git-tree-sha1 = "bbb5c2115d63c2f1451cb70e5ef75e8fe4707019"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
 version = "1.1.22+0"
 
-[[deps.Opus_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "51a08fb14ec28da2ec7a927c4337e4332c2a4720"
-uuid = "91d4177d-7536-5919-b921-800302f37372"
-version = "1.3.2+0"
-
 [[deps.OrderedCollections]]
 git-tree-sha1 = "2e73fe17cac3c62ad1aebe70d44c963c3cfdc3e3"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 version = "1.6.2"
-
-[[deps.PCRE2_jll]]
-deps = ["Artifacts", "Libdl"]
-uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
-version = "10.42.0+1"
-
-[[deps.PProf]]
-deps = ["AbstractTrees", "CodecZlib", "EnumX", "FlameGraphs", "Libdl", "OrderedCollections", "Profile", "ProgressMeter", "ProtoBuf", "pprof_jll"]
-git-tree-sha1 = "c909f647881a80ec4c5974eec9624b0c96afad9d"
-uuid = "e4faabce-9ead-11e9-39d9-4379958e3056"
-version = "3.1.0"
-
-[[deps.Pango_jll]]
-deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "FriBidi_jll", "Glib_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "4745216e94f71cb768d58330b059c9b76f32cb66"
-uuid = "36c8627f-9965-5494-a995-c6b170f724f3"
-version = "1.50.14+0"
 
 [[deps.Parsers]]
 deps = ["Dates", "PrecompileTools", "UUIDs"]
@@ -3746,53 +4089,10 @@ git-tree-sha1 = "716e24b21538abc91f6205fd1d8363f39b442851"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.7.2"
 
-[[deps.Pipe]]
-git-tree-sha1 = "6842804e7867b115ca9de748a0cf6b364523c16d"
-uuid = "b98c9c47-44ae-5843-9183-064241ee97a0"
-version = "1.3.0"
-
-[[deps.Pixman_jll]]
-deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LLVMOpenMP_jll", "Libdl"]
-git-tree-sha1 = "64779bc4c9784fee475689a1752ef4d5747c5e87"
-uuid = "30392449-352a-5448-841d-b1acce4e97dc"
-version = "0.42.2+0"
-
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.10.0"
-
-[[deps.PlotThemes]]
-deps = ["PlotUtils", "Statistics"]
-git-tree-sha1 = "1f03a2d339f42dca4a4da149c7e15e9b896ad899"
-uuid = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
-version = "3.1.0"
-
-[[deps.PlotUtils]]
-deps = ["ColorSchemes", "Colors", "Dates", "PrecompileTools", "Printf", "Random", "Reexport", "Statistics"]
-git-tree-sha1 = "862942baf5663da528f66d24996eb6da85218e76"
-uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
-version = "1.4.0"
-
-[[deps.Plots]]
-deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "JLFzf", "JSON", "LaTeXStrings", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "PrecompileTools", "Preferences", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "RelocatableFolders", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "UnitfulLatexify", "Unzip"]
-git-tree-sha1 = "ccee59c6e48e6f2edf8a5b64dc817b6729f99eb5"
-uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.39.0"
-
-    [deps.Plots.extensions]
-    FileIOExt = "FileIO"
-    GeometryBasicsExt = "GeometryBasics"
-    IJuliaExt = "IJulia"
-    ImageInTerminalExt = "ImageInTerminal"
-    UnitfulExt = "Unitful"
-
-    [deps.Plots.weakdeps]
-    FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
-    GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
-    IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
-    ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
-    Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
@@ -3816,28 +4116,6 @@ version = "1.4.0"
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
-[[deps.Profile]]
-deps = ["Printf"]
-uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
-
-[[deps.ProgressMeter]]
-deps = ["Distributed", "Printf"]
-git-tree-sha1 = "00099623ffee15972c16111bcf84c58a0051257c"
-uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
-version = "1.9.0"
-
-[[deps.ProtoBuf]]
-deps = ["BufferedStreams", "Dates", "EnumX", "TOML", "TranscodingStreams"]
-git-tree-sha1 = "dc85dc33abde04b3c2f687834a5551994b27c328"
-uuid = "3349acd9-ac6a-5e09-bcdb-63829b23a429"
-version = "1.0.14"
-
-[[deps.Qt6Base_jll]]
-deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Vulkan_Loader_jll", "Xorg_libSM_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_cursor_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "libinput_jll", "xkbcommon_jll"]
-git-tree-sha1 = "7c29f0e8c575428bd84dc3c72ece5178caa67336"
-uuid = "c0090381-4147-56d7-9ebc-da0b1113ec56"
-version = "6.5.2+2"
-
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
@@ -3846,53 +4124,17 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
-[[deps.RecipesBase]]
-deps = ["PrecompileTools"]
-git-tree-sha1 = "5c3d09cc4f31f5fc6af001c250bf1278733100ff"
-uuid = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
-version = "1.3.4"
-
-[[deps.RecipesPipeline]]
-deps = ["Dates", "NaNMath", "PlotUtils", "PrecompileTools", "RecipesBase"]
-git-tree-sha1 = "45cf9fd0ca5839d06ef333c8201714e888486342"
-uuid = "01d81517-befc-4cb6-b9ec-a95719d0359c"
-version = "0.6.12"
-
 [[deps.Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
 uuid = "189a3867-3050-52da-a836-e630ba90ab69"
 version = "1.2.2"
 
-[[deps.RelocatableFolders]]
-deps = ["SHA", "Scratch"]
-git-tree-sha1 = "ffdaf70d81cf6ff22c2b6e733c900c3321cab864"
-uuid = "05181044-ff0b-4ac5-8273-598c1e38db00"
-version = "1.0.1"
-
-[[deps.Requires]]
-deps = ["UUIDs"]
-git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
-uuid = "ae029012-a4dd-5104-9daa-d747884805df"
-version = "1.3.0"
-
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
 
-[[deps.Scratch]]
-deps = ["Dates"]
-git-tree-sha1 = "3bac05bc7e74a75fd9cba4295cde4045d9fe2386"
-uuid = "6c6a2e73-6563-6170-7368-637461726353"
-version = "1.2.1"
-
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
-
-[[deps.Showoff]]
-deps = ["Dates", "Grisu"]
-git-tree-sha1 = "91eddf657aca81df9ae6ceb20b959ae5653ad1de"
-uuid = "992d4aef-0814-514b-bc4d-f2e9a6c4116f"
-version = "1.0.3"
 
 [[deps.SimpleBufferStream]]
 git-tree-sha1 = "874e8867b33a00e784c8a7e4b60afe9e037b74e1"
@@ -3951,12 +4193,6 @@ deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 version = "1.10.0"
 
-[[deps.TensorCore]]
-deps = ["LinearAlgebra"]
-git-tree-sha1 = "1feb45f88d133a655e001435632f019a9a1bcdb6"
-uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
-version = "0.1.1"
-
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -3984,298 +4220,15 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
-[[deps.UnicodeFun]]
-deps = ["REPL"]
-git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
-uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
-version = "0.4.1"
-
-[[deps.Unitful]]
-deps = ["Dates", "LinearAlgebra", "Random"]
-git-tree-sha1 = "3c793be6df9dd77a0cf49d80984ef9ff996948fa"
-uuid = "1986cc42-f94f-5a68-af5c-568840ba703d"
-version = "1.19.0"
-
-    [deps.Unitful.extensions]
-    ConstructionBaseUnitfulExt = "ConstructionBase"
-    InverseFunctionsUnitfulExt = "InverseFunctions"
-
-    [deps.Unitful.weakdeps]
-    ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
-    InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
-
-[[deps.UnitfulLatexify]]
-deps = ["LaTeXStrings", "Latexify", "Unitful"]
-git-tree-sha1 = "e2d817cc500e960fdbafcf988ac8436ba3208bfd"
-uuid = "45397f5d-5981-4c77-b2b3-fc36d6e9b728"
-version = "1.6.3"
-
-[[deps.Unzip]]
-git-tree-sha1 = "ca0969166a028236229f63514992fc073799bb78"
-uuid = "41fe7b60-77ed-43a1-b4f0-825fd5a5650d"
-version = "0.2.0"
-
-[[deps.Vulkan_Loader_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Wayland_jll", "Xorg_libX11_jll", "Xorg_libXrandr_jll", "xkbcommon_jll"]
-git-tree-sha1 = "2f0486047a07670caad3a81a075d2e518acc5c59"
-uuid = "a44049a8-05dd-5a78-86c9-5fde0876e88c"
-version = "1.3.243+0"
-
-[[deps.Wayland_jll]]
-deps = ["Artifacts", "EpollShim_jll", "Expat_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg", "XML2_jll"]
-git-tree-sha1 = "7558e29847e99bc3f04d6569e82d0f5c54460703"
-uuid = "a2964d1f-97da-50d4-b82a-358c7fce9d89"
-version = "1.21.0+1"
-
-[[deps.Wayland_protocols_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "4528479aa01ee1b3b4cd0e6faef0e04cf16466da"
-uuid = "2381bf8a-dfd0-557d-9999-79630e7b1b91"
-version = "1.25.0+0"
-
-[[deps.XML2_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
-git-tree-sha1 = "801cbe47eae69adc50f36c3caec4758d2650741b"
-uuid = "02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a"
-version = "2.12.2+0"
-
-[[deps.XSLT_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Libgpg_error_jll", "Libiconv_jll", "Pkg", "XML2_jll", "Zlib_jll"]
-git-tree-sha1 = "91844873c4085240b95e795f692c4cec4d805f8a"
-uuid = "aed1982a-8fda-507f-9586-7b0439959a61"
-version = "1.1.34+0"
-
-[[deps.XZ_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "522b8414d40c4cbbab8dee346ac3a09f9768f25d"
-uuid = "ffd25f8a-64ca-5728-b0f7-c24cf3aae800"
-version = "5.4.5+0"
-
-[[deps.Xorg_libICE_jll]]
-deps = ["Libdl", "Pkg"]
-git-tree-sha1 = "e5becd4411063bdcac16be8b66fc2f9f6f1e8fe5"
-uuid = "f67eecfb-183a-506d-b269-f58e52b52d7c"
-version = "1.0.10+1"
-
-[[deps.Xorg_libSM_jll]]
-deps = ["Libdl", "Pkg", "Xorg_libICE_jll"]
-git-tree-sha1 = "4a9d9e4c180e1e8119b5ffc224a7b59d3a7f7e18"
-uuid = "c834827a-8449-5923-a945-d239c165b7dd"
-version = "1.2.3+0"
-
-[[deps.Xorg_libX11_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libxcb_jll", "Xorg_xtrans_jll"]
-git-tree-sha1 = "afead5aba5aa507ad5a3bf01f58f82c8d1403495"
-uuid = "4f6342f7-b3d2-589e-9d20-edeb45f2b2bc"
-version = "1.8.6+0"
-
-[[deps.Xorg_libXau_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "6035850dcc70518ca32f012e46015b9beeda49d8"
-uuid = "0c0b7dd1-d40b-584c-a123-a41640f87eec"
-version = "1.0.11+0"
-
-[[deps.Xorg_libXcursor_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libXfixes_jll", "Xorg_libXrender_jll"]
-git-tree-sha1 = "12e0eb3bc634fa2080c1c37fccf56f7c22989afd"
-uuid = "935fb764-8cf2-53bf-bb30-45bb1f8bf724"
-version = "1.2.0+4"
-
-[[deps.Xorg_libXdmcp_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "34d526d318358a859d7de23da945578e8e8727b7"
-uuid = "a3789734-cfe1-5b06-b2d0-1dd0d9d62d05"
-version = "1.1.4+0"
-
-[[deps.Xorg_libXext_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll"]
-git-tree-sha1 = "b7c0aa8c376b31e4852b360222848637f481f8c3"
-uuid = "1082639a-0dae-5f34-9b06-72781eeb8cb3"
-version = "1.3.4+4"
-
-[[deps.Xorg_libXfixes_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll"]
-git-tree-sha1 = "0e0dc7431e7a0587559f9294aeec269471c991a4"
-uuid = "d091e8ba-531a-589c-9de9-94069b037ed8"
-version = "5.0.3+4"
-
-[[deps.Xorg_libXi_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libXext_jll", "Xorg_libXfixes_jll"]
-git-tree-sha1 = "89b52bc2160aadc84d707093930ef0bffa641246"
-uuid = "a51aa0fd-4e3c-5386-b890-e753decda492"
-version = "1.7.10+4"
-
-[[deps.Xorg_libXinerama_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libXext_jll"]
-git-tree-sha1 = "26be8b1c342929259317d8b9f7b53bf2bb73b123"
-uuid = "d1454406-59df-5ea1-beac-c340f2130bc3"
-version = "1.1.4+4"
-
-[[deps.Xorg_libXrandr_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll"]
-git-tree-sha1 = "34cea83cb726fb58f325887bf0612c6b3fb17631"
-uuid = "ec84b674-ba8e-5d96-8ba1-2a689ba10484"
-version = "1.5.2+4"
-
-[[deps.Xorg_libXrender_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll"]
-git-tree-sha1 = "19560f30fd49f4d4efbe7002a1037f8c43d43b96"
-uuid = "ea2f1a96-1ddc-540d-b46f-429655e07cfa"
-version = "0.9.10+4"
-
-[[deps.Xorg_libpthread_stubs_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "8fdda4c692503d44d04a0603d9ac0982054635f9"
-uuid = "14d82f49-176c-5ed1-bb49-ad3f5cbd8c74"
-version = "0.1.1+0"
-
-[[deps.Xorg_libxcb_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "XSLT_jll", "Xorg_libXau_jll", "Xorg_libXdmcp_jll", "Xorg_libpthread_stubs_jll"]
-git-tree-sha1 = "b4bfde5d5b652e22b9c790ad00af08b6d042b97d"
-uuid = "c7cfdc94-dc32-55de-ac96-5a1b8d977c5b"
-version = "1.15.0+0"
-
-[[deps.Xorg_libxkbfile_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libX11_jll"]
-git-tree-sha1 = "730eeca102434283c50ccf7d1ecdadf521a765a4"
-uuid = "cc61e674-0454-545c-8b26-ed2c68acab7a"
-version = "1.1.2+0"
-
-[[deps.Xorg_xcb_util_cursor_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_jll", "Xorg_xcb_util_renderutil_jll"]
-git-tree-sha1 = "04341cb870f29dcd5e39055f895c39d016e18ccd"
-uuid = "e920d4aa-a673-5f3a-b3d7-f755a4d47c43"
-version = "0.1.4+0"
-
-[[deps.Xorg_xcb_util_image_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_xcb_util_jll"]
-git-tree-sha1 = "0fab0a40349ba1cba2c1da699243396ff8e94b97"
-uuid = "12413925-8142-5f55-bb0e-6d7ca50bb09b"
-version = "0.4.0+1"
-
-[[deps.Xorg_xcb_util_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libxcb_jll"]
-git-tree-sha1 = "e7fd7b2881fa2eaa72717420894d3938177862d1"
-uuid = "2def613f-5ad1-5310-b15b-b15d46f528f5"
-version = "0.4.0+1"
-
-[[deps.Xorg_xcb_util_keysyms_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_xcb_util_jll"]
-git-tree-sha1 = "d1151e2c45a544f32441a567d1690e701ec89b00"
-uuid = "975044d2-76e6-5fbe-bf08-97ce7c6574c7"
-version = "0.4.0+1"
-
-[[deps.Xorg_xcb_util_renderutil_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_xcb_util_jll"]
-git-tree-sha1 = "dfd7a8f38d4613b6a575253b3174dd991ca6183e"
-uuid = "0d47668e-0667-5a69-a72c-f761630bfb7e"
-version = "0.3.9+1"
-
-[[deps.Xorg_xcb_util_wm_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_xcb_util_jll"]
-git-tree-sha1 = "e78d10aab01a4a154142c5006ed44fd9e8e31b67"
-uuid = "c22f9ab0-d5fe-5066-847c-f4bb1cd4e361"
-version = "0.4.1+1"
-
-[[deps.Xorg_xkbcomp_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libxkbfile_jll"]
-git-tree-sha1 = "330f955bc41bb8f5270a369c473fc4a5a4e4d3cb"
-uuid = "35661453-b289-5fab-8a00-3d9160c6a3a4"
-version = "1.4.6+0"
-
-[[deps.Xorg_xkeyboard_config_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_xkbcomp_jll"]
-git-tree-sha1 = "691634e5453ad362044e2ad653e79f3ee3bb98c3"
-uuid = "33bec58e-1273-512f-9401-5d533626f822"
-version = "2.39.0+0"
-
-[[deps.Xorg_xtrans_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "e92a1a012a10506618f10b7047e478403a046c77"
-uuid = "c5fb5394-a638-5e4d-96e5-b29de1b5cf10"
-version = "1.5.0+0"
-
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
 version = "1.2.13+1"
 
-[[deps.Zstd_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "49ce682769cd5de6c72dcf1b94ed7790cd08974c"
-uuid = "3161d3a3-bdf6-5164-811a-617609db77b4"
-version = "1.5.5+0"
-
-[[deps.eudev_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "gperf_jll"]
-git-tree-sha1 = "431b678a28ebb559d224c0b6b6d01afce87c51ba"
-uuid = "35ca27e7-8b34-5b7f-bca9-bdc33f59eb06"
-version = "3.2.9+0"
-
-[[deps.fzf_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "a68c9655fbe6dfcab3d972808f1aafec151ce3f8"
-uuid = "214eeab7-80f7-51ab-84ad-2988db7cef09"
-version = "0.43.0+0"
-
-[[deps.gperf_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "3516a5630f741c9eecb3720b1ec9d8edc3ecc033"
-uuid = "1a1c6b14-54f6-533d-8383-74cd7377aa70"
-version = "3.1.1+0"
-
-[[deps.libaom_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "3a2ea60308f0996d26f1e5354e10c24e9ef905d4"
-uuid = "a4ae2306-e953-59d6-aa16-d00cac43593b"
-version = "3.4.0+0"
-
-[[deps.libass_jll]]
-deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "5982a94fcba20f02f42ace44b9894ee2b140fe47"
-uuid = "0ac62f75-1d6f-5e53-bd7c-93b484bb37c0"
-version = "0.15.1+0"
-
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
 version = "5.8.0+1"
-
-[[deps.libevdev_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "141fe65dc3efabb0b1d5ba74e91f6ad26f84cc22"
-uuid = "2db6ffa8-e38f-5e21-84af-90c45d0032cc"
-version = "1.11.0+0"
-
-[[deps.libfdk_aac_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
-uuid = "f638f0a6-7fb0-5443-88ba-1cc74229b280"
-version = "2.0.2+0"
-
-[[deps.libinput_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "eudev_jll", "libevdev_jll", "mtdev_jll"]
-git-tree-sha1 = "ad50e5b90f222cfe78aa3d5183a20a12de1322ce"
-uuid = "36db933b-70db-51c0-b978-0f229ee0e533"
-version = "1.18.0+0"
-
-[[deps.libpng_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
-git-tree-sha1 = "93284c28274d9e75218a416c65ec49d0e0fcdf3d"
-uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.40+0"
-
-[[deps.libvorbis_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
-git-tree-sha1 = "b910cb81ef3fe6e78bf6acee440bda86fd6ae00c"
-uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
-version = "1.3.7+1"
-
-[[deps.mtdev_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "814e154bdb7be91d78b6802843f76b6ece642f11"
-uuid = "009596ad-96f7-51b1-9f1b-5ce2d5e8a71e"
-version = "1.1.6+0"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -4286,30 +4239,6 @@ version = "1.52.0+1"
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 version = "17.4.0+2"
-
-[[deps.pprof_jll]]
-deps = ["Artifacts", "Graphviz_jll", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "b004c9fd6294afe24efccc7e2f055436b63cb809"
-uuid = "cf2c5f97-e748-59fa-a03f-dda3c62118cb"
-version = "1.0.1+0"
-
-[[deps.x264_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "4fea590b89e6ec504593146bf8b988b2c00922b2"
-uuid = "1270edf5-f2f9-52d2-97e9-ab00b5d0237a"
-version = "2021.5.5+0"
-
-[[deps.x265_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "ee567a171cce03570d77ad3a43e90218e38937a9"
-uuid = "dfaa095f-4041-5dcd-9319-2fabd8486b76"
-version = "3.5.0+0"
-
-[[deps.xkbcommon_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Wayland_jll", "Wayland_protocols_jll", "Xorg_libxcb_jll", "Xorg_xkeyboard_config_jll"]
-git-tree-sha1 = "9c304562909ab2bab0262639bd4f444d7bc2be37"
-uuid = "d8fb68d0-12a3-5cfd-a85a-d49703b185fd"
-version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
@@ -4370,31 +4299,52 @@ version = "1.4.1+1"
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
 # ╠═29a93299-f577-4114-b77f-dbc079392090
-# ╟─f1949d12-86eb-4236-b887-b750916d3493
+# ╠═f1949d12-86eb-4236-b887-b750916d3493
 # ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╟─61a0e2bf-2fed-4141-afc0-c8b5507679d1
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╠═1fe8a98e-6dc6-466e-9bc9-406c416d8076
-# ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
-# ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
+# ╠═1f021cc5-edb0-4515-b8c9-6a2395bc9547
+# ╠═aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
+# ╠═c5a9d1af-118d-4cba-99bd-722e7176ae02
+# ╠═45e5f072-5717-4d29-9dce-db799e806d23
+# ╠═cff87557-3a42-4649-831e-17b792acd493
+# ╠═240dd9d0-5d65-4d4a-b165-fb05d1d79dc1
+# ╠═62878cb5-e01d-427a-97d6-e1816e3e3bc9
+# ╠═28124dd1-7559-4ec4-bae8-86a1573c63df
+# ╠═17677613-d05a-475b-9383-ff11b480b508
+# ╠═aa4d7d14-10dc-4800-9c58-1bf2a2dc0598
+# ╠═0fea5b09-dfbb-4b69-ba47-897a34647e80
+# ╠═d312f582-0d32-45cf-8898-0eef6894674c
+# ╠═316a1fae-a140-4bb8-84f8-07fc21e17be2
+# ╠═43477aed-4b13-44f4-92db-f3e8a97c022f
+# ╠═7a6bfe59-711f-4400-9a27-8e5332dc4fcc
+# ╠═8fb24754-901c-4c65-864e-e6e597daf581
+# ╠═156c508f-2026-4619-9632-d679ca2cae50
+# ╠═18f8a5d6-c775-44a3-9490-cd11352c4a63
+# ╠═d535db36-c2c7-4460-aa04-e758dcf79a59
+# ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
+# ╠═a27e0adf-aa09-42ee-97f5-ede084a9edc3
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
-# ╠═761fb8d7-0c7d-4428-ad48-707d219582c0
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╟─466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
-# ╠═91c35ba0-729e-4ea9-8848-3887936a8a21
-# ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+# ╟─91c35ba0-729e-4ea9-8848-3887936a8a21
+# ╟─1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
 # ╠═8b6264b0-f7ea-4177-9700-30072d4c5826
+# ╠═2ccc880f-805e-47e3-af9e-eae4f5fa261d
 # ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
 # ╠═5e5366a9-3086-4210-a037-c56e1374a686
 # ╠═7316a125-3bfe-4bac-babf-4e3db953078b
 # ╠═064496dc-4e23-4242-9e25-a41ddbaf59d1
 # ╠═28ee9310-9b7d-4169-bae4-615e4b2c386e
+# ╠═4cb9af27-b7c2-4b76-8c67-dd5221240de6
+# ╠═f6cb0643-d60c-4a64-baf1-8afbff17f582
 # ╟─612a1121-b672-4bc7-9eee-f7989ac27346
 # ╟─a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
@@ -4410,7 +4360,7 @@ version = "1.4.1+1"
 # ╟─13eb72c7-ac24-4b93-8fd9-260b49940370
 # ╟─8929062f-0d97-41f9-99dd-99d51f01b664
 # ╟─ebd8e962-2150-4ada-8ebd-3eba6e29c12e
-# ╟─f55bb88f-ecce-4c14-b9ac-4fc975c3592e
+# ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
@@ -4418,13 +4368,16 @@ version = "1.4.1+1"
 # ╟─7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
 # ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
-# ╟─6a174abd-c9bc-4c3c-93f0-05a7d70db4af
+# ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 # ╟─14aa5b7c-9065-4ca3-b0e9-19c104b1854d
+# ╠═7b090d5d-cce2-415b-8621-fbdc11b54f77
 # ╟─4976c9c5-d60d-4b19-aa72-0e135ad37361
 # ╟─1c970cc9-de1f-48cf-aa81-684d209689e0
 # ╟─e6cc0cf6-617a-4231-826d-63f36d6136a5
 # ╟─cd06cad4-4b47-48dd-913f-61028ebe8cb3
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
+# ╟─db1ce9bc-0593-4dd7-b905-a14295d47533
+# ╠═63cf005b-e631-4de4-8927-085c3f982803
 # ╟─5ce26cae-4604-4ad8-8d15-15f0bfc9a81a
 # ╠═9b8a5995-d8f0-4528-ad62-a2113d5790fd
 # ╠═c9d90fd5-4b65-435f-82e7-324340f31cd8

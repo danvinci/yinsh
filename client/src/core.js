@@ -377,11 +377,18 @@ async function replay_opponent_move(){
 
         };
 
+        // notice if array is empty
+        if (yinsh.delta_array.length == 0) {
+            console.log(`LOG - No delta to replay`);
+        };
+
         // wipe clean delta data once used
         // avoids issues when replaying_opponent_move in winning scenarios: serverJS only saves new data if it has delta, so on winning move it will mess up trying to replay past delta
         delete yinsh.delta_array;
         
     };
+
+
 };
 
 // update current/next data -> reinit/redraw everything (on-canvas nothing should change)
@@ -650,6 +657,8 @@ async function ringDrop_handler (event) {
                     reset_scoring_tasks();
 
                 } else {
+
+                    // note: re-use this later, display during opp scoring replay
                     console.log("USER - Oh no, you scored for your opponent!");
 
                     ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Oh no, you scored for your opponent!` }));
