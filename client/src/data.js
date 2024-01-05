@@ -162,6 +162,8 @@ export function init_empty_game_objects(){
 
         // turns, moves, score handling
         _game_objects.current_turn = {in_progress: false}; // to track if this is the client's turn 
+
+        _game_objects.pre_move_scoring = {mk_sel: -1, ring_score: -1, mk_locs : []}; // save details in case pre-move scoring took place
        
         _game_objects.current_move = {in_progress: false, start_index: 0, legal_drops: []}; // -> details for move currently in progress 
         _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal drops ids)
@@ -309,6 +311,22 @@ export function reset_scoring_tasks(){
 
 };
 
+export function set_preMove_scoring_pick(mk_sel_id = -1, score_ring_id = -1){
+
+    // if called without arguments it will reset the var (-1 def)
+
+    yinsh.objs.pre_move_scoring.mk_sel_pick = mk_sel_id;
+    yinsh.objs.pre_move_scoring.score_ring_pick = score_ring_id;
+
+};
+
+export function get_preMove_scoring_pick(){
+
+    return yinsh.objs.pre_move_scoring; 
+
+};
+
+
 export function get_task_status(task_name){
 
     if (task_name == 'mk_scoring_task') {
@@ -320,7 +338,6 @@ export function get_task_status(task_name){
         return yinsh.objs.current_ring_scoring.in_progress;
 
     };
-
 };
 
 export function get_current_turn_no(){

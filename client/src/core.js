@@ -8,6 +8,7 @@ import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_pl
 import { bind_adapt_canvas, reorder_rings, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
 import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
+import { get_preMove_scoring_pick, set_preMove_scoring_pick } from './data.js'
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
 import { ringDrop_playS, markersRemoved_player_playS, markersRemoved_oppon_playS, endGame_win_playS, endGame_lose_playS } from './sound.js'
@@ -568,7 +569,6 @@ async function ringDrop_handler (event) {
 
     // retrieve ring and its index details (last)
     const dropping_ring = yinsh.objs.rings.at(-1);
-    const gs_value = dropping_ring.type.concat(dropping_ring.player); // -> RB, RW
     
     // retrieve index of drop location
     const drop_loc_index = snap_drop_loc.index
@@ -621,6 +621,7 @@ async function ringDrop_handler (event) {
                 // values to send back to server
                 let scoring_mk_sel_picked = -1;
                 let scoring_ring_picked = -1;
+                let scoring_mk_locs_removed = [];
 
             if (move_scenario.score_flag == true){
 
@@ -629,7 +630,7 @@ async function ringDrop_handler (event) {
                 const _player_scores = _all_scores.filter(s => s.player == player_id);
 
                 // handle scoring for current player
-                if (_player_scores.length > 0) {
+                if (_player_scores.length > 0) { // fix as server will return only player's score avails 
 
                     console.log("USER - Score!");
 
@@ -643,7 +644,7 @@ async function ringDrop_handler (event) {
 
                     // turn will be ended by score handling function 
                     core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
-                    scoring_mk_sel_picked = await mk_scoring.promise // wait for mk to be picked -> return value of loc_id
+                    [scoring_mk_sel_picked, scoring_mk_locs_removed]= await mk_scoring.promise // wait for mk to be picked -> return value of loc_id
 
                     // highlight rings - need to pass player own rings ids to the function
                     await sleep(350);
@@ -666,20 +667,19 @@ async function ringDrop_handler (event) {
 
                 };  
             };
-                    
-            const _played_turn_no = get_current_turn_no();
-            console.log(`TEST - Turn no: ${_played_turn_no}`);
 
-            // move done -> wrap up info to send back on actions taken by player
-            const scenario_info = { start: start_move_index, 
-                                    end: drop_loc_index,
-                                    mk_sel_pick: scoring_mk_sel_picked, // default to -1
-                                    ring_removed: scoring_ring_picked, // defaults to -1
+            const _played_turn_no = get_current_turn_no();
+            console.log(`LOG - Completed player turn no: ${_played_turn_no}`);
+
+            // turn completed -> wrap up info to send back on actions taken by player
+            const turn_recap = {    score_action_preMove : get_preMove_scoring_pick(), // this happened at the beginning of the turn, in case, without ring_drop involved
+                                    move_action: { start: start_move_index, end: drop_loc_index },
+                                    score_action: { mk_sel: scoring_mk_sel_picked, mk_locs: scoring_mk_locs_removed, ring_score: scoring_ring_picked }, // defaults to -1
                                     completed_turn_no: _played_turn_no
                                 }; 
 
             // turn completed -> notify server with info on scenario
-            await end_turn_wait_opponent(scenario_info);
+            await end_turn_wait_opponent(turn_recap);
         
         };
 
@@ -753,7 +753,7 @@ function mk_scoring_options_handler(event){
         markersRemoved_player_playS();
 
         // complete score handling task (success)
-        const success_msg = mk_sel_picked_id; // value to be returned by completed task
+        const success_msg = [mk_sel_picked_id, _mk_row_to_remove]; // value to be returned by completed task (mk_sel marker + mk_locs removed)
         complete_task('mk_scoring_task', success_msg);
 
         console.log("USER - Pick a ring to be removed from the board!");
