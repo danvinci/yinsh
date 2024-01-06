@@ -1,6 +1,7 @@
 // DATA
 // data objects + functions operating on them + data utils (like reshape_index)
 
+import { setup_ok_codes, next_ok_codes, joiner_ok_code} from './server.js'
 
 // utility function: from col-major julia matrix to linear index in js
 const reshape_index = (row, col) => ( (col-1)*19 + row - 1); // js arrays start at 0, hence the -1 offset
@@ -183,78 +184,64 @@ export function init_empty_game_objects(){
 
 };
 
-// saving server response data when asking for new game -> server_data.game_id/client_player_id/etc
-export function save_first_server_response(srv_response_input, joiner=false){
-    
+
+// saving server response data - internally handles if it's setup or next move data
+// assumes input data has msg_code field, and are returning w/ OK code
+export function save_server_response(srv_input){
+
+    // check if it's SETUP or NEXT MOVE data
+    const f_setup = setup_ok_codes.includes(srv_input.msg_code);
+    const f_next = next_ok_codes.includes(srv_input.msg_code);
+
     // init temporary object
-    const _server_response = {};
+    let _srv_response = {};
 
-        _server_response.game_id = srv_response_input.game_id; // game ID
+    // save NEXT MOVE data
+    if (f_next) {
 
-        // assign color to client (player_black_id / player_white_id)
-        // if this client is joining the game, it will be the joiner
-        if (joiner) {
-            _server_response.client_player_id = srv_response_input.join_player_id;
-            _server_response.opponent_player_id = srv_response_input.orig_player_id;  
-        } else {
-            _server_response.client_player_id = srv_response_input.orig_player_id; 
-            _server_response.opponent_player_id = srv_response_input.join_player_id;  
-        };
+            _srv_response.rings = srv_input.rings; // rings
+            _srv_response.markers = srv_input.markers; // markers
+            _srv_response.scenarioTree = srv_input.scenarioTree; // scenario tree
+            _srv_response.turn_no = srv_input.turn_no; // turn number
+
+        // save to global obj and log
+        yinsh.next_server_data = structuredClone(_srv_response);
+
+        // save delta data if present - TO BE REVISITED CORE DOES AN UNDEF CHECK
+        yinsh.delta_array = ('delta_array' in srv_input) ? structuredClone(srv_input.delta_array) : undefined;
+
+        console.log('LOG - Server NEXT MOVE data saved');
+
+    //////////////////////////////
+
+    // save SETUP data
+    } else if (f_setup) {
+
+            // save specific fields 
+            _srv_response.game_id = srv_input.game_id; // game ID
+            _srv_response.rings = srv_input.rings; // rings
+            _srv_response.markers = srv_input.markers; // markers (empty array on setup)
+            _srv_response.scenarioTree = srv_input.scenarioTree; // pre-computed scenario tree for each possible move
+            _srv_response.turn_no = srv_input.turn_no; // turn number
+
+            // determine if we're originator or joiner -> assign color to client (player_black_id / player_white_id)
+            const f_joiner = srv_input.msg_code == joiner_ok_code;
+
+            // client and opponent IDs (B | W)
+            _srv_response.client_player_id = f_joiner ? srv_input.join_player_id : srv_input.orig_player_id;
+            _srv_response.opponent_player_id = f_joiner ? srv_input.orig_player_id : srv_input.join_player_id;  
         
-        // initial rings setup
-        _server_response.rings = srv_response_input.rings; 
-
-         // initial markers setup (empty array)
-         _server_response.markers = srv_response_input.markers; 
-
-        // pre-computed scenario tree for each possible move (except pick/drop in same location)
-        _server_response.scenarioTree = srv_response_input.scenarioTree;
-
-        // turn number that should be played by client
-        _server_response.turn_no = srv_response_input.turn_no; // should be 1 on first
-    
-    // save to global obj and log
-    yinsh.server_data = structuredClone(_server_response);
-    
-    // make local working copy that we can alter, and from which markers/rings will be re-init in case of window resize
-    // this way we can preserve local state without messing with server data
-    yinsh.local_server_data_ref = structuredClone(yinsh.server_data);
-
-    console.log('LOG - Server response saved');
-    
-    console.log(`USER - You're player ${_server_response.client_player_id}`);
-
-};
-
-
-// saving server response data when asking for new game -> server_data.game_id/client_player_id/etc
-export function save_next_server_response(srv_response_input){
-    
-    // init temporary object
-    const _server_response = {};
+        // save to global obj and log
+        yinsh.server_data = structuredClone(_srv_response);
         
-        // rings update
-        _server_response.rings = srv_response_input.rings; 
+        // make local working copy that we can alter, and from which markers/rings will be re-init in case of window resize
+        // this way we can preserve local state without messing with server data
+        yinsh.local_server_data_ref = structuredClone(yinsh.server_data);
 
-        // markers update
-        _server_response.markers = srv_response_input.markers; 
+        console.log('LOG - Server SETUP data saved');      
 
-        // pre-computed scenario tree for each possible move (except pick/drop in same location)
-        _server_response.scenarioTree = srv_response_input.scenarioTree;
-
-        // turn number that should be played by client
-        _server_response.turn_no = srv_response_input.turn_no;
-    
-    // save to global obj and log
-    yinsh.next_server_data = structuredClone(_server_response);
-
-    // save delta data if present
-    const has_delta = Object.keys(srv_response_input).includes('delta_array');
-    yinsh.delta_array = has_delta ? structuredClone(srv_response_input.delta_array) : undefined;
-
-    console.log('LOG - Next turn data from server saved');
-    
-};
+    };
+ };
 
 
 // updates rings, markers, and scenario tree so to match data for next turn

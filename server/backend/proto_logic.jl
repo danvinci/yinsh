@@ -2754,7 +2754,7 @@ function temp_sim_delta_translation(sim::Dict)::Dict
 
 =#
 
-	_ret = Dict()
+	_ret = copy(sim) # copy existing data, substitute use over time downstream 
 
 	if haskey(sim, :move_done)
 
@@ -3107,7 +3107,7 @@ end
 # ╔═╡ 9fdbf307-1067-4f55-ac56-8335ecc84962
 function temp_ai_pick_translation(pick::Dict)::Dict
 
-	#= need to translate ai pick in this format:
+	#= need to translate IN the AI pick in this format:
 	
 		score_action_preMove : { mk_sel: -1, mk_locs: [], ring_score: -1 },
 		move_action: { start: start_move_index, end: drop_loc_index },

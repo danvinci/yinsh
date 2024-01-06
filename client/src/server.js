@@ -13,7 +13,7 @@
 
 */
 
-import { save_first_server_response, save_next_server_response, get_game_id, get_player_id, get_current_turn_no } from './data.js'
+import { save_server_response, get_game_id, get_player_id, get_current_turn_no } from './data.js'
 
 // how to reach endpoint
 
@@ -30,15 +30,25 @@ const CODE_join_game = "join_game"
 const CODE_advance_game = "advance_game" // clients asking to progress the game
 const CODE_resign_game = "resign_game" // clients asking to resign from game
 
-// server -> client codes
-const key_nextActionCode = "next_action_code"
-const CODE_action_play = "play" // the other player has joined -> move
-const CODE_action_wait = "wait"// the other player has yet to join -> wait 
-const CODE_end_game = "end_game" // someone won or other player resigned (we should also handle lost connections)
+const allowed_OUT_codes = [ CODE_new_game_human, CODE_new_game_server, CODE_join_game, CODE_advance_game, CODE_resign_game ]; 
 
 // suffixes for code response type
 const sfx_CODE_OK = "_OK"
 const sfx_CODE_ERR = "_ERROR"
+
+// creating OK resp codes to distinguish between SETUP (1st time) and NEXT MOVE codes -> data functions will need these
+export const setup_ok_codes = [ CODE_new_game_human, CODE_new_game_server, CODE_join_game].map(c => c.concat(sfx_CODE_OK));
+export const next_ok_codes = [ CODE_advance_game, CODE_resign_game].map(c => c.concat(sfx_CODE_OK));
+export const joiner_ok_code = CODE_join_game.concat(sfx_CODE_OK);
+
+// NOTE -> this mapping should be moved over to the data module
+    // key to access specific inner values
+    const key_nextActionCode = "next_action_code" // NOTE: to be deleted, prev used to distinguish 1st from next responses
+
+    // server -> client codes
+    const CODE_action_play = "play" // the other player has joined -> move
+    const CODE_action_wait = "wait"// the other player has yet to join -> wait 
+    const CODE_end_game = "end_game" // someone won or other player resigned (we should also handle lost connections)
 
 
 /// EVENT TARGET + HANDLER for push messages
@@ -51,33 +61,32 @@ server_et.addEventListener('new_push_message', push_messages_handler, false);
 
 // event handler for push messages: only events with a specific msg code are handled
 function push_messages_handler(event){
+
+    const code_ok_advance = CODE_advance_game.concat(sfx_CODE_OK)
+    const code_ok_resign = CODE_resign_game.concat(sfx_CODE_OK)
     
-    // see if we have the field 
-    if ( key_nextActionCode in event.detail ) {
+    // see if we have the msg_code field 
+    if ( 'msg_code' in event.detail ) {
 
-        // advance_game_OK
-        if (event.detail.msg_code == CODE_advance_game.concat(sfx_CODE_OK)) {
-
-            console.log('TEST - push event triggered')
+        // advance_game_OK -OR- game being resigned by other player
+        if (event.detail.msg_code == code_ok_advance || event.detail.msg_code == code_ok_resign ) {
 
              // save data + trigger event towards core
             _handler_next_action_data(event.detail);
-
-        // game being resigned by other player
-        } else if (event.detail.msg_code == CODE_resign_game.concat(sfx_CODE_OK)) { 
-
-            _handler_next_action_data(event.detail);
+        
+        } else {
+            console.log("ERROR - Msg code ERROR / NOT RECOGNIZED in server push msg");
         };
 
     } else {
-        console.log("ERROR - Action code not found in incoming push msg");
+        console.log("ERROR - Msg code NOT FOUND in server push msg");
     };
 };
 
 
 // custom class for managing the lifecycle of messages
 class MessagePromise {
-    constructor(payload, msg_id, msg_time, timeout = 300000) { // 5mins timeout
+    constructor(payload, msg_id, msg_time, timeout = 900_000) { // 900k ms -> 15 mins timeout
         this.payload = payload;
         this.msg_id = msg_id;
         this.msg_time = msg_time;
@@ -85,7 +94,7 @@ class MessagePromise {
         this.promise = new Promise((resolve, reject)=> {
             this.resolve = resolve
 
-            // automatic rejection 120s after creation if not resolved 
+            // automatic rejection at TIMEOUT after creation if not resolved 
             setTimeout(()=> {reject(new Error("LOG - Request timed out - ID: msg_id"))}, timeout);
         })
     }
@@ -95,6 +104,13 @@ class MessagePromise {
 // initialize log for message promises 
 globalThis.messagePromises_log = {}; 
    
+
+// retrieves promise that should be awaited for resolution -> response received
+function msgPromise_lookup(msg_id){
+
+    return messagePromises_log[msg_id].promise;
+
+};
 
 // write to log on the way out
 function try_logOutbound(msg_prom){ 
@@ -146,9 +162,7 @@ function logInbound(msg_id, server_response_data){
 
 // resolves promise associated with sent message (called by message handler)
 function mark_msg_handled(msg_id){
-
     messagePromises_log[msg_id].resolve();
-
 };
 
 
@@ -188,6 +202,7 @@ export async function init_ws () {
                 
             } catch (err) { // if connection doesn't work
 
+                console.log(`LOG - WebSocket - something went wrong when connecting`);
                 reject(err); 
 
             };
@@ -218,7 +233,7 @@ function onMessage_handler (event) {
     logInbound(msg_id, server_data);
     
     // print it
-    console.log(server_data);
+    console.log(`TEST - Incoming server data: `, server_data);
 
 };
 
@@ -232,13 +247,64 @@ function onError_handler (event) {
 
 function onClose_handler (event) {
 
-    console.log(`LOG - WebSocket - connection CLOSED - `, event.reason);
+    console.log(`LOG - WebSocket - connection CLOSED - ${Date.now()} `, event.reason);
 
 };
 
 
 //////////////////////////// MESSAGE SENDERS (called by core)
-// could be unified in single function to handle cases/dispatch
+// could be unified in single function and handle cases internally
+
+// Send message for generating new game 
+export async function server_ws_send(msg_code, msg_payload){
+
+    // check that code is among allowed ones
+    const f_msg_valid = allowed_OUT_codes.includes(msg_code);
+
+    if (f_msg_valid) {
+
+        await init_ws(); // ensure connection is up whenever we ping the server again
+
+        try {
+
+            // prepare message payload
+            const msg_contents = {msg_code: msg_code, payload: msg_payload};
+    
+            // package message, log it, send it
+            const [msg_time, msg_id] = fwd_outbound(msg_contents) // used later to recognize response and log times
+            
+            // wait to receive a response
+            // -> will get resolved by message handler when we receive a response
+            await msgPromise_lookup(msg_id);
+    
+            // check server response
+            const resp_code = messagePromises_log[msg_id].server_response.msg_code
+            if (resp_code == msg_code.concat(sfx_CODE_OK)){ 
+    
+                console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
+                
+                // save response in dedicate objects
+                save_server_response(messagePromises_log[msg_id].server_response);
+    
+            } else {
+                throw new Error(`LOG - ${resp_code} - msg ID : ${msg_id}`);
+            };
+
+        } catch (err) {
+            console.log(err);
+        };
+
+    } else {
+
+        throw new Error(`ERROR - ${msg_code} is not a valid code`);
+    };
+    
+};
+
+
+
+
+
 
 // Send message for generating new game 
 export async function server_ws_genNewGame(){
@@ -263,7 +329,7 @@ export async function server_ws_genNewGame(){
             console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
             
             // save response in dedicate objects
-            save_first_server_response(messagePromises_log[msg_id].server_response);
+            save_server_response(messagePromises_log[msg_id].server_response);
 
         } else {
             throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
@@ -294,7 +360,7 @@ export async function server_ws_joinWithCode(input_game_id){
         if (resp_code == msg_code.concat(sfx_CODE_OK)){
 
             // save response (as joiner) in dedicate objects
-            save_first_server_response(messagePromises_log[msg_id].server_response, true);
+            save_server_response(messagePromises_log[msg_id].server_response, true);
             
             // log time
             console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
@@ -332,7 +398,7 @@ export async function server_ws_genNewGame_AI(){
             console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
             
             // save response in dedicate objects
-            save_first_server_response(messagePromises_log[msg_id].server_response);
+            save_server_response(messagePromises_log[msg_id].server_response);
 
         } else {
             throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
@@ -426,7 +492,7 @@ function _handler_next_action_data(server_response_data) {
     // save/overwrite data only if we have delta information data 
     const has_delta = Object.keys(server_response_data).includes('delta_array');
     if (has_delta) {
-        save_next_server_response(server_response_data);
+        save_server_response(server_response_data);
     };
 
     console.log(`SERVER TEST - server response data`, server_response_data);
@@ -443,7 +509,7 @@ function _handler_next_action_data(server_response_data) {
 function gen_time_id() {
     
     const msg_time = Date.now();
-    const msg_id = msg_time.toString(36)
+    const msg_id = msg_time.toString(36) // generating a time-based unique ID
 
     return [msg_time, msg_id]
 
@@ -460,9 +526,6 @@ function fwd_outbound(payload){
         // add details to message payload -> for the server's consumption
         payload.msg_time = msg_time;
         payload.msg_id = msg_id;
-
-        // add details for AWS API gateway
-        payload.aws_gw = '_r_key';
     
         // log message that is about to be sent -> msg_id/msg_time stored separately for client's consumption
         const local_msg = new MessagePromise(payload, msg_id, msg_time);
@@ -471,7 +534,7 @@ function fwd_outbound(payload){
         // send message
         ws.send(JSON.stringify(payload));
 
-        console.log(`LOG - Msg with code "${payload.msg_code}" sent - msg ID: ${msg_id}`);  
+        console.log(`LOG - Msg "${payload.msg_code}" sent - msg ID: ${msg_id}`);  
 
 
         return [msg_time, msg_id];
@@ -482,9 +545,3 @@ function fwd_outbound(payload){
 };
 
 
-// retrieves promise that should be awaited for resolution -> response received
-function msgPromise_lookup(msg_id){
-
-    return messagePromises_log[msg_id].promise;
-
-};
