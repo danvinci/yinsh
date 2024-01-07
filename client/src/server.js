@@ -4,19 +4,9 @@
 // https://stackoverflow.com/questions/1349404/generate-random-string-characters-in-javascript
 // https://javascript.info/promise-basics
 
-
-
-// TODO
-/*
-- uniform server calling functions?
-- handle push case
-
-*/
-
 import { save_server_response, get_game_id, get_player_id, get_current_turn_no } from './data.js'
 
-// how to reach endpoint
-
+// API endpoint address
 const ws_complete_address = `ws://localhost:6091`; // local test address (pluto)
 // const ws_complete_address = `ws://localhost:80/api`; // local test address (docker)
 // const ws_complete_address = "wss://yinsh.net/api" // prod deployment
@@ -24,11 +14,11 @@ const ws_complete_address = `ws://localhost:6091`; // local test address (pluto)
 
 ///// COMMUNICATION CODES
 // client -> server codes
-const CODE_new_game_human = "new_game_vs_human"
-const CODE_new_game_server = "new_game_vs_server"
-const CODE_join_game = "join_game"
-const CODE_advance_game = "advance_game" // clients asking to progress the game
-const CODE_resign_game = "resign_game" // clients asking to resign from game
+export const CODE_new_game_human = "new_game_vs_human"
+export const CODE_new_game_server = "new_game_vs_server"
+export const CODE_join_game = "join_game"
+export const CODE_advance_game = "advance_game" // clients asking to progress the game
+export const CODE_resign_game = "resign_game" // clients asking to resign from game
 
 const allowed_OUT_codes = [ CODE_new_game_human, CODE_new_game_server, CODE_join_game, CODE_advance_game, CODE_resign_game ]; 
 
@@ -41,16 +31,6 @@ export const setup_ok_codes = [ CODE_new_game_human, CODE_new_game_server, CODE_
 export const next_ok_codes = [ CODE_advance_game, CODE_resign_game].map(c => c.concat(sfx_CODE_OK));
 export const joiner_ok_code = CODE_join_game.concat(sfx_CODE_OK);
 
-// NOTE -> this mapping should be moved over to the data module
-    // key to access specific inner values
-    const key_nextActionCode = "next_action_code" // NOTE: to be deleted, prev used to distinguish 1st from next responses
-
-    // server -> client codes
-    const CODE_action_play = "play" // the other player has joined -> move
-    const CODE_action_wait = "wait"// the other player has yet to join -> wait 
-    const CODE_end_game = "end_game" // someone won or other player resigned (we should also handle lost connections)
-
-
 /// EVENT TARGET + HANDLER for push messages
 
 // inits global event target for handling push messages from server
@@ -58,30 +38,6 @@ globalThis.server_et = new EventTarget(); // <- this semicolon is very important
 
 // event listener
 server_et.addEventListener('new_push_message', push_messages_handler, false);
-
-// event handler for push messages: only events with a specific msg code are handled
-function push_messages_handler(event){
-
-    const code_ok_advance = CODE_advance_game.concat(sfx_CODE_OK)
-    const code_ok_resign = CODE_resign_game.concat(sfx_CODE_OK)
-    
-    // see if we have the msg_code field 
-    if ( 'msg_code' in event.detail ) {
-
-        // advance_game_OK -OR- game being resigned by other player
-        if (event.detail.msg_code == code_ok_advance || event.detail.msg_code == code_ok_resign ) {
-
-             // save data + trigger event towards core
-            _handler_next_action_data(event.detail);
-        
-        } else {
-            console.log("ERROR - Msg code ERROR / NOT RECOGNIZED in server push msg");
-        };
-
-    } else {
-        console.log("ERROR - Msg code NOT FOUND in server push msg");
-    };
-};
 
 
 // custom class for managing the lifecycle of messages
@@ -166,7 +122,6 @@ function mark_msg_handled(msg_id){
 };
 
 
-
 //////////////////////////// WEBSOCKET INIT + EVENT HANDLERS
 
 // initialize web socket, called by core
@@ -233,7 +188,7 @@ function onMessage_handler (event) {
     logInbound(msg_id, server_data);
     
     // print it
-    console.log(`TEST - Incoming server data: `, server_data);
+    console.log(`TEST - Msg handler - Incoming data from server: `, server_data);
 
 };
 
@@ -251,12 +206,32 @@ function onClose_handler (event) {
 
 };
 
+///// HANDLER FOR PUSH MESSAGES FROM SERVER - only events with a specific msg code are handled
+function push_messages_handler(event){
+    
+    // see if we have the msg_code field 
+    if ( 'msg_code' in event.detail ) {
 
-//////////////////////////// MESSAGE SENDERS (called by core)
+        // advance_game_OK -OR- game_resign_OK
+        if ( next_ok_codes.includes(event.detail.msg_code) ) {
+
+             // save server data -> data fn will take care of triggering event for core
+             save_server_response(event.detail);
+        
+        } else {
+            console.log("ERROR - msg_code ERROR / NOT RECOGNIZED in msg from server");
+        };
+
+    } else {
+        console.log("ERROR - msg_code NOT FOUND in msg from server");
+    };
+};
+
+//////////////////////////// MESSAGE SENDER (called by core)
 // could be unified in single function and handle cases internally
 
 // Send message for generating new game 
-export async function server_ws_send(msg_code, msg_payload){
+export async function server_ws_send(msg_code, msg_payload = {}){
 
     // check that code is among allowed ones
     const f_msg_valid = allowed_OUT_codes.includes(msg_code);
@@ -267,14 +242,13 @@ export async function server_ws_send(msg_code, msg_payload){
 
         try {
 
-            // prepare message payload
-            const msg_contents = {msg_code: msg_code, payload: msg_payload};
+            // prepare message
+            const _msg = {msg_code: msg_code, payload: msg_payload};
     
             // package message, log it, send it
-            const [msg_time, msg_id] = fwd_outbound(msg_contents) // used later to recognize response and log times
+            const [msg_time, msg_id] = fwd_outbound(_msg) // used later to recognize response and log times
             
-            // wait to receive a response
-            // -> will get resolved by message handler when we receive a response
+            // wait to receive a response -> will get resolved by message handler when we receive a response
             await msgPromise_lookup(msg_id);
     
             // check server response
@@ -283,7 +257,7 @@ export async function server_ws_send(msg_code, msg_payload){
     
                 console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
                 
-                // save response in dedicate objects
+                // save response, read from log (we already wrote the received message)
                 save_server_response(messagePromises_log[msg_id].server_response);
     
             } else {
@@ -297,211 +271,9 @@ export async function server_ws_send(msg_code, msg_payload){
     } else {
 
         throw new Error(`ERROR - ${msg_code} is not a valid code`);
-    };
-    
+    };  
 };
 
-
-
-
-
-
-// Send message for generating new game 
-export async function server_ws_genNewGame(){
-    
-    try {
-
-        // prepare message payload
-        const msg_code = CODE_new_game_human;
-        const payload = {msg_code: msg_code};
-
-        // package message, log it, send it
-        const [msg_time, msg_id] = fwd_outbound(payload) // used later to recognize response and log times
-        
-        // wait to receive a response
-        // -> will get resolved by message handler when we receive a response
-        await msgPromise_lookup(msg_id);
-
-        // check server response
-        const resp_code = messagePromises_log[msg_id].server_response.msg_code
-        if (resp_code == msg_code.concat(sfx_CODE_OK)){ // these codes could be shared by the server on first connection
-
-            console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
-            
-            // save response in dedicate objects
-            save_server_response(messagePromises_log[msg_id].server_response);
-
-        } else {
-            throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
-        };
-    } catch (err) {
-        console.log(err);
-    };
-};
-
-
-// Send message for generating new game 
-export async function server_ws_joinWithCode(input_game_id){
-    
-    try {
-
-        // prepare message payload
-        const msg_code = CODE_join_game;
-        const payload = {msg_code: msg_code, game_id: input_game_id};
-
-        // package message, log it, send it
-        const [msg_time, msg_id] = fwd_outbound(payload)
-                            
-        // wait to receive a response
-        await msgPromise_lookup(msg_id);
-        
-        // check server response
-        const resp_code = messagePromises_log[msg_id].server_response.msg_code
-        if (resp_code == msg_code.concat(sfx_CODE_OK)){
-
-            // save response (as joiner) in dedicate objects
-            save_server_response(messagePromises_log[msg_id].server_response, true);
-            
-            // log time
-            console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
-       
-        } else {
-            throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
-        };
-        
-    } catch (err) {
-        console.log(err);
-    };
-};
-
-
-// Send message for generating new game 
-export async function server_ws_genNewGame_AI(){
-    
-    try {
-
-        // prepare message payload
-        const msg_code = CODE_new_game_server;
-        const payload = {msg_code: msg_code};
-
-        // package message, log it, send it
-        const [msg_time, msg_id] = fwd_outbound(payload) // used later to recognize response and log times
-        
-        // wait to receive a response
-        // -> will get resolved by message handler when we receive a response
-        await msgPromise_lookup(msg_id);
-
-        // check server response
-        const resp_code = messagePromises_log[msg_id].server_response.msg_code
-        if (resp_code == msg_code.concat(sfx_CODE_OK)){ // these codes should be shared by the server on first connection
-
-            console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
-            
-            // save response in dedicate objects
-            save_server_response(messagePromises_log[msg_id].server_response);
-
-        } else {
-            throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
-        };
-
-    } catch (err) {
-        console.log(err);
-    };
-};
-
-// Send message asking the server what to do (wait or move?)
-export async function server_ws_advance_game(scenario_pick = false){
-    
-    try {
-
-        // prepare message payload
-        const msg_code = CODE_advance_game;
-        const payload = {msg_code: msg_code, game_id: get_game_id(), player_id: get_player_id(), scenario_pick: scenario_pick};
-
-        // package message, log it, send it
-        const [msg_time, msg_id] = fwd_outbound(payload)
-                            
-        // wait to receive a response
-        await msgPromise_lookup(msg_id);
-
-        const srv_response = messagePromises_log[msg_id].server_response;
-        const resp_code = srv_response.msg_code;
-        
-        // check server response
-        if (resp_code == msg_code.concat(sfx_CODE_OK)){
-
-            // log server response             
-            console.log(`LOG - Server response:`, srv_response);
-            console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
-
-            // handle response (save + emit event)
-            _handler_next_action_data(srv_response);
-
-        } else {    
-            throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
-        };
-        
-    } catch (err) {
-        console.log(err);
-    };
-};
-
-
-// Send message asking the server what to do (wait or move?)
-export async function server_ws_resign_game(){ 
-    
-    try {
-
-        // prepare message payload
-        const msg_code = CODE_resign_game;
-        const payload = {msg_code: msg_code, game_id: get_game_id(), player_id: get_player_id(), scenario_pick: false}; // note: we're keeping scenario_pick here to avoid handling exceptions inside the server game_runner
-
-        // package message, log it, send it
-        const [msg_time, msg_id] = fwd_outbound(payload)
-                            
-        // wait to receive a response
-        await msgPromise_lookup(msg_id);
-
-        const srv_response = messagePromises_log[msg_id].server_response;
-        const resp_code = srv_response.msg_code;
-        
-        // check server response
-        if (resp_code == msg_code.concat(sfx_CODE_OK)){
-
-            // log server response             
-            console.log(`LOG - Server response:`, srv_response);
-            console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
-
-            // handle response (save + emit event)
-            _handler_next_action_data(srv_response);
-
-        } else {    
-            throw new Error(`LOG - ${msg_code} error - msg ID : ${msg_id}`);
-        };
-        
-    } catch (err) {
-        console.log(err);
-    };
-};
-
-
-///// UNIFY CALLS TO SERVER INTO SINGLE FUNCTION - WORK WITH CODES/DATA FROM CORE (?)
-
-function _handler_next_action_data(server_response_data) {
-
-    // save/overwrite data only if we have delta information data 
-    const has_delta = Object.keys(server_response_data).includes('delta_array');
-    if (has_delta) {
-        save_server_response(server_response_data);
-    };
-
-    console.log(`SERVER TEST - server response data`, server_response_data);
-    console.log(`SERVER TEST - current turn number`, get_current_turn_no());
-
-    // dispatch event for core game logic
-    core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: server_response_data }));
-
-};
 
 
 //////////////////////////// UTILS
@@ -517,24 +289,24 @@ function gen_time_id() {
 
 
 // adds unique id and timestamp to messages, returns id, logs in outbound, and sends them 
-function fwd_outbound(payload){
+function fwd_outbound(_msg){
 
     try{
 
         const [msg_time, msg_id] = gen_time_id(); // used later to recognize response and log times
 
         // add details to message payload -> for the server's consumption
-        payload.msg_time = msg_time;
-        payload.msg_id = msg_id;
+        _msg.msg_time = msg_time;
+        _msg.msg_id = msg_id;
     
         // log message that is about to be sent -> msg_id/msg_time stored separately for client's consumption
-        const local_msg = new MessagePromise(payload, msg_id, msg_time);
+        const local_msg = new MessagePromise(_msg, msg_id, msg_time);
         try_logOutbound(local_msg);
     
         // send message
-        ws.send(JSON.stringify(payload));
+        ws.send(JSON.stringify(_msg));
 
-        console.log(`LOG - Msg "${payload.msg_code}" sent - msg ID: ${msg_id}`);  
+        console.log(`LOG - Msg "${_msg.msg_code}" sent - msg ID: ${msg_id}`);  
 
 
         return [msg_time, msg_id];

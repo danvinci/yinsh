@@ -191,7 +191,8 @@ export function save_server_response(srv_input){
 
     // check if it's SETUP or NEXT MOVE data
     const f_setup = setup_ok_codes.includes(srv_input.msg_code);
-    const f_next = next_ok_codes.includes(srv_input.msg_code);
+    const f_next_event = next_ok_codes.includes(srv_input.msg_code);
+    const f_next = next_ok_codes.includes(srv_input.msg_code) && ('delta_array' in srv_input); // save/overwrite next data only if we have a delta
 
     // init temporary object
     let _srv_response = {};
@@ -207,7 +208,7 @@ export function save_server_response(srv_input){
         // save to global obj and log
         yinsh.next_server_data = structuredClone(_srv_response);
 
-        // save delta data if present - TO BE REVISITED CORE DOES AN UNDEF CHECK
+        // save delta data separately if present - TO BE REVISITED: CORE DOES AN UNDEF CHECK + IT SHOULD BE W/ THE REST OF SRV DATA
         yinsh.delta_array = ('delta_array' in srv_input) ? structuredClone(srv_input.delta_array) : undefined;
 
         console.log('LOG - Server NEXT MOVE data saved');
@@ -241,6 +242,22 @@ export function save_server_response(srv_input){
         console.log('LOG - Server SETUP data saved');      
 
     };
+
+    // inform core anytime we receive an "advance_game_OK" message - but not always overwrite
+    if (f_next_event) {
+
+        // dispatch event for core game logic -> action handling // NOTE: what's the point of saving this if we're passing srv_input to the handler anyway
+        core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: srv_input }));
+
+    };
+    
+ };
+
+
+ export function get_local_server_data_ref(){
+
+    return yinsh.local_server_data_ref;
+
  };
 
 

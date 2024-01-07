@@ -3,16 +3,18 @@
 
 
 //////////// IMPORTS
-import { init_ws, server_ws_genNewGame, server_ws_joinWithCode, server_ws_genNewGame_AI, server_ws_advance_game, server_ws_resign_game} from './server.js'
-import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_player_id, save_next_server_response } from './data.js'
+import { init_ws, server_ws_send } from './server.js'
+import { CODE_new_game_human, CODE_new_game_server, CODE_join_game, CODE_advance_game, CODE_resign_game } from './server.js'
+
+import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_game_id, get_player_id } from './data.js'
 import { bind_adapt_canvas, reorder_rings, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
 import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
 import { get_preMove_scoring_pick, set_preMove_scoring_pick } from './data.js'
+
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
 import { ringDrop_playS, markersRemoved_player_playS, markersRemoved_oppon_playS, endGame_win_playS, endGame_lose_playS } from './sound.js'
-
 
 //////////// GLOBAL DEFINITIONS
 
@@ -119,14 +121,13 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         await init_ws();
     
         if (joiner) {
-            // asks to join existing game
-            await server_ws_joinWithCode(game_code);
+            await server_ws_send(CODE_join_game, {game_id: game_code}); // asks to join existing game by ID
+            
         } else if (originator) {
-            // requests a new game and writes response (as originator)
-            await server_ws_genNewGame();
+            await server_ws_send(CODE_new_game_human); // requests new game vs a friend
+
         } else if (ai_game) {
-            // requests a new game and writes response (as originator vs AI server)
-            await server_ws_genNewGame_AI();
+            await server_ws_send(CODE_new_game_server); // requests new game vs server/AI
         };
         
         // Bind canvas
@@ -158,7 +159,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         };
 
         // ask server what to do -> it will emit event on response
-        await server_ws_advance_game();
+        await server_ws_send(CODE_advance_game, { game_id: get_game_id(), player_id: get_player_id(), scenario_pick: false });
 
     } catch (err){
 
@@ -183,6 +184,8 @@ async function server_actions_handler (event) {
     const _next_action = event.detail.next_action_code;
 
     if (_next_action == CODE_action_play) {
+
+        console.log(`LOG - ${CODE_action_play} msg from server`);
 
         // replay move by opponent (if we have delta data)
         await replay_opponent_move();
@@ -211,6 +214,8 @@ async function server_actions_handler (event) {
 
 
     } else if (_next_action == CODE_action_wait) {
+
+        console.log(`LOG - ${CODE_action_wait} msg from server`);
 
         disableInteraction(); // a bit redundant, is disabled by default
         console.log(`USER - Wait for your opponent.`); 
@@ -265,6 +270,9 @@ async function server_actions_handler (event) {
 
 //////////// UTILS
 
+// this entity is used to create instances of tasks/interactions the user is expected to complete, 
+// like picking a row of markers or scoring ring - on resolution, they return information that can be given by who triggers promise resolution from the outside
+// this is used for passing along ID information, that is then shared w/ the server
 class Task {
     constructor(name, data = {}) {
         this.name = name;
@@ -697,14 +705,21 @@ async function ringDrop_handler (event) {
 
 
 // can be called from different points to terminate turn
-async function end_turn_wait_opponent(srv_payload) {
+async function end_turn_wait_opponent(turn_recap) {
 
     turn_end(); // local turn ends
 
     disableInteraction();
 
+    let msg_payload = {}
+
+        // add fields to the msg payload
+        msg_payload.scenario_pick = turn_recap;
+        msg_payload.game_id = get_game_id();
+        msg_payload.player_id = get_player_id();
+
     // -> notify server about completed move (next turn)
-    await server_ws_advance_game(srv_payload); 
+    await server_ws_send(CODE_advance_game, msg_payload); 
 
 };
 
@@ -1170,7 +1185,9 @@ export async function game_exit_handler(event){
     disableInteraction();
 
     // notify server (game is lost automatically) --> other user is informed by server
-    await server_ws_resign_game(); // server will acknowledge
+    // note: we're keeping scenario_pick here to avoid handling exceptions inside the server game_runner -> to be fixed
+    const _resign_msg_payload = { game_id: get_game_id(), player_id: get_player_id(), scenario_pick: false }; 
+    await server_ws_send(CODE_resign_game, _resign_msg_payload); // server will acknowledge
 
     // we receive formal 'you lost' response from server, handled by next_action_handler
     // we should handle if/when communication w/ server fails, (eg. websocket timeout) so we trigger the game ending anyway and UI can be reset
@@ -1179,8 +1196,8 @@ export async function game_exit_handler(event){
 
 
 // HELPER FUNCTION
-// animate last ring (ie. on top of canvas) to move between start and end points
-// as the ring is moved, it triggers redraw of the canvas
+// animate last ring (ie. on top of canvas) to move between start and end points -> as the ring is moved, it triggers redraw of the canvas
+// can also be used for moving markers - either last or a specific ID (multi-object animation, without array re-ordering)
 async function syn_object_move(start, end, no_steps, sleep_ms, obj = 'ring', id_in_array = -1){
 
     let _progress = 0;

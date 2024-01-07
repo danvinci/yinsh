@@ -2440,10 +2440,10 @@ function fn_join_game(ws, msg)
 # human client asking to join existing code via game code
 
 	# retrieve existing game data (otherwise error is handled by calling function)
-	_existing_game_data = getLast_clientPkg(msg[:game_id]) # caller payload
+	_existing_game_data = getLast_clientPkg(msg[:payload][:game_id]) # caller payload
 
 	# save ws handler for joining player
-	update_ws_handler!(msg[:game_id], ws, false) # true if originator
+	update_ws_handler!(msg[:payload][:game_id], ws, false) # true if originator
 
 	_other_pld = Dict() # empty payload for other
 
@@ -2630,9 +2630,9 @@ function conv_json_arrays(input::Union{JSON3.Array, Array})::Array
 end
 
 # ╔═╡ e494778a-2e20-4f67-b237-28c2f0374c9f
-function conv_json_objects(input::Union{JSON3.Object, Dict})::Dict
+function conv_json_objects(input::Union{JSON3.Object, Dict})::Dict{Symbol, Any}
 
-	_ret = Dict{Any, Any}()
+	_ret = Dict{Symbol, Any}()
 
 	for (k,v) in input
 
@@ -2698,11 +2698,17 @@ end
 function filter_msg_logs_by_gameID(game_id::String)::Array
 
 	return ws_messages_log |> 
-				logs -> filter(m -> haskey(m, :game_id) 
-								&& m[:game_id] == game_id 
+			logs -> filter(m -> (haskey(m, :game_id) && m[:game_id] == game_id) 
+							|| (haskey(m, :payload) && haskey(m[:payload], :game_id) && m[:payload][:game_id] == game_id)
 								,logs)
 
 end
+
+# ╔═╡ f8bf1d4b-7909-4751-9b0e-d3aaa2eb37d3
+ttt = filter_msg_logs_by_gameID("3JY9E1")
+
+# ╔═╡ 40c8cca9-170c-4cb5-afe8-e462e75f6915
+ttt[2]
 
 # ╔═╡ 276dd93c-05f9-46b1-909c-1d449c07e2b5
 function get_player_score(game_id::String, player_id::String)
@@ -2803,18 +2809,6 @@ function temp_sim_delta_translation(sim::Dict)::Dict
 		
 end
 
-# ╔═╡ f2f3c7d0-4a0d-4352-9187-9442de3ccf4c
-games_log_dict["XTGWWK"]
-
-# ╔═╡ b5f8e2b9-6054-49a2-a0a6-f229c0a0d588
-f_ms = filter_msg_logs_by_gameID("3LE5DW") |> v -> filter(d -> d[:type] == "received", v)
-
-# ╔═╡ 89800ab3-87c6-4649-8435-a72bde89f276
-f_ms[end][:scenario_pick][:score_action][:mk_locs]
-
-# ╔═╡ 7deba17d-f9ec-48da-b740-12da21c2a787
-f_ms[end][:scenario_pick]
-
 # ╔═╡ 67322d28-5f9e-43da-90a0-2e517b003b58
 swap_player_id(player_id) = ( player_id == "W") ? "B" : "W"
 
@@ -2913,14 +2907,14 @@ function update_serverStates!(_game_code, _player_id, turn_recap)
 
 	=#
 	
-	@info turn_recap
+	#@info turn_recap
 
 	## extract info from turn recap data, convert moves to server indexes
 	# drops non actionable fields and dicts w/ default values
 	# it should be good as-is to be fed into sim_new_gameState
 	srv_turn_recap = strip_reshape_in_recap(turn_recap)	
 	
-	@info srv_turn_recap
+	#@info srv_turn_recap
 
 	# retrieve old game state and last moving
 	ex_gs = get_last_srv_gameState(_game_code)
@@ -2932,9 +2926,9 @@ function update_serverStates!(_game_code, _player_id, turn_recap)
 	# add pre-move/move/score info from client
 	_sc_info = setindex!(srv_turn_recap, _sc_id, :id)
 	
-	@info _sc_info
+	#@info _sc_info
 	new_gs_sim = sim_new_gameState(ex_gs, _sc_info, :replay)
-	@info new_gs_sim
+	#@info new_gs_sim
 	
 	# update player score
 	edit_player_score!(_game_code, _player_id, new_gs_sim[:new_player_score])
@@ -2950,7 +2944,7 @@ function update_serverStates!(_game_code, _player_id, turn_recap)
 	_delta_client = temp_sim_delta_translation(new_gs_sim)
 
 
-	@info _delta_client # let's see what's inside
+	#@info _delta_client # let's see what's inside
 	
 	# note: need to get rid of array, this was originally here to handle opp_scoring, but not useful anymore
 	push!(_array_delta_client, _delta_client) 
@@ -3128,7 +3122,7 @@ function temp_ai_pick_translation(pick::Dict)::Dict
 
 	=#
 
-	_ret = Dict()
+	_ret = Dict{Symbol, Any}()
 
 	# we assume it always has a move
 	_move = Dict(:start => pick[:start], :end => pick[:end])
@@ -3328,10 +3322,8 @@ function play_turn_AI(game_code::String, ai_moving_player_id::String)
 	# make choice
 	_pick = scenario_choice(_ex_game_state, _scenarios, ai_moving_player_id)
 
+	# TEMP TRANSLATION LAYER
 	_tr_pick = temp_ai_pick_translation(_pick)
-	
-	println("AI pick before: ", _pick)
-	println("AI pick after: ", _tr_pick)
 	
 	return _tr_pick
 
@@ -3376,12 +3368,12 @@ function game_runner(msg)
 # players may have made or not a move, and asking to advance the game
 
 	# retrieve game and caller move details
-	_game_code = msg[:game_id]
-	_player_id = msg[:player_id]
+	_msg_code = msg[:msg_code]
+	_game_code = msg[:payload][:game_id]
+	_player_id = msg[:payload][:player_id]
 	_who = whos_player(_game_code, _player_id) # :originator || :joiner
 	_game_vs_ai_flag = is_game_vs_ai(_game_code)
-	_scenario_pick = msg[:scenario_pick] # false || start/end/mk_sel/ring_pick
-	_msg_code = msg[:msg_code]
+	_scenario_pick = msg[:payload][:scenario_pick] # false || start/end/mk_sel/ring_pick
 	
 	# println("SRV Game runner - scenario pick: ", _scenario_pick)
 
@@ -3569,11 +3561,11 @@ function fn_advance_game(ws, msg)
 	try 
 		
 		# is this orig or joiner ?
-		_who = whos_player(msg[:game_id], msg[:player_id])
+		_who = whos_player(msg[:payload][:game_id], msg[:payload][:player_id])
 		_is_originator = (_who == :originator) ? true : false
 	
 		# save ws handler for originating vs joining player
-		update_ws_handler!(msg[:game_id], ws, _is_originator)
+		update_ws_handler!(msg[:payload][:game_id], ws, _is_originator)
 
 		# generate responses for caller & other
 		_resp_caller, _resp_other = game_runner(msg)
@@ -3611,15 +3603,15 @@ function msg_handler(ws, msg, msg_log)
 
 # handles messages depending on their code
 # every incoming message should have an id and code - if they're missing, throw error
-
+	
 	# save incoming message
 	setindex!(msg, "received", :type)
 	push!(msg_log, msg)
 
-	# try retrieving specific values
+	# try retrieving specific values (msg header)
 	_msg_id = get(msg, :msg_id, nothing)
 	_msg_code = get(msg, :msg_code, nothing)
-
+	_msg_payload = get(msg, :payload, nothing)
 
 	# if messages are valid, run matching function 
 	if !isnothing(_msg_id) && (_msg_code in allowed_CODES)
@@ -3634,11 +3626,11 @@ function msg_handler(ws, msg, msg_log)
 				
 			# if payload is not empty, assumes game already exists
 			# game vs other human player, informed with other payload
-			if !isempty(_pld_other) && !is_game_vs_ai(msg[:game_id])
+			if !isempty(_pld_other) && !is_game_vs_ai(_msg_payload[:game_id])
 
 				# game and player id are in the original msg as game exists
-				_game_id = msg[:game_id]
-				_player_id = msg[:player_id]
+				_game_id = _msg_payload[:game_id]
+				_player_id = _msg_payload[:player_id]
 
 				# identify caller
 				_who = whos_player(_game_id, _player_id)
@@ -3686,11 +3678,14 @@ function start_ws_server(ws_array, _log)
 
 				# parse incoming msg as json
 				msg_parsed = Dict(JSON3.read(msg))
+
+				# convert msg type (to allow for handling nested objects)
+				_msg_parsed_converted = conv_json_objects(msg_parsed)
 				
 				# dispatch parsed message to message handler
 				# handler takes care of generating response payload and replying,
 				# as well as handling potential errors
-				msg_handler(ws, msg_parsed, _log)
+				msg_handler(ws, _msg_parsed_converted, _log)
 
 			end
 		end
@@ -4318,7 +4313,7 @@ version = "5.8.0+1"
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
 # ╟─91c35ba0-729e-4ea9-8848-3887936a8a21
-# ╟─1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+# ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
 # ╠═8b6264b0-f7ea-4177-9700-30072d4c5826
 # ╠═2ccc880f-805e-47e3-af9e-eae4f5fa261d
@@ -4332,7 +4327,9 @@ version = "5.8.0+1"
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╠═ca346015-b2c9-45da-8c1e-17493274aca2
-# ╟─88616e0f-6c85-4bb2-a856-ea7cee1b187d
+# ╠═f8bf1d4b-7909-4751-9b0e-d3aaa2eb37d3
+# ╠═40c8cca9-170c-4cb5-afe8-e462e75f6915
+# ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
 # ╟─5d6e868b-50a9-420b-8533-5db4c5d8f72c
@@ -4343,17 +4340,13 @@ version = "5.8.0+1"
 # ╟─8929062f-0d97-41f9-99dd-99d51f01b664
 # ╟─ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 # ╠═af5a7cbf-8f9c-42e0-9f8f-6d3561635c40
-# ╟─e494778a-2e20-4f67-b237-28c2f0374c9f
+# ╠═e494778a-2e20-4f67-b237-28c2f0374c9f
 # ╟─79b29f87-a9d5-4292-8e64-f9c276848d4d
-# ╟─5ae493f4-346d-40ce-830f-909ec40de8d0
+# ╠═5ae493f4-346d-40ce-830f-909ec40de8d0
 # ╟─276dd93c-05f9-46b1-909c-1d449c07e2b5
 # ╟─8797a304-aa98-4ce0-ab0b-759df0256fa7
 # ╠═4f3e9400-6eb7-4ffb-bf5b-887d523e00a4
 # ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
-# ╠═f2f3c7d0-4a0d-4352-9187-9442de3ccf4c
-# ╠═b5f8e2b9-6054-49a2-a0a6-f229c0a0d588
-# ╠═89800ab3-87c6-4649-8435-a72bde89f276
-# ╠═7deba17d-f9ec-48da-b740-12da21c2a787
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
@@ -4362,8 +4355,8 @@ version = "5.8.0+1"
 # ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 # ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
-# ╠═9fdbf307-1067-4f55-ac56-8335ecc84962
-# ╠═14aa5b7c-9065-4ca3-b0e9-19c104b1854d
+# ╟─9fdbf307-1067-4f55-ac56-8335ecc84962
+# ╟─14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 # ╟─4976c9c5-d60d-4b19-aa72-0e135ad37361
 # ╠═1c970cc9-de1f-48cf-aa81-684d209689e0
 # ╟─e6cc0cf6-617a-4231-826d-63f36d6136a5
