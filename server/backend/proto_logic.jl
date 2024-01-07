@@ -19,6 +19,12 @@ using HTTP, JSON3
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
 
+# ╔═╡ 20bc797e-c99b-417d-8921-9b95c8e21679
+# ╠═╡ disabled = true
+#=╠═╡
+using BenchmarkTools
+  ╠═╡ =#
+
 # ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
 # prod packages
 
@@ -530,7 +536,7 @@ end
 # pre-populate dictionary with search space for each starting location
 
 begin
-	locs_searchSpace = Dict()
+	locs_searchSpace = Dict{CartesianIndex, Any}()
 	populate_searchSpace!(locs_searchSpace)
 end
 
@@ -693,8 +699,16 @@ end
 # pre-populate dictionary with search space (scoring)
 
 begin
-	locs_searchSpace_scoring = Dict()
+	locs_searchSpace_scoring = Dict{CartesianIndex, Any}()
 	populate_searchSpace_scoring!(locs_searchSpace_scoring)
+end
+
+# ╔═╡ 9700ea30-a99c-4832-a181-7ef23c86030a
+function _pick_rand_locsRow()
+# used for generating starting points for replicating close-to-scoring scenarios
+	
+	return rand(rand(locs_searchSpace_scoring).second)
+
 end
 
 # ╔═╡ 52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
@@ -1252,7 +1266,7 @@ function markers_actions(client_state, client_start_index, client_end_index)
 end
 
 # ╔═╡ c334b67e-594f-49fc-8c11-be4ea11c33b5
-function gen_random_gameState(white_ring, black_ring)
+function gen_random_gameState(white_ring, black_ring, _near_score_mks = false)
 # generate a new random game state (server format)
 
 	## pick 10 random starting valid locations (without replacement)
@@ -1270,6 +1284,36 @@ function gen_random_gameState(white_ring, black_ring)
 		server_game_state[loc] = (i%2 == 0) ? white_ring : black_ring
 
 	end
+
+	# add a 4-markers row for a player
+	if _near_score_mks
+
+		_rand_locs_row = _pick_rand_locsRow()
+
+		# !!! subtract locations already taken for rings
+		_pot_mks_locs = setdiff(_rand_locs_row, sampled_locs)
+		_sampled_mk_locsRow = []
+		_sam = 4
+
+		@label retry_sampling
+		try 
+			# @info _sam
+			_sampled_mk_locsRow = sample(_pot_mks_locs, _sam, replace = false)
+	
+		catch #not enough samples
+			_sam -= 1
+			@goto retry_sampling
+		end
+			
+			
+		_lucky_player = rand(["W", "B"])
+
+		for loc in _sampled_mk_locsRow
+			server_game_state[loc] = "M"*_lucky_player
+		end
+
+	end
+	
 
 	return server_game_state
 end
@@ -1748,19 +1792,31 @@ function gen_newGame(vs_ai=false)
 	next_movingPlayer = white_id 
 
 	# generate random initial game state (server format)
-	_game_state = gen_random_gameState(white_ring, black_ring)
+	# TEMP GENERATING STATES w/ 4MKS in a row for random player
+	_game_state = gen_random_gameState(white_ring, black_ring, true)
+
+	# RINGS
+		# retrieves location ids in client format 
+		whiteRings_ids = reshape_out(findall(i -> i == white_ring, _game_state))
+		blackRings_ids = reshape_out(findall(i -> i == black_ring, _game_state))
 	
-	# retrieves location ids in client format 
-	whiteRings_ids = reshape_out(findall(i -> i == white_ring, _game_state))
-	blackRings_ids = reshape_out(findall(i -> i == black_ring, _game_state))
+		white_rings = [Dict(:id => id, :player => white_id) for id in whiteRings_ids]
+		black_rings = [Dict(:id => id, :player => black_id) for id in blackRings_ids]
+	
+		# prepare rings array to be sent to client
+		rings = union(white_rings, black_rings)
 
-	white_rings = [Dict(:id => id, :player => white_id) for id in whiteRings_ids]
-	black_rings = [Dict(:id => id, :player => black_id) for id in blackRings_ids]
+	# MARKERS
+		# retrieves location ids in client format 
+		whiteMKS_ids = reshape_out(findall(i -> i == "MW", _game_state))
+		blackMKS_ids = reshape_out(findall(i -> i == "MB", _game_state))
+		
+		white_mks = [Dict(:id => id, :player => white_id) for id in whiteMKS_ids]
+		black_mks = [Dict(:id => id, :player => black_id) for id in blackMKS_ids]
 
-	# prepare rings array to be sent to client
-	rings = union(white_rings, black_rings)
-
-
+		# prepare markers array to be sent to client
+		__mks = union(white_mks, black_mks)
+		
 	# simulates possible moves and scoring/flipping outcomes for each
 	scenario_tree = gen_scenarioTree(_game_state, next_movingPlayer)
 	
@@ -1795,7 +1851,7 @@ function gen_newGame(vs_ai=false)
 						:orig_player_id => ORIG_player_id,
 						:join_player_id => JOIN_player_id,
 						:rings => rings,
-						:markers => [], # no markers yet
+						:markers => __mks, # no markers yet
 						:scenarioTree => scenario_tree,
 						:turn_no => 1) # first game turn
 
@@ -2076,9 +2132,6 @@ function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::
 
 		# save choices in tree to be returned
 		setindex!(scenario_tree, _pms_choices, :score_preMove_avail)
-
-		# mark ops score opportunity
-		turn_summary[:f_score_preMove_avail] = true
 		
 		for s_choice in _pms_choices
 			
@@ -2267,6 +2320,9 @@ function print_gameState(server_game_state)
 print(mm_to_print)
 
 end
+
+# ╔═╡ dffafbec-3c1e-4f93-852b-e890a94b7e5c
+print_gameState(gen_random_gameState("RW", "RB", true))
 
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
@@ -2823,15 +2879,17 @@ function gen_new_clientPkg(game_id, moving_client_id)
 
 	# simulates possible moves and outcomes for each
 	scenario_tree = gen_scenarioTree(_game_state, next_movingPlayer)
-	
 
+	# sneaking new format it, alongside old one
+	_ex_score = get_player_score(game_id, next_movingPlayer)
+	_new_scenario = sim_scenarioTree(_game_state, next_movingPlayer, _ex_score) |> s -> reshape_out_fields(s)
 		
 	### package data for client
 	_cli_pkg = Dict(:game_id => game_id,
 					:rings => rings,
 					:markers => markers,
-					:scenarioTree => scenario_tree)
-					# later we should address cases of double scoring
+					:scenarioTree => scenario_tree,
+					:new_scenario => _new_scenario)
 	
 	
 	# saves game to general log (DB?)
@@ -3288,9 +3346,6 @@ function play_turn_AI(game_code::String, ai_moving_player_id::String)
 	return _tr_pick
 
 end
-
-# ╔═╡ 27bc0020-1a8e-4996-b44a-c79a6ab99267
-
 
 # ╔═╡ e6cc0cf6-617a-4231-826d-63f36d6136a5
 function mark_player_ready!(game_code::String, who::Symbol)
@@ -3817,8 +3872,7 @@ md"#### Open issues "
 - uniform handling/naming of originator vs joiner
 - way too many hardcoded values everywhere
 - AI is too annoying  -> could add rule about placing something first, or experiment with RL and self-play ??
-- clients disconnecting / non-responsive are not handled
-- websocket disconneting
+- clients disconnecting / non-responsive are not handled / websocket disconneting
 - should I use a DB?
 - perf optimizations
 - revise github readme + add note for suggestions -> or alt text/hover on page?
@@ -3870,6 +3924,7 @@ wait(Condition())
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
@@ -3877,6 +3932,7 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
+BenchmarkTools = "~1.4.0"
 HTTP = "~1.9.15"
 JSON3 = "~1.13.2"
 StatsBase = "~0.34.0"
@@ -3888,13 +3944,19 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "72975cf3b7f1104ee482fae1a25cd20fdbd10245"
+project_hash = "f7fc6edff03ad213d4a168ae405d4bfc35079e87"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "f1f03a9fa24271160ed7e73051fba3c1a759b53f"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.4.0"
 
 [[deps.BitFlags]]
 git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
@@ -3975,6 +4037,12 @@ deps = ["Artifacts", "Preferences"]
 git-tree-sha1 = "7e5d6779a1e09a36db2a7b6cff50942a0a7d0fca"
 uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
 version = "1.5.0"
+
+[[deps.JSON]]
+deps = ["Dates", "Mmap", "Parsers", "Unicode"]
+git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
+uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+version = "0.21.4"
 
 [[deps.JSON3]]
 deps = ["Dates", "Mmap", "Parsers", "PrecompileTools", "StructTypes", "UUIDs"]
@@ -4103,6 +4171,10 @@ version = "1.4.0"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[[deps.Profile]]
+deps = ["Printf"]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 
 [[deps.Random]]
 deps = ["SHA"]
@@ -4245,6 +4317,7 @@ version = "5.8.0+1"
 # ╟─f0e9e077-f435-4f4b-bd69-f495dfccec27
 # ╟─bf2dce8c-f026-40e3-89db-d72edb0b041c
 # ╟─33707130-7703-4aa0-84e6-23ab387c0c4d
+# ╟─9700ea30-a99c-4832-a181-7ef23c86030a
 # ╟─9d153cf1-3e3b-49c0-abe7-ebd0f524557c
 # ╟─52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
 # ╟─8f2e4816-b60d-40eb-a9d8-acf4240c646a
@@ -4257,20 +4330,21 @@ version = "5.8.0+1"
 # ╟─b56084e8-7286-404b-9088-094070331afe
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
-# ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
+# ╠═c334b67e-594f-49fc-8c11-be4ea11c33b5
+# ╠═dffafbec-3c1e-4f93-852b-e890a94b7e5c
 # ╠═29a93299-f577-4114-b77f-dbc079392090
 # ╠═f1949d12-86eb-4236-b887-b750916d3493
-# ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
+# ╠═e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╟─61a0e2bf-2fed-4141-afc0-c8b5507679d1
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╠═1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
 # ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
-# ╟─156c508f-2026-4619-9632-d679ca2cae50
+# ╠═156c508f-2026-4619-9632-d679ca2cae50
 # ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
 # ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
-# ╠═a27e0adf-aa09-42ee-97f5-ede084a9edc3
+# ╟─a27e0adf-aa09-42ee-97f5-ede084a9edc3
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
@@ -4279,7 +4353,7 @@ version = "5.8.0+1"
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
 # ╟─91c35ba0-729e-4ea9-8848-3887936a8a21
-# ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
+# ╟─1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
 # ╠═8b6264b0-f7ea-4177-9700-30072d4c5826
 # ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
@@ -4316,12 +4390,11 @@ version = "5.8.0+1"
 # ╟─7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
 # ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
-# ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
+# ╟─6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 # ╟─9fdbf307-1067-4f55-ac56-8335ecc84962
 # ╟─14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 # ╟─4976c9c5-d60d-4b19-aa72-0e135ad37361
-# ╠═1c970cc9-de1f-48cf-aa81-684d209689e0
-# ╠═27bc0020-1a8e-4996-b44a-c79a6ab99267
+# ╟─1c970cc9-de1f-48cf-aa81-684d209689e0
 # ╟─e6cc0cf6-617a-4231-826d-63f36d6136a5
 # ╟─cd06cad4-4b47-48dd-913f-61028ebe8cb3
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
@@ -4329,6 +4402,7 @@ version = "5.8.0+1"
 # ╠═63cf005b-e631-4de4-8927-085c3f982803
 # ╟─5ce26cae-4604-4ad8-8d15-15f0bfc9a81a
 # ╠═9b8a5995-d8f0-4528-ad62-a2113d5790fd
+# ╠═20bc797e-c99b-417d-8921-9b95c8e21679
 # ╠═c9d90fd5-4b65-435f-82e7-324340f31cd8
 # ╠═5d1ba3df-3e0d-49b8-a995-c27fab85ab54
 # ╠═c6f5745b-4299-48d5-ac80-268260ac7e0f

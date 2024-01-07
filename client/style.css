@@ -284,16 +284,16 @@ body, html {
                     }
 
                     button.exit_button {
-                        height: 6vh;
-                        width: 10vw;
+                        height: 5.5vh;
+                        width: 9.5vw;
 
-                        border-radius: 10px;
+                        border-radius: 11px;
                         border-width: 4px;
 
                         font-size: 16px;
 
-                        background-color: rgb(230, 230, 230);
-                        border-color: rgb(240, 240, 240);
+                        background-color: rgb(235, 235, 235);
+                        border-color: rgb(245, 245, 245);
                     }
 
                         button.exit_button:hover {

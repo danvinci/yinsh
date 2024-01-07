@@ -192,24 +192,30 @@ export function save_server_response(srv_input){
     // check if it's SETUP or NEXT MOVE data
     const f_setup = setup_ok_codes.includes(srv_input.msg_code);
     const f_next_event = next_ok_codes.includes(srv_input.msg_code);
-    const f_next = next_ok_codes.includes(srv_input.msg_code) && ('delta_array' in srv_input); // save/overwrite next data only if we have a delta
+    const f_next_save = next_ok_codes.includes(srv_input.msg_code) && ('delta_array' in srv_input); // save/overwrite next data only if we have a delta
 
     // init temporary object
     let _srv_response = {};
 
     // save NEXT MOVE data
-    if (f_next) {
+    if (f_next_save) {
 
             _srv_response.rings = srv_input.rings; // rings
             _srv_response.markers = srv_input.markers; // markers
             _srv_response.scenarioTree = srv_input.scenarioTree; // scenario tree
             _srv_response.turn_no = srv_input.turn_no; // turn number
 
+            _srv_response.delta_array = srv_input.delta_array; // delta array
+            _srv_response.TEMP_scenario = srv_input.new_scenario; // new scenario tree(s)
+
+
         // save to global obj and log
         yinsh.next_server_data = structuredClone(_srv_response);
 
         // save delta data separately if present - TO BE REVISITED: CORE DOES AN UNDEF CHECK + IT SHOULD BE W/ THE REST OF SRV DATA
-        yinsh.delta_array = ('delta_array' in srv_input) ? structuredClone(srv_input.delta_array) : undefined;
+        yinsh.delta_array = structuredClone(srv_input.delta_array);
+        
+        console.log(`TEST - DELTA: `, yinsh.delta_array);
 
         console.log('LOG - Server NEXT MOVE data saved');
 
@@ -221,9 +227,11 @@ export function save_server_response(srv_input){
             // save specific fields 
             _srv_response.game_id = srv_input.game_id; // game ID
             _srv_response.rings = srv_input.rings; // rings
-            _srv_response.markers = srv_input.markers; // markers (empty array on setup)
+            _srv_response.markers = srv_input.markers; // markers (empty array on setup, unless testing otherwise)
             _srv_response.scenarioTree = srv_input.scenarioTree; // pre-computed scenario tree for each possible move
             _srv_response.turn_no = srv_input.turn_no; // turn number
+
+            _srv_response.TEMP_scenario = srv_input.new_scenario; // new scenario tree(s)
 
             // determine if we're originator or joiner -> assign color to client (player_black_id / player_white_id)
             const f_joiner = srv_input.msg_code == joiner_ok_code;
@@ -246,7 +254,8 @@ export function save_server_response(srv_input){
     // inform core anytime we receive an "advance_game_OK" message - but not always overwrite
     if (f_next_event) {
 
-        // dispatch event for core game logic -> action handling // NOTE: what's the point of saving this if we're passing srv_input to the handler anyway
+        // dispatch event for core game logic -> action handling 
+        // NOTE: what's the point of saving this if we're passing srv_input to the handler anyway, save/event firing should be smarter
         core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: srv_input }));
 
     };
@@ -273,6 +282,9 @@ export function swap_data_next_turn() {
         // tree
         yinsh.server_data.scenarioTree = structuredClone(yinsh.next_server_data.scenarioTree);
 
+        // new (TEMP) tree
+        yinsh.server_data.TEMP_scenario = structuredClone(yinsh.next_server_data.TEMP_scenario);
+
         // turn number
         yinsh.server_data.turn_no = yinsh.next_server_data.turn_no;
 
@@ -282,6 +294,61 @@ export function swap_data_next_turn() {
     console.log('LOG - Data ready for next turn');
 
 };
+
+
+// check if we have pre-move scoring opportunities
+export function preMove_score_op_check(){
+
+    return f_check = ('score_preMove_avail' in yinsh.server_data.TEMP_scenario);
+
+};
+
+// get pre-move scoring opportunities
+export function get_preMove_score_op_data(){
+
+    return structuredClone(yinsh.server_data.TEMP_scenario.score_preMove_avail);
+
+};
+
+// return tree among trees given input, otherwise return the only one
+export function select_apply_scenarioTree(mk_s = -1, ring_s = -1){
+
+    f_ret_default = mk_s == -1 && ring_s == -1;
+    let _tree = {};
+
+    try{
+        // pick default/only tree
+        if (f_ret_default) {
+
+            _tree = structuredClone(yinsh.server_data.TEMP_scenario.move_trees[0].tree); // first/only tree in array
+        
+        } else { // pick specific tree
+
+            _trees_array = yinsh.server_data.TEMP_scenario.move_trees;
+            _tree = _trees_array.find( t => (t.gs_id.mk_sel == mk_s && t.gs_id.ring_score == ring_s) ).tree;
+
+        };
+
+        // check if we're returning something
+        if (typeof _tree != 'undefined'){
+            
+            yinsh.server_data.scenarioTree = _tree // write tree in place
+            const tree_id = f_ret_default ? 'default' : `{mk_sel:${mk_s}, ring_score:${ring_s}}`
+
+            console.log(`LOG - Tree ${tree_id} selected`);
+
+            return _tree; 
+        } else {
+            throw(`Tree not found for mk_sel: ${mk_s} ring_score: ${ring_s}`);
+        };
+
+    } catch(err) {
+        
+            console.log(`ERROR - ${err}`);
+    };
+};
+
+// return relevant tree given input choices of scoring
 
 export function get_move_status(){
     return yinsh.objs.current_move.in_progress;

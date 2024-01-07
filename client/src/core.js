@@ -10,6 +10,7 @@ import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_ga
 import { bind_adapt_canvas, reorder_rings, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
 import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
+import { preMove_score_op_check, get_preMove_score_op_data, select_apply_scenarioTree } from './data.js'
 import { get_preMove_scoring_pick, set_preMove_scoring_pick } from './data.js'
 
 import { refresh_canvas_state } from './drawing.js'
@@ -87,7 +88,8 @@ function window_resize_handler() {
 
     // regenerate objects using new S/H constants
     // note -> temp issue with marker halos (need to be re-generated correctly or wiped / will regenerate on 1st hover interaction) + grave issue when handling rings when resizing (as order is changed while moving ring is expected to be on top)
-    init_game_objs();
+    // IDEA -> depending if move is in progress or not, we could restore objects from other store (and reset events as well?)
+    init_game_objs(); 
 
     // draw what you have
     refresh_canvas_state();
@@ -187,6 +189,12 @@ async function server_actions_handler (event) {
 
         console.log(`LOG - ${CODE_action_play} msg from server`);
 
+        // hide game setup controls in the first turns in which the player moves (can be either 1 or 3)
+        if (get_current_turn_no() <= 3) {
+            ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_in_progress` }));
+            //console.log("LOG - Hiding game controls on first playable turns");
+        };
+
         // replay move by opponent (if we have delta data)
         await replay_opponent_move();
 
@@ -196,21 +204,26 @@ async function server_actions_handler (event) {
         // -> start player's turn
         turn_start(); 
 
-        // handle scoring by opponent if necessary - multiple rows too, FUUUCK :( 
-        // TODO
-
         // from here on, it should go to the client turn manager
-        enableInteraction();
-        console.log(`USER - It's your turn - # ${get_current_turn_no()}`); // -> this should go to the UI
+        console.log(`USER - It's your turn - # ${get_current_turn_no()}`); 
 
         // display code in the text prompt
         ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `It's your turn` }));
 
-        // hide game setup controls in the first turns in which the player moves (can be either 1 or 3)
-        if (get_current_turn_no() <= 3) {
-            ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_in_progress` }));
-            //console.log("LOG - Hiding game controls on first playable turns");
-        };
+        // check if opportunity is available -> handle pre-move scoring opportunity
+        // once scoring is done, resume normal turn playing -> handle edge cases of game ending at pre-move stage -> how ?
+        /*if (preMove_score_op_check()) {
+
+            // inform user
+            console.log(`USER - Your opponent scored for you!`)
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored for you!` }));
+
+
+
+        };*/
+
+        // enable interaction only at the end
+        enableInteraction();
 
 
     } else if (_next_action == CODE_action_wait) {
@@ -504,7 +517,6 @@ function ringPicked_handler (event) {
 
 };
 
-
 // listens to a ring being moved -> updates ring location & triggers re-draw
 function ringMoved_handler (event) {
 
@@ -642,28 +654,7 @@ async function ringDrop_handler (event) {
 
                     console.log("USER - Score!");
 
-                    // create task for markers scoring (options only for current player)
-                    const mk_scoring = new Task('mk_scoring_task', _player_scores);
-                    activate_task(mk_scoring); // save scoring options and activate task
-
-                    // create task for ring scoring
-                    const ring_scoring = new Task('ring_scoring_task');
-                    activate_task(ring_scoring); 
-
-                    // turn will be ended by score handling function 
-                    core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
-                    [scoring_mk_sel_picked, scoring_mk_locs_removed]= await mk_scoring.promise // wait for mk to be picked -> return value of loc_id
-
-                    // highlight rings - need to pass player own rings ids to the function
-                    await sleep(350);
-                    const _player_rings_ids = yinsh.objs.rings.filter((ring) => (ring.player == player_id)).map(ring => ring.loc.index);;
-                    core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', {detail: {player_rings: _player_rings_ids}}));
-                    
-                    // wait for ring to be picked 
-                    scoring_ring_picked = await ring_scoring.promise // wait for ring to be picked -> return value of loc_id
-                    
-                    // wipe tasks data from global refs
-                    reset_scoring_tasks();
+                    [scoring_mk_sel_picked, scoring_mk_locs_removed, scoring_ring_picked] = await scoring_handler(_player_scores);
 
                 } else {
 
@@ -701,6 +692,42 @@ async function ringDrop_handler (event) {
 
 
     };
+};
+
+
+async function scoring_handler(player_scoring_ops){
+
+    // vars to be returned
+    let _mk_sel_pick = -1;
+    let _mk_locs_removed = [];
+    let _ring_score_pick = -1;
+
+        // create task for markers scoring (options only for current player)
+        const mk_scoring = new Task('mk_scoring_task', player_scoring_ops);
+        activate_task(mk_scoring); // save scoring options and activate task
+
+        // create task for ring scoring
+        const ring_scoring = new Task('ring_scoring_task');
+        activate_task(ring_scoring); 
+
+        // turn will be ended by score handling function 
+        core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
+        [_mk_sel_pick, _mk_locs_removed]= await mk_scoring.promise // wait for mk to be picked -> return value of loc_id
+
+        // highlight rings - need to pass player own rings ids to the function
+        await sleep(350);
+        const _player_rings_ids = yinsh.objs.rings.filter((ring) => (ring.player == get_player_id())).map(ring => ring.loc.index);
+        core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', {detail: {player_rings: _player_rings_ids}}));
+        
+        // wait for ring to be picked 
+        _ring_score_pick = await ring_scoring.promise // wait for ring to be picked -> return value of loc_id
+        
+        // wipe tasks data from global refs
+        reset_scoring_tasks();
+
+    // return relevant values
+    return [_mk_sel_pick, _mk_locs_removed, _ring_score_pick];
+
 };
 
 
