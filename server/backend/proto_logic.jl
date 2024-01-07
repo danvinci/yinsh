@@ -2290,6 +2290,7 @@ md"### Running websocket server"
 begin
 	ws_servers_array = []; # array of server handles
 	ws_messages_log = []; # log for all received messages
+	ws_messages_log_OG = []; # log for all received messages (only parsing)
 end
 
 # ╔═╡ 0bb77295-be29-4b50-bff8-f712ebe08197
@@ -2300,9 +2301,6 @@ begin
 	ws_port = 6091
 
 end
-
-# ╔═╡ 2ccc880f-805e-47e3-af9e-eae4f5fa261d
-games_log_dict
 
 # ╔═╡ f9949a92-f4f8-4bbb-81d0-650ff218dd1c
 #HTTP.forceclose(ws_servers_ref[end])
@@ -2335,6 +2333,28 @@ begin
 
 	
 
+end
+
+# ╔═╡ ca522939-422f-482a-8658-452790c463f6
+function dict_keys_to_sym(input::Dict{String, Any})::Dict{Symbol, Any}
+# swaps dict keys from String to Symbol
+	
+	_new = Dict{Symbol, Any}()
+
+	for (k,v) in input
+
+		# is key a string ?
+		_nkey = isa(k, String) ? Symbol(k) : k
+
+		# is value a Dict ?
+		_nval = isa(v, Dict) ? dict_keys_to_sym(v) : v
+
+		# write 
+		setindex!(_new, _nval, _nkey)
+		
+	end
+
+	return _new
 end
 
 # ╔═╡ 28ee9310-9b7d-4169-bae4-615e4b2c386e
@@ -2609,61 +2629,8 @@ function whos_player(game_code::String, player_id::String)::Symbol
 
 end
 
-# ╔═╡ 79b29f87-a9d5-4292-8e64-f9c276848d4d
-function conv_json_arrays(input::Union{JSON3.Array, Array})::Array
-
-	# non-empty array
-	f_ne_ARR = isa(input, JSON3.Array) && !isempty(input)
-
-	# OBJ-array
-	f_ne_ARR_OBJ = f_ne_ARR && isa(input[begin], JSON3.Object)
-
-
-	if f_ne_ARR
-		return Array(input)
-	elseif f_ne_ARR_OBJ
-		return conv_json_objects.(input)
-	else
-		return input
-	end
-
-end
-
-# ╔═╡ e494778a-2e20-4f67-b237-28c2f0374c9f
-function conv_json_objects(input::Union{JSON3.Object, Dict})::Dict{Symbol, Any}
-
-	_ret = Dict{Symbol, Any}()
-
-	for (k,v) in input
-
-		# non-empty OBJ
-		f_OBJ = isa(v, JSON3.Object) && !isempty(v)
-
-		# non-empty array
-		f_ne_ARR = isa(v, JSON3.Array) && !isempty(v)
-
-
-		if f_OBJ
-
-			setindex!(_ret, conv_json_objects(v), k) # recursion 
-
-		elseif f_ne_ARR
-
-			setindex!(_ret, conv_json_arrays(v), k) # recursion 
-		else
-
-			setindex!(_ret, v, k) # leave as-is
-		end
-
-	end
-
-	
-	return _ret
-
-end
-
 # ╔═╡ af5a7cbf-8f9c-42e0-9f8f-6d3561635c40
-function strip_reshape_in_recap(recap::Union{JSON3.Object, Dict})
+function strip_reshape_in_recap(recap::Dict)
 # takes turn recap from client, strips away not relevant fields, convert Int -> CI
 # does type conversion (json3 obj/array => julia) using other functions
 	
@@ -2675,11 +2642,10 @@ function strip_reshape_in_recap(recap::Union{JSON3.Object, Dict})
 	completed_turn_no: _played_turn_no     
 
 =#
-	_jl_recap = conv_json_objects(recap) # performs type conversion
 	_srv_recap = Dict()
 
 	# keep only dicts that have non-default values in their fields
-	for (k, v) in _jl_recap
+	for (k, v) in recap
 		if isa(v, Dict)
 			if haskey(v, :mk_sel) && v[:mk_sel] != -1 && v[:ring_score] != -1
 				
@@ -2703,12 +2669,6 @@ function filter_msg_logs_by_gameID(game_id::String)::Array
 								,logs)
 
 end
-
-# ╔═╡ f8bf1d4b-7909-4751-9b0e-d3aaa2eb37d3
-ttt = filter_msg_logs_by_gameID("3JY9E1")
-
-# ╔═╡ 40c8cca9-170c-4cb5-afe8-e462e75f6915
-ttt[2]
 
 # ╔═╡ 276dd93c-05f9-46b1-909c-1d449c07e2b5
 function get_player_score(game_id::String, player_id::String)
@@ -3329,6 +3289,9 @@ function play_turn_AI(game_code::String, ai_moving_player_id::String)
 
 end
 
+# ╔═╡ 27bc0020-1a8e-4996-b44a-c79a6ab99267
+
+
 # ╔═╡ e6cc0cf6-617a-4231-826d-63f36d6136a5
 function mark_player_ready!(game_code::String, who::Symbol)
 
@@ -3666,7 +3629,7 @@ function msg_handler(ws, msg, msg_log)
 end
 
 # ╔═╡ 1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
-function start_ws_server(ws_array, _log)
+function start_ws_server(ws_array, _log, _log_OG)
 
 	try 
 
@@ -3676,16 +3639,19 @@ function start_ws_server(ws_array, _log)
 			# iterate over incoming messages
 			for msg in ws
 
-				# parse incoming msg as json
-				msg_parsed = Dict(JSON3.read(msg))
-
-				# convert msg type (to allow for handling nested objects)
-				_msg_parsed_converted = conv_json_objects(msg_parsed)
+				# save received messages as-is
+				push!(_log_OG, msg) 
+				
+				# parse incoming msg as JL Dict -> then keys from String to Symbol
+				# we could halve time (~4 -> 2 micro_s) if skip key conversion
+				# but would need to use Strings when reading client's msgs
+				_msg_jl = dict_keys_to_sym(JSON3.read(msg, Dict))
+				
 				
 				# dispatch parsed message to message handler
 				# handler takes care of generating response payload and replying,
 				# as well as handling potential errors
-				msg_handler(ws, _msg_parsed_converted, _log)
+				msg_handler(ws, _msg_jl, _log)
 
 			end
 		end
@@ -3707,12 +3673,12 @@ end
 # anytime we change something in the child functions (parameters) the ws server is initiated again
 # so we're killing the previous one to avoid errors (listening on same ip/port)
 	
-function reactive_start_server(ws_array, _msg_log)
+function reactive_start_server(ws_array, _msg_log, _msg_log_OG)
 
 	# start websocket server if there's none
 	if isempty(ws_array)
 
-		start_ws_server(ws_array, _msg_log)
+		start_ws_server(ws_array, _msg_log, _msg_log_OG)
 
 	# otherwise, close all open ones existing and start a new one
 	else
@@ -3727,14 +3693,14 @@ function reactive_start_server(ws_array, _msg_log)
 		
 		
 		sleep(0.025)
-		start_ws_server(ws_array, _msg_log)
+		start_ws_server(ws_array, _msg_log, _msg_log_OG)
 		
 	end
 
 end
 
 # ╔═╡ 8b6264b0-f7ea-4177-9700-30072d4c5826
-reactive_start_server(ws_servers_array, ws_messages_log)
+reactive_start_server(ws_servers_array, ws_messages_log, ws_messages_log_OG)
 
 # ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 function test_ws_client()
@@ -4316,9 +4282,9 @@ version = "5.8.0+1"
 # ╠═1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
 # ╠═8b6264b0-f7ea-4177-9700-30072d4c5826
-# ╠═2ccc880f-805e-47e3-af9e-eae4f5fa261d
 # ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
 # ╠═5e5366a9-3086-4210-a037-c56e1374a686
+# ╟─ca522939-422f-482a-8658-452790c463f6
 # ╠═7316a125-3bfe-4bac-babf-4e3db953078b
 # ╠═064496dc-4e23-4242-9e25-a41ddbaf59d1
 # ╠═28ee9310-9b7d-4169-bae4-615e4b2c386e
@@ -4327,8 +4293,6 @@ version = "5.8.0+1"
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╠═ca346015-b2c9-45da-8c1e-17493274aca2
-# ╠═f8bf1d4b-7909-4751-9b0e-d3aaa2eb37d3
-# ╠═40c8cca9-170c-4cb5-afe8-e462e75f6915
 # ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
@@ -4339,10 +4303,8 @@ version = "5.8.0+1"
 # ╟─13eb72c7-ac24-4b93-8fd9-260b49940370
 # ╟─8929062f-0d97-41f9-99dd-99d51f01b664
 # ╟─ebd8e962-2150-4ada-8ebd-3eba6e29c12e
-# ╠═af5a7cbf-8f9c-42e0-9f8f-6d3561635c40
-# ╠═e494778a-2e20-4f67-b237-28c2f0374c9f
-# ╟─79b29f87-a9d5-4292-8e64-f9c276848d4d
-# ╠═5ae493f4-346d-40ce-830f-909ec40de8d0
+# ╟─af5a7cbf-8f9c-42e0-9f8f-6d3561635c40
+# ╟─5ae493f4-346d-40ce-830f-909ec40de8d0
 # ╟─276dd93c-05f9-46b1-909c-1d449c07e2b5
 # ╟─8797a304-aa98-4ce0-ab0b-759df0256fa7
 # ╠═4f3e9400-6eb7-4ffb-bf5b-887d523e00a4
@@ -4359,6 +4321,7 @@ version = "5.8.0+1"
 # ╟─14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 # ╟─4976c9c5-d60d-4b19-aa72-0e135ad37361
 # ╠═1c970cc9-de1f-48cf-aa81-684d209689e0
+# ╠═27bc0020-1a8e-4996-b44a-c79a6ab99267
 # ╟─e6cc0cf6-617a-4231-826d-63f36d6136a5
 # ╟─cd06cad4-4b47-48dd-913f-61028ebe8cb3
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59

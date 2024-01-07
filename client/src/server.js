@@ -4,7 +4,7 @@
 // https://stackoverflow.com/questions/1349404/generate-random-string-characters-in-javascript
 // https://javascript.info/promise-basics
 
-import { save_server_response, get_game_id, get_player_id, get_current_turn_no } from './data.js'
+import { save_server_response } from './data.js'
 
 // API endpoint address
 const ws_complete_address = `ws://localhost:6091`; // local test address (pluto)
@@ -226,6 +226,8 @@ function push_messages_handler(event){
         console.log("ERROR - msg_code NOT FOUND in msg from server");
     };
 };
+
+
 
 //////////////////////////// MESSAGE SENDER (called by core)
 // could be unified in single function and handle cases internally
