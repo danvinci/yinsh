@@ -157,12 +157,18 @@ export async function init_ws () {
                 
             } catch (err) { // if connection doesn't work
 
-                console.log(`LOG - WebSocket - something went wrong when connecting`);
+                console.log(`LOG - WebSocket - something went wrong during connection`);
                 reject(err); 
 
             };
         };
     });
+};
+
+// close connection to WS - called when player resigns
+// https://stackoverflow.com/questions/67526503/can-a-browser-execute-on-close-websocket-event-when-closing-the-browser
+export function close_ws (){
+    ws.close(); // close waits ~30sec and gracefully shuts doen
 };
 
 
@@ -191,7 +197,6 @@ function onMessage_handler (event) {
     console.log(`TEST - Msg handler - Incoming data from server: `, server_data);
 
 };
-
 
 function onError_handler (event) {
 
@@ -240,7 +245,7 @@ export async function server_ws_send(msg_code, msg_payload = {}){
 
     if (f_msg_valid) {
 
-        await init_ws(); // ensure connection is up whenever we ping the server again
+        await init_ws(); // ensure connection is up whenever we're about to send something to the server
 
         try {
 
@@ -262,8 +267,11 @@ export async function server_ws_send(msg_code, msg_payload = {}){
                 // save response, read from log (we already wrote the received message)
                 save_server_response(messagePromises_log[msg_id].server_response);
     
+            } else if (resp_code == msg_code.concat(sfx_CODE_ERR)) {
+                throw new Error(`ERROR - ${resp_code} - msg ID : ${msg_id}`);
+
             } else {
-                throw new Error(`LOG - ${resp_code} - msg ID : ${msg_id}`);
+                throw new Error(`ERROR - Unrecognized response code ${resp_code} - msg ID : ${msg_id}`);
             };
 
         } catch (err) {

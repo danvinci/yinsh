@@ -192,7 +192,7 @@ export function save_server_response(srv_input){
     // check if it's SETUP or NEXT MOVE data
     const f_setup = setup_ok_codes.includes(srv_input.msg_code);
     const f_next_event = next_ok_codes.includes(srv_input.msg_code);
-    const f_next_save = next_ok_codes.includes(srv_input.msg_code) && ('delta_array' in srv_input); // save/overwrite next data only if we have a delta
+    const f_next_save = next_ok_codes.includes(srv_input.msg_code) && ('delta' in srv_input); // save/overwrite next data only if we have a delta
 
     // init temporary object
     let _srv_response = {};
@@ -205,7 +205,7 @@ export function save_server_response(srv_input){
             _srv_response.scenarioTree = srv_input.scenarioTree; // scenario tree
             _srv_response.turn_no = srv_input.turn_no; // turn number
 
-            _srv_response.delta_array = srv_input.delta_array; // delta array
+            _srv_response.delta = srv_input.delta; // delta data for replaying opponent's move
             _srv_response.TEMP_scenario = srv_input.new_scenario; // new scenario tree(s)
 
 
@@ -213,9 +213,9 @@ export function save_server_response(srv_input){
         yinsh.next_server_data = structuredClone(_srv_response);
 
         // save delta data separately if present - TO BE REVISITED: CORE DOES AN UNDEF CHECK + IT SHOULD BE W/ THE REST OF SRV DATA
-        yinsh.delta_array = structuredClone(srv_input.delta_array);
+        yinsh.delta = structuredClone(srv_input.delta);
         
-        console.log(`TEST - DELTA: `, yinsh.delta_array);
+        console.log(`TEST - DELTA: `, yinsh.delta);
 
         console.log('LOG - Server NEXT MOVE data saved');
 
@@ -297,23 +297,24 @@ export function swap_data_next_turn() {
 
 
 // check if we have pre-move scoring opportunities
+// this function is called even when we might not have scenario data
 export function preMove_score_op_check(){
 
-    return f_check = ('score_preMove_avail' in yinsh.server_data.TEMP_scenario);
+    return 'score_preMove_avail' in yinsh.server_data.TEMP_scenario; // ref object should exist to avoid 'in' checks against undefined objects
 
 };
 
 // get pre-move scoring opportunities
 export function get_preMove_score_op_data(){
 
-    return structuredClone(yinsh.server_data.TEMP_scenario.score_preMove_avail);
+    return structuredClone(yinsh.server_data.TEMP_scenario.score_preMove_avail); // [{}]
 
 };
 
 // return tree among trees given input, otherwise return the only one
 export function select_apply_scenarioTree(mk_s = -1, ring_s = -1){
 
-    f_ret_default = mk_s == -1 && ring_s == -1;
+    const f_ret_default = ( mk_s == -1 && ring_s == -1 );
     let _tree = {};
 
     try{
@@ -324,7 +325,7 @@ export function select_apply_scenarioTree(mk_s = -1, ring_s = -1){
         
         } else { // pick specific tree
 
-            _trees_array = yinsh.server_data.TEMP_scenario.move_trees;
+            const _trees_array = yinsh.server_data.TEMP_scenario.move_trees;
             _tree = _trees_array.find( t => (t.gs_id.mk_sel == mk_s && t.gs_id.ring_score == ring_s) ).tree;
 
         };
@@ -335,7 +336,7 @@ export function select_apply_scenarioTree(mk_s = -1, ring_s = -1){
             yinsh.server_data.scenarioTree = _tree // write tree in place
             const tree_id = f_ret_default ? 'default' : `{mk_sel:${mk_s}, ring_score:${ring_s}}`
 
-            console.log(`LOG - Tree ${tree_id} selected`);
+            console.log(`LOG - Tree ${tree_id} set`);
 
             return _tree; 
         } else {
@@ -348,7 +349,7 @@ export function select_apply_scenarioTree(mk_s = -1, ring_s = -1){
     };
 };
 
-// return relevant tree given input choices of scoring
+
 
 export function get_move_status(){
     return yinsh.objs.current_move.in_progress;
@@ -370,6 +371,20 @@ export function activate_task(task){
 };
 
 
+export function get_task_status(task_name){
+
+    if (task_name == 'mk_scoring_task') {
+
+        return yinsh.objs.current_mk_scoring.in_progress;
+
+    } else if (task_name == 'ring_scoring_task') {
+
+        return yinsh.objs.current_ring_scoring.in_progress;
+
+    };
+};
+
+
 export function reset_scoring_tasks(){
     
     // overall scoring
@@ -382,12 +397,13 @@ export function reset_scoring_tasks(){
 
 };
 
-export function set_preMove_scoring_pick(mk_sel_id = -1, score_ring_id = -1){
+export function set_preMove_scoring_pick(mk_sel_id = -1, mk_removed = [], score_ring_id = -1){
 
-    // if called without arguments it will reset the var (-1 def)
+    // if called without arguments it will reset the var to its default (-1 def)
 
-    yinsh.objs.pre_move_scoring.mk_sel_pick = mk_sel_id;
-    yinsh.objs.pre_move_scoring.score_ring_pick = score_ring_id;
+    yinsh.objs.pre_move_scoring.mk_sel = mk_sel_id;
+    yinsh.objs.pre_move_scoring.mk_locs = mk_removed;
+    yinsh.objs.pre_move_scoring.ring_score = score_ring_id;
 
 };
 
@@ -395,20 +411,6 @@ export function get_preMove_scoring_pick(){
 
     return yinsh.objs.pre_move_scoring; 
 
-};
-
-
-export function get_task_status(task_name){
-
-    if (task_name == 'mk_scoring_task') {
-
-        return yinsh.objs.current_mk_scoring.in_progress;
-
-    } else if (task_name == 'ring_scoring_task') {
-
-        return yinsh.objs.current_ring_scoring.in_progress;
-
-    };
 };
 
 export function get_current_turn_no(){

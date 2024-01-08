@@ -37,11 +37,11 @@ function mouseDown_handler (event) {
         // check if scoring is underway
         const mk_scoring_in_progress = get_task_status('mk_scoring_task'); 
         const ring_scoring_in_progress = get_task_status('ring_scoring_task'); 
-            const any_scoring_in_progress = mk_scoring_in_progress || ring_scoring_in_progress;
+            const mk_or_ring_scoring_in_progress = mk_scoring_in_progress || ring_scoring_in_progress;
 
-        // check if move currently underway
-        // If not, check which ring is being picked and send event to core_et
-        if (move_in_progress == false && any_scoring_in_progress == false ){
+        // check if move currently underway, and mk or ring_scoring not underway
+        // if okay -> check which ring is being picked and send event to core_et
+        if (move_in_progress == false && mk_or_ring_scoring_in_progress == false){
 
             // retrieve array of rings
             const _rings = yinsh.objs.rings;
