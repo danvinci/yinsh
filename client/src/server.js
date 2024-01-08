@@ -146,7 +146,7 @@ export async function init_ws () {
                 // adds event listeners 
                 // ws.addEventListener('open', onOpen_handler, false); // -> directly handled here
                 ws.addEventListener('message', onMessage_handler, false);
-                ws.addEventListener('error', onError_handler, false);
+                ws.addEventListener('error', onError_handler, false); // -> let event bubble up
                 ws.addEventListener('close', onClose_handler, false);
 
                 // resolve on open
@@ -155,9 +155,10 @@ export async function init_ws () {
                     resolve('ws_connection_open'); // -> resolve promise
                 };
                 
-            } catch (err) { // if connection doesn't work
+            } catch (err) { // if connection doesn't work -> event catched by onError_handler first
 
                 console.log(`LOG - WebSocket - something went wrong during connection`);
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Sorry! The server seems unreachable at the moment` }));
                 reject(err); 
 
             };
@@ -202,12 +203,13 @@ function onError_handler (event) {
 
     console.log(`LOG - Websocket - ERROR`);
     console.log(event);
+    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< server connection error >` })); // inform user
 
 };
 
 function onClose_handler (event) {
 
-    console.log(`LOG - WebSocket - connection CLOSED - ${Date.now()} `, event.reason);
+    console.log(`LOG - WebSocket - connection CLOSED`);
 
 };
 

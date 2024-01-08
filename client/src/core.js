@@ -11,7 +11,7 @@ import { bind_adapt_canvas, reorder_rings, update_current_move, add_marker, upda
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
 import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
 import { preMove_score_op_check, get_preMove_score_op_data, select_apply_scenarioTree } from './data.js'
-import { get_preMove_scoring_pick, set_preMove_scoring_pick } from './data.js'
+import { delta_replay_check, get_delta, get_preMove_scoring_pick, set_preMove_scoring_pick, get_moves_tree } from './data.js'
 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
@@ -194,20 +194,14 @@ async function server_actions_handler (event) {
                 //console.log("LOG - Hiding game controls on first playable turns");
             };
 
-            // replay move by opponent (if we have delta data)
-            await replay_opponent_move();
+            // replay whole turn by opponent (if we have delta data)
+            await replay_opponent_turn();
 
             // prepare data, objects, and canvas for next turn
             prep_next_turn(event.detail.turn_no);
 
             // flag turn as in-progress
             turn_start(); 
-
-            // from here on, it should go to the client turn manager
-            console.log(`USER - It's your turn - # ${get_current_turn_no()}`); 
-
-            // display code in the text prompt
-            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `It's your turn` }));
 
         enableInteraction(); 
 
@@ -237,8 +231,7 @@ async function server_actions_handler (event) {
             // check if game is over or not -> act accordingly
 
             // inform user that they should still move
-            // console.log(`USER - Your turn is still on`)
-            // ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your turn is still on, make a move` }));
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Make your move` }));
         };
 
         // pick correct scenario tree to move on
@@ -262,8 +255,8 @@ async function server_actions_handler (event) {
 
         disableInteraction(); 
 
-        // replay move by opponent (if we have delta data)
-        await replay_opponent_move();
+        // replay turn by opponent (if we have delta data)
+        await replay_opponent_turn();
         refresh_canvas_state(); 
 
         const winning_player = event.detail.won_by;
@@ -321,107 +314,142 @@ class Task {
     }
 };
 
-async function replay_opponent_move(){
+// replays opponent's turn using DELTA data from server
+async function replay_opponent_turn(){
 
-    // do something only if we have delta data
-    if (typeof yinsh.delta !== 'undefined') {
+    /* structure of delta replay data 
+    
+    note: fields included only if valued, order of execution as listed
 
-        const delta = yinsh.delta;
+        :score_preMove_done => (:mk_locs => [locs], :ring_score => loc) 
+		:move_done => (:mk_add => (loc, player), :ring_move = (start, end, player))
+		:mk_flip => [locs]
+		:score_done => (:mk_locs => [locs], :ring_score => loc) 
+    
+    */
+
+    // only executes if we have delta data
+    if (delta_replay_check()) {
+
+        const delta = get_delta(); // get a copy of the data
 
         console.log(`USER - Replaying opponent's moves`);
+        console.log(`LOG - Delta: `, delta);
         // ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent is moving` }));
 
         const replay_start_time = Date.now();
 
-        console.log(`LOG - Delta: `, yinsh.delta);
+        // any part of the turn is replayed only if we have data about it (server includes data only if actionable)
 
-        // add opponent's marker
-            const _marker_add_wait = 800;
-            await sleep(_marker_add_wait);
-            const _added_mk_index = delta.added_marker.cli_index;
+        // replay pre-move scoring 
+        if('score_preMove_done' in delta) {
+
+            // replay move and increase score (handle scoring slot too)
+            await replay_opponent_scoring(delta.score_preMove_done.mk_locs, delta.score_preMove_done.ring_score);
+
+            // txt for user
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
+
+        };
+
+        // check if game is over -> ? now handled by payload code, but implies full replay -> need to handle server-side first detection of game ending at pre-move score
+
+        // replay move (mk-add + ring move)
+        if ('move_done' in delta) {
+
+            // add opponent's marker
+            await sleep(800);
+            const _added_mk_index = delta.move_done.mk_add.loc; 
             add_marker(_added_mk_index, true); // -> as opponent
             refresh_canvas_state();
 
-        // move and drop ring
-            const _ring_move_wait = 800;
-            await sleep(_ring_move_wait);
-            await synthetic_ring_move_drop(delta.moved_ring);
+            // move and drop ring
+            await sleep(800);
+            await replay_ring_move_drop(delta.move_done.ring_move);
             ringDrop_playS(); 
-        
-        // flipped markers 
-            let _flip_wait = 0;
-            if (delta.flip_flag == true) {
 
-                _flip_wait = 150;
-                await sleep(_flip_wait);
-                flip_markers(delta.markers_toFlip);
-                refresh_canvas_state();
-            };
-            
-        // opponent's scoring
-            let _score_mk_wait = 0;
-            let _score_ring_wait = 0;
-            if (delta.score_handled){
-                
-                // markers
-                _score_mk_wait = 600;
-                await sleep(_score_mk_wait);
-                
-                update_mk_halos(delta.markers_toRemove, true); // highlight markers
-                refresh_canvas_state();
-                
-                await sleep(_score_mk_wait); // wait to let user see visual changes
+        };
 
-                remove_markers(delta.markers_toRemove); // remove markers
-                update_mk_halos(); // turn off markers highlight
-                refresh_canvas_state(); // materialize changes on canvas
+        // replay flipped markers
+        if ('mk_flip' in delta) {
 
-                markersRemoved_oppon_playS(); // play sound
+            await sleep(150);
+            flip_markers(delta.mk_flip);
+            refresh_canvas_state();
 
-                //// RING SCORING
+        };
 
-                _score_ring_wait = 650;
-                await sleep(_score_ring_wait);
+        // replay score
+        if ('score_done' in delta) {
 
-                // move scoring ring on top (need for animation)
-                const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == delta.scoring_ring);
-                reorder_rings(_ring_index_in_array);
+            await replay_opponent_scoring(delta.score_done.mk_locs, delta.score_done.ring_score);
 
-                // grab start (x,y) coordinates   
-                const _start = yinsh.objs.drop_zones.find(d => d.loc.index == delta.scoring_ring);
-                const _start_xy = {x:_start.loc.x, y:_start.loc.y};
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
 
-                // grab end coordinates -> these will be of the scoring slots for the opponent (hence input is false)
-                const _slot_coord = get_coord_free_slot(false);
-                const _end_xy = {x:_slot_coord.x, y:_slot_coord.y};    
+        };
 
-                // animate ring move via synthetic mouse event
-                await syn_object_move(_start_xy, _end_xy, 45, 15);
-                
-                // increases player's score by one and mark scoring slot as filled
-                const new_opponent_score = increase_opponent_score();
-                console.log(`LOG - New opponent score: ${new_opponent_score}`);
-
-                // remove ring from rings array 
-                remove_ring_scoring(delta.scoring_ring); // remove ring (scoring ring id)
-
-                // refresh canvas (ring is drawn in scoring slot now)
-                refresh_canvas_state();
-
-                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
-
-            };
-            
-        // total sleep time
-            const _tot_sleep_time = array_sum([_marker_add_wait, _ring_move_wait, _flip_wait, _score_mk_wait, _score_mk_wait, _score_ring_wait])
-            const _tot_time = Date.now() - replay_start_time;
-            const _net_time = _tot_time - _tot_sleep_time
+        // total replay time
+        const _tot_time = Date.now() - replay_start_time;
 
         // log replay done
-            console.log(`LOG - Move replay time - Total: ${_tot_time}ms - Net: ${_net_time}ms`);
+        console.log(`LOG - Total replay time: ${_tot_time}ms`);
 
-        
+    } else {
+        console.log(`LOG - No delta to replay`);
     };
+};
+
+
+
+// called by replay_opponent_turn, used for both pre-move and post-move scoring replay
+// also takes care of increasing opponent's score and fill scoring slot
+async function replay_opponent_scoring(mk_removed_locs, ring_score_loc){
+
+    const _score_mk_wait = 600;
+    const _score_ring_wait = 650;
+                
+    // MARKERS ROW 
+        await sleep(_score_mk_wait);
+        
+        update_mk_halos(mk_removed_locs, true); // highlight markers
+        refresh_canvas_state();
+        
+        await sleep(_score_mk_wait); // wait to let user see visual changes
+
+        remove_markers(mk_removed_locs); // remove markers
+        update_mk_halos(); // turn off markers highlight
+        refresh_canvas_state(); // materialize changes on canvas
+
+        markersRemoved_oppon_playS(); // play sound
+
+    //// RING SCORING
+        await sleep(_score_ring_wait);
+
+        // move scoring ring on top (need for animation)
+        const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == ring_score_loc);
+        reorder_rings(_ring_index_in_array); // put ring last
+
+        // grab start (x,y) coordinates   
+        const _start = yinsh.objs.drop_zones.find(d => d.loc.index == ring_score_loc); // from matching drop zone
+        const _start_xy = {x:_start.loc.x, y:_start.loc.y};
+
+        // grab end coordinates -> these will be of the scoring slots for the opponent (hence input is false)
+        const _slot_coord = get_coord_free_slot(false);
+        const _end_xy = {x:_slot_coord.x, y:_slot_coord.y};    
+
+        // animate ring move via synthetic mouse event
+        await syn_object_move(_start_xy, _end_xy, 45, 15);
+        
+        // increases player's score by one and mark scoring slot as filled
+        const new_opponent_score = increase_opponent_score();
+        console.log(`LOG - New opponent score: ${new_opponent_score}`);
+
+        // remove ring from rings array 
+        remove_ring_scoring(ring_score_loc); // remove ring 
+
+        // refresh canvas (ring is drawn as part of the scoring slot now)
+        refresh_canvas_state();
+
 };
 
 // update current/next data -> reinit/redraw everything (on-canvas nothing should change)
@@ -432,6 +460,7 @@ function prep_next_turn(_turn_no){
 
         swap_data_next_turn(); // -> takes data from next
         update_objects_next_turn(); // -> update objcts
+        set_preMove_scoring_pick(); // -> set variable clean to avoid sending bad data to the server -> ghost replays on the other side
         refresh_canvas_state(); 
 
     };
@@ -451,12 +480,12 @@ function array_sum(input_array) {
     return _running_sum
 };
 
-// move ring between start and end state
-async function synthetic_ring_move_drop(moved_ring_details) {
+// move ring between start and end location and drop it
+async function replay_ring_move_drop(moved_ring_details) {
 
     // start/end indexes for moved ring
-    const _mr_start_index = moved_ring_details.cli_index_start;
-    const _mr_end_index = moved_ring_details.cli_index_end;
+    const _mr_start_index = moved_ring_details.start;
+    const _mr_end_index = moved_ring_details.end;
     const _mr_player = moved_ring_details.player_id;
 
     console.log(`LOG - Ring ${_mr_player} picked from index ${_mr_start_index}`);
@@ -469,11 +498,11 @@ async function synthetic_ring_move_drop(moved_ring_details) {
     const _drop_start = yinsh.objs.drop_zones.find(d => d.loc.index == _mr_start_index);
     const _drop_end = yinsh.objs.drop_zones.find(d => d.loc.index == _mr_end_index);
 
-        const start = {x:_drop_start.loc.x, y:_drop_start.loc.y};
-        const end = {x:_drop_end.loc.x, y:_drop_end.loc.y};
+        const start_xy = {x:_drop_start.loc.x, y:_drop_start.loc.y};
+        const end_xy = {x:_drop_end.loc.x, y:_drop_end.loc.y};
 
     // animate move via synthetic mouse event
-    await syn_object_move(start, end, 30, 15);
+    await syn_object_move(start_xy, end_xy, 30, 15);
 
     // update dropping ring loc information 
     updateLoc_last_ring(_drop_end.loc);
@@ -485,7 +514,6 @@ async function synthetic_ring_move_drop(moved_ring_details) {
     console.log(`LOG - Ring ${dropping_ring.player} moved to index ${dropping_ring_loc_index}`);
 
 };
-
 
 //////////// EVENT HANDLERS FOR LOCAL GAME MECHANICS
 
@@ -630,13 +658,13 @@ async function ringDrop_handler (event) {
         } else {
 
             // CASE: ring moved to a legal destination -> look at scenarioTree to see what happens
-            // retrieve scenario as scenarioTree.index_start_move.index_end_move
-            const move_scenario = yinsh.server_data.scenarioTree[start_move_index][drop_loc_index];
+            // retrieve scenario as tree.index_start_move.index_end_move
+            // THE tree was written in place by server_actions fn, among several possible if a preMove score was available
+            const move_scenario = get_moves_tree()[start_move_index][drop_loc_index];
             console.log(`LOG - Move scenario: `, move_scenario);
 
             // CASE: some markers must be flipped
-            const f_mk_to_flip = 'mk_flip' in move_scenario;
-            if (f_mk_to_flip){
+            if ('mk_flip' in move_scenario){
                 // flip and re-draw
                 await sleep(150);
                 flip_markers(move_scenario.mk_flip);
@@ -1099,7 +1127,7 @@ async function win_animation() {
 
         endGame_win_playS();
 
-        await sleep(150);
+        await sleep(250);
 
         // loop over every object (rings + markers)
         // pick a different one every 50ms or so

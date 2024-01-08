@@ -204,19 +204,12 @@ export function save_server_response(srv_input){
             _srv_response.markers = srv_input.markers; // markers
             _srv_response.scenarioTree = srv_input.scenarioTree; // scenario tree
             _srv_response.turn_no = srv_input.turn_no; // turn number
-
             _srv_response.delta = srv_input.delta; // delta data for replaying opponent's move
-            _srv_response.TEMP_scenario = srv_input.new_scenario; // new scenario tree(s)
-
 
         // save to global obj and log
         yinsh.next_server_data = structuredClone(_srv_response);
 
-        // save delta data separately if present - TO BE REVISITED: CORE DOES AN UNDEF CHECK + IT SHOULD BE W/ THE REST OF SRV DATA
-        yinsh.delta = structuredClone(srv_input.delta);
-        
-        console.log(`TEST - DELTA: `, yinsh.delta);
-
+        console.log(`TEST - DELTA: `, srv_input.delta);
         console.log('LOG - Server NEXT MOVE data saved');
 
     //////////////////////////////
@@ -230,8 +223,6 @@ export function save_server_response(srv_input){
             _srv_response.markers = srv_input.markers; // markers (empty array on setup, unless testing otherwise)
             _srv_response.scenarioTree = srv_input.scenarioTree; // pre-computed scenario tree for each possible move
             _srv_response.turn_no = srv_input.turn_no; // turn number
-
-            _srv_response.TEMP_scenario = srv_input.new_scenario; // new scenario tree(s)
 
             // determine if we're originator or joiner -> assign color to client (player_black_id / player_white_id)
             const f_joiner = srv_input.msg_code == joiner_ok_code;
@@ -263,30 +254,35 @@ export function save_server_response(srv_input){
  };
 
 
- export function get_local_server_data_ref(){
+export function get_local_server_data_ref(){
 
-    return yinsh.local_server_data_ref;
+return yinsh.local_server_data_ref;
 
- };
+};
+
+// do we have delta data to replay? -> expected to return false only on setup for white player
+export function delta_replay_check(){
+
+    if ('next_server_data' in yinsh){
+        return ('delta' in yinsh.next_server_data); // always true if we have next_server_data
+    } else {
+        return false;
+    };
+};
+
+export function get_delta(){
+    return structuredClone(yinsh.next_server_data.delta);
+};
+
 
 
 // updates rings, markers, and scenario tree so to match data for next turn
 export function swap_data_next_turn() {
 
-        // rings
-        yinsh.server_data.rings = structuredClone(yinsh.next_server_data.rings);
-
-        // markers
-        yinsh.server_data.markers = structuredClone(yinsh.next_server_data.markers);
-
-        // tree
-        yinsh.server_data.scenarioTree = structuredClone(yinsh.next_server_data.scenarioTree);
-
-        // new (TEMP) tree
-        yinsh.server_data.TEMP_scenario = structuredClone(yinsh.next_server_data.TEMP_scenario);
-
-        // turn number
-        yinsh.server_data.turn_no = yinsh.next_server_data.turn_no;
+        yinsh.server_data.rings = structuredClone(yinsh.next_server_data.rings);  // rings
+        yinsh.server_data.markers = structuredClone(yinsh.next_server_data.markers); // markers
+        yinsh.server_data.scenarioTree = structuredClone(yinsh.next_server_data.scenarioTree); // tree
+        yinsh.server_data.turn_no = yinsh.next_server_data.turn_no; // turn number
 
     // make local working copy
     yinsh.local_server_data_ref = structuredClone(yinsh.server_data);
@@ -300,14 +296,14 @@ export function swap_data_next_turn() {
 // this function is called even when we might not have scenario data
 export function preMove_score_op_check(){
 
-    return 'score_preMove_avail' in yinsh.server_data.TEMP_scenario; // ref object should exist to avoid 'in' checks against undefined objects
+    return 'score_preMove_avail' in yinsh.server_data.scenarioTree; // ref object should exist to avoid 'in' checks against undefined objects
 
 };
 
 // get pre-move scoring opportunities
 export function get_preMove_score_op_data(){
 
-    return structuredClone(yinsh.server_data.TEMP_scenario.score_preMove_avail); // [{}]
+    return structuredClone(yinsh.server_data.scenarioTree.score_preMove_avail); // [{}]
 
 };
 
@@ -321,11 +317,11 @@ export function select_apply_scenarioTree(mk_s = -1, ring_s = -1){
         // pick default/only tree
         if (f_ret_default) {
 
-            _tree = structuredClone(yinsh.server_data.TEMP_scenario.move_trees[0].tree); // first/only tree in array
+            _tree = structuredClone(yinsh.server_data.scenarioTree.move_trees[0].tree); // first/only tree in array
         
         } else { // pick specific tree
 
-            const _trees_array = yinsh.server_data.TEMP_scenario.move_trees;
+            const _trees_array = yinsh.server_data.scenarioTree.move_trees;
             _tree = _trees_array.find( t => (t.gs_id.mk_sel == mk_s && t.gs_id.ring_score == ring_s) ).tree;
 
         };
@@ -333,7 +329,7 @@ export function select_apply_scenarioTree(mk_s = -1, ring_s = -1){
         // check if we're returning something
         if (typeof _tree != 'undefined'){
             
-            yinsh.server_data.scenarioTree = _tree // write tree in place
+            yinsh.objs.tree = _tree // write tree in place
             const tree_id = f_ret_default ? 'default' : `{mk_sel:${mk_s}, ring_score:${ring_s}}`
 
             console.log(`LOG - Tree ${tree_id} set`);
@@ -349,6 +345,9 @@ export function select_apply_scenarioTree(mk_s = -1, ring_s = -1){
     };
 };
 
+export function get_moves_tree(){
+    return structuredClone(yinsh.objs.tree);
+};
 
 
 export function get_move_status(){
@@ -446,7 +445,7 @@ export function increase_player_score(){
     return yinsh.objs.player_score;
 };
 
-
+// acts on both logged score and the scoring slots
 export function increase_opponent_score(){
 
     // increase player score
@@ -495,7 +494,7 @@ export function update_objects_next_turn(){
 
 export function turn_start(){
    yinsh.objs.current_turn.in_progress = true;
-   console.log(`USER - Turn started`);
+   console.log(`USER - Turn #${get_current_turn_no()} started`); 
 };
 
 export function turn_end(){
@@ -1024,16 +1023,14 @@ export function update_current_move(in_progress = false, start_index = 0){
 // retrieve indexes of legal moves/drops from saved server data
 function getIndexes_legal_drops(start_index){
 
-    // keys (possible moves) are the first level of the branch for a ring
-    const tree_branch = yinsh.server_data.scenarioTree[start_index];
+    // keys (possible moves) are the first level of the branch for a ring loc
+    const tree_branch = get_moves_tree()[start_index];
 
-    let _legal_drops = [];
-    for (const key in tree_branch){
-        _legal_drops.push(parseInt(key)); // javascript forces object keys to be strings, we need to parse them ¯\_(ツ)_/¯
-    };
+    // only keep keys that can be interpreted as numbers
+    // javascript forces object keys to be strings, we need to parse them ¯\_(ツ)_/¯
+    let _legal_drops = Object.keys(tree_branch).filter(Number).map(k => parseInt(k));
     
     return structuredClone(_legal_drops);
-
 };
 
 

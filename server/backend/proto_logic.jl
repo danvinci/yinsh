@@ -2186,11 +2186,8 @@ function gen_newGame(vs_ai=false)
 		# prepare markers array to be sent to client
 		__mks = union(white_mks, black_mks)
 		
-	# simulates possible moves and scoring/flipping outcomes for each
-	scenario_tree = gen_scenarioTree(_game_state, next_movingPlayer)
-
-		# sneaking new format it, alongside old one
-		_new_scenario = sim_scenarioTree(_game_state, next_movingPlayer, 0) |> s -> reshape_out_fields(s)
+	# simulates possible moves and scoring/flipping outcomes for each -> in client's format
+	scenario_tree = sim_scenarioTree(_game_state, next_movingPlayer, 0) |> s -> reshape_out_fields(s)
 	
 	
 	### package data for server storage
@@ -2227,7 +2224,6 @@ function gen_newGame(vs_ai=false)
 						:rings => rings,
 						:markers => __mks, # no markers yet
 						:scenarioTree => scenario_tree,
-						:new_scenario => _new_scenario,
 						:turn_no => 1) # first game turn
 
 		_first_turn = Dict(:turn_no => 1,
@@ -2877,19 +2873,15 @@ function gen_new_clientPkg(game_id, moving_client_id)
 		markers = union(whiteMks, blackMks)
 	
 
-	# simulates possible moves and outcomes for each
-	scenario_tree = gen_scenarioTree(_game_state, next_movingPlayer)
-
-	# sneaking new format it, alongside old one
+	# simulates possible moves and outcomes for each -> in client's format
 	_ex_score = get_player_score(game_id, next_movingPlayer)
-	_new_scenario = sim_scenarioTree(_game_state, next_movingPlayer, _ex_score) |> s -> reshape_out_fields(s)
+	scenario_tree = sim_scenarioTree(_game_state, next_movingPlayer, _ex_score) |> s -> reshape_out_fields(s)
 		
 	### package data for client
 	_cli_pkg = Dict(:game_id => game_id,
 					:rings => rings,
 					:markers => markers,
-					:scenarioTree => scenario_tree,
-					:new_scenario => _new_scenario)
+					:scenarioTree => scenario_tree)
 	
 	
 	# saves game to general log (DB?)
@@ -2954,13 +2946,8 @@ function update_serverStates!(_game_code, _player_id, turn_recap)
 	# save new game state to log
 	push!(games_log_dict[_game_code][:server_states], new_gs_sim[:new_game_state])
 
-
-	# extract delta to be logged and passed onto client
-	_delta_client = temp_sim_delta_translation(new_gs_sim)
-	#@info _delta_client # let's see what's inside
-
-	# save delta for client
-	push!(games_log_dict[_game_code][:client_delta], _delta_client)
+	# save delta for client (w/ client loc coordinates)
+	push!(games_log_dict[_game_code][:client_delta], reshape_out_fields(new_gs_sim))
 	
 	println("LOG - Server game state and delta updated")
 
