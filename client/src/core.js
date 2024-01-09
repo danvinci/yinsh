@@ -11,7 +11,7 @@ import { bind_adapt_canvas, reorder_rings, update_current_move, add_marker, upda
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
 import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
 import { preMove_score_op_check, get_preMove_score_op_data, select_apply_scenarioTree } from './data.js'
-import { delta_replay_check, get_delta, get_preMove_scoring_pick, set_preMove_scoring_pick, get_moves_tree } from './data.js'
+import { delta_replay_check, get_delta, wipe_delta, get_preMove_scoring_pick, set_preMove_scoring_pick, get_moves_tree } from './data.js'
 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
@@ -230,15 +230,13 @@ async function server_actions_handler (event) {
 
             // check if game is over or not -> act accordingly
 
-            // inform user that they should still move
-            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Make your move` }));
         };
 
         // pick correct scenario tree to move on
         select_apply_scenarioTree(_mk_sel_picked, _ring_picked);
 
-        // enable interaction (disabled by scoring_ring_handler)
-        // enableInteraction();
+        // inform user that they should still move
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Make your move` }));
 
 
     } else if (_next_action == CODE_action_wait) {
@@ -393,6 +391,8 @@ async function replay_opponent_turn(){
 
         // log replay done
         console.log(`LOG - Total replay time: ${_tot_time}ms`);
+
+        wipe_delta(); // clean up delta data to avoid weird replays at next turn, in case of last move - NOTE: should be prevented server-side
 
     } else {
         console.log(`LOG - No delta to replay`);

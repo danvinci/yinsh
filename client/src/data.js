@@ -274,7 +274,11 @@ export function get_delta(){
     return structuredClone(yinsh.next_server_data.delta);
 };
 
-
+// to avoid weird replays at end of the game
+// NOTE -> server should send empty delta, and we should save/overwrite every time after 1st turn
+export function wipe_delta(){
+    yinsh.next_server_data.delta = [];
+};
 
 // updates rings, markers, and scenario tree so to match data for next turn
 export function swap_data_next_turn() {
@@ -290,7 +294,6 @@ export function swap_data_next_turn() {
     console.log('LOG - Data ready for next turn');
 
 };
-
 
 // check if we have pre-move scoring opportunities
 // this function is called even when we might not have scenario data

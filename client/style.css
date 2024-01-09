@@ -71,7 +71,7 @@ body, html {
                     }
 
     div.app_root {
-        height: calc(100vh - 100px);
+        height: calc(90vh);
     }
 
         div.game_main {
