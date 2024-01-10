@@ -1286,7 +1286,10 @@ end
 _sc_ = Dict(:id => Dict(:player_id => "W", :player_score => 0), :move_action => Dict(:start => CartesianIndex(15, 3), :end => CartesianIndex(9, 3)))
 
 # ╔═╡ 12909b46-9f85-4c69-858a-7cd3ca8d9ee8
-_gs = gen_random_gameState("RW","RB",false, 51)
+_gs = gen_random_gameState("RW","RB",false, 60)
+
+# ╔═╡ e82b0769-ad51-48fd-968c-98d3a7400126
+vcat([[1,2,3],[4,45,6]]...)
 
 # ╔═╡ 9c5bf63e-8603-4a5d-8b8b-1f020c2586b1
 begin 
@@ -1298,6 +1301,15 @@ begin
 
 	t_rows_vec = [test_v1, test_v2, test_v3, test_v4, test_v5]
 end
+
+# ╔═╡ 94f8392c-db84-41ca-a097-a1e3f27ca809
+ccmap = countmap(vcat(t_rows_vec...))
+
+# ╔═╡ 274733a7-0502-450e-ad79-11824987b511
+freq, id = findmin(i -> ccmap[i], [CartesianIndex(16,2),CartesianIndex(14,2),CartesianIndex(10,2)])
+
+# ╔═╡ 749a641e-9e76-4d21-ace9-2e435a694c7e
+
 
 # ╔═╡ 411eb962-73f9-42cd-a177-f32c8ffb41ec
 function group_scoring_rows(rows::Vector{Vector{CartesianIndex}})
@@ -1338,61 +1350,20 @@ function group_scoring_rows(rows::Vector{Vector{CartesianIndex}})
 	
 end
 
-# ╔═╡ 8fcdef38-505e-4a12-b3cd-5036003b66fe
-function group_scoring_rows(rows::Set{Set{CartesianIndex}})
-# takes in input rows of locations (CI) and returns them split in groups [[][]]
-
-	f_grouped = Dict(r => false for r in rows) # keep track of which we group
-	grouped_rows::Set{Set{Set{CartesianIndex}}} = Set()
-
-	for r in rows
-
-		# skip if grouped
-		f_grouped[r] == true && @goto skip_row 
-
-		# start w/ an empty group
-		temp_group = Set(); 
-		push!(temp_group, r) 
-	
-		# check against all non-grouped following rows
-		not_grouped_rows = Set(r for (r,flag) in f_grouped if flag == false)
-		setdiff!(not_grouped_rows, r) # remove comparison this/comparison row
-		
-		for ngr in not_grouped_rows			
-			# group if they intersect
-			if !isdisjoint(r, ngr)
-				push!(temp_group, ngr)
-				f_grouped[ngr] = true
-			end
-
-		end
-
-		push!(grouped_rows, temp_group)
-		
-		@label skip_row
-	end
-
-	return grouped_rows
-	
-end
-
 # ╔═╡ 69b9885f-96bd-4f8d-9bde-9ac09521f435
 function _score_lookup(gs::Matrix{String})
 # look at the game state as it is to check if there are scoring opportunities
 
-	# all markers locations
-	all_mks::Vector = findall(s -> contains(s, "M"), gs)
-
 	# to be returned
-	_scores::Dict{Symbol, Vector{Vector{Dict}}} = Dict()
+	_scores::Dict{Symbol, Vector{Vector{Dict}}} = Dict(:W=>[],:B=>[])
 	# :B/:W -> container[ group[ score{} {}] [{} {}] ]
-	
-	num_scoring_rows::Dict{Symbol, Int} = Dict(:tot => 0, :B => 0, :W => 0) #del
-	scoring_details = [] # del
 
-	# helper array to store found locations for scoring markers
+	# helper array to store found locations for scoring rows
 	found_rows::Dict{Symbol, Vector{Vector{CartesianIndex}}} = Dict(:B=>[], :W=>[])
 
+	# all markers locations
+	all_mks::Vector = findall(s -> contains(s, "M"), gs)
+	
 	for mk_index in all_mks
 
 		# for each marker retrieve search space for scoring ops
@@ -1411,7 +1382,6 @@ function _score_lookup(gs::Matrix{String})
 			black_scoring::Bool = count(==("MB"), states_vec) == 5 ? true : false
 			white_scoring::Bool = count(==("MW"), states_vec) == 5 ? true : false
 
-
 			# if a score was made
 			if black_scoring || white_scoring
 				# log who's the scoring player
@@ -1426,22 +1396,7 @@ function _score_lookup(gs::Matrix{String})
 					# save it
 					push!(found_rows[player_key], locs_vec)
 
-					# save score_row details
-					score_row = Dict(:mk_locs => locs_vec, :player => player)
-			
-					push!(scoring_details, score_row)
-					
-					# keep count of scoring rows (total and per player)
-						num_scoring_rows[:tot] += 1	
-	
-						if black_scoring
-							num_scoring_rows[:B] += 1
-						elseif white_scoring
-							num_scoring_rows[:W] += 1
-						end
-				
-				end		
-				
+				end					
 			end	
 
 			@label skip_search_locs_vec
@@ -1449,67 +1404,47 @@ function _score_lookup(gs::Matrix{String})
 	end
 
 	
-	# identify double scoring for each player
-	setindex!(_scores, group_scoring_rows(found_rows[:W]), :W)
-	setindex!(_scores, group_scoring_rows(found_rows[:B]), :B)
-	
-	## handling case of multiple scoring rows in the same move + row selection
-	if num_scoring_rows[:tot] >= 1
-
-		# scoring rows: find markers outside intersection and use them for selection
-		# guaranteed to find at least 1 for each series (found_locs helps)
-
-		all_scoring_mk_ids = []
-		for row in scoring_details
-			append!(all_scoring_mk_ids, row[:mk_locs])
-		end
-
-		# frequency count of each marker location ID
-		mk_ids_fCount = countmap(all_scoring_mk_ids)
-
-		# keep track of sel markers already taken (by CartIndex)
-		mk_sel_taken = []
+	# identify mk_sel for row selection within same groups
+	mk_sel_taken::Vector{CartesianIndex}=[] # keep track of ones already taken
+	for player in keys(found_rows)
+		score_groups = group_scoring_rows(found_rows[player])
 		
-		for (row_id, row) in enumerate(scoring_details)
+		for group in score_groups
+			
+			group_info::Vector{Dict} = []
+			mk_group::Vector{CartesianIndex} = vcat(group...)
+			mk_freq::Dict{CartesianIndex,Int64} = countmap(mk_group)
+			
+			for row in group
 
-			# temp copy of locations, to avoid modifying the original array
-			temp_locs = copy(row[:mk_locs])
+				# exclude from row mks already taken
+				mk_sel_avail::Vector{CartesianIndex} = setdiff(row, mk_sel_taken)
 
-			# build search array of locations in row by exluding taken locations
-			if !isempty(mk_sel_taken)
+				# find marker with min frequency and save it
+				freq::Int64, id::Int64 = findmin(i -> mk_freq[i], mk_sel_avail)
+				mk_sel::CartesianIndex = mk_sel_avail[id]
+				push!(mk_sel_taken, mk_sel)
 
-				indexes_toRemove = findall(m -> m in mk_sel_taken, temp_locs)
-				if !isempty(indexes_toRemove)
+				# package score information
+				score_info::Dict{Symbol,Union{CartesianIndex, Vector{CartesianIndex}}} = Dict(:mk_sel => mk_sel, :mk_locs => row)
 
-					deleteat!(temp_locs, indexes_toRemove)
-				end
+				# save score
+				push!(group_info, score_info)
+
 			end
-				
-
-			# find marker with min frequency that hasn't been already taken
-			min_fr, min_fr_index = findmin(i -> mk_ids_fCount[i], temp_locs)
-			mk_sel = temp_locs[min_fr_index]
-				
-			# save mk_sel in row collection to be returned
-			setindex!(scoring_details[row_id], mk_sel, :mk_sel)
-
-			# store mk_sel in array (useful for solving conflicts later)
-			push!(mk_sel_taken, mk_sel)
+			
+			# save group of scores x player
+			push!(_scores[player], group_info)
 		end
 	end
 
-	return num_scoring_rows, scoring_details, found_rows, _temp
+
+	return _scores
 
 end
 
-# ╔═╡ 362fc06c-61aa-4a48-a18e-ff859478f893
-@report_opt _score_lookup(_gs)
-
 # ╔═╡ ce99c297-764a-4ead-972e-7bb48dc4887e
-# ╠═╡ disabled = true
-#=╠═╡
 @benchmark _score_lookup(_gs)
-  ╠═╡ =#
 
 # ╔═╡ 30af9114-2646-4940-95f7-817e3decdab4
 _score_lookup(_gs)
@@ -1940,14 +1875,14 @@ return scenario_tree
 
 end
 
-# ╔═╡ 4ee002d8-d30a-419c-ae11-5f289fef774f
-@report_opt static_score_lookup(_gs)
-
 # ╔═╡ 0d8f038f-e223-454d-89c6-13536cf35b02
 static_score_lookup(_gs)
 
 # ╔═╡ 5bb1b9c5-1291-450d-820f-9b75c732f2ec
+# ╠═╡ disabled = true
+#=╠═╡
 @benchmark static_score_lookup(_gs)
+  ╠═╡ =#
 
 # ╔═╡ a27e0adf-aa09-42ee-97f5-ede084a9edc3
 function sim_new_gameState(ex_game_state::Matrix, sc::Dict, fn_mode::Symbol)
@@ -3108,12 +3043,6 @@ function gen_new_clientPkg(game_id, moving_client_id)
 	
 	
 end
-
-# ╔═╡ a790c6e7-e606-4834-9243-f2bf80790548
-@report_opt sim_new_gameState(get_last_srv_gameState("4D7CBM"), _sc_,:move)
-
-# ╔═╡ 60aaf371-48f0-443b-80c2-4094efd486e4
-@report_opt static_score_lookup(get_last_srv_gameState("4D7CBM"))
 
 # ╔═╡ 4c0f16c4-31f7-4f94-b6c5-e3e928ce440e
 static_score_lookup(get_last_srv_gameState("4D7CBM",1))
@@ -5193,21 +5122,20 @@ version = "17.4.0+2"
 # ╠═40174fcb-3064-4f47-af01-9bb99944472f
 # ╠═be2a5e35-0040-49df-8fb7-64cb7df86fb8
 # ╠═12909b46-9f85-4c69-858a-7cd3ca8d9ee8
-# ╠═4ee002d8-d30a-419c-ae11-5f289fef774f
 # ╠═0d8f038f-e223-454d-89c6-13536cf35b02
 # ╠═210bf59a-06dc-4dd2-b4c4-c569658fcaff
-# ╠═a790c6e7-e606-4834-9243-f2bf80790548
-# ╠═60aaf371-48f0-443b-80c2-4094efd486e4
 # ╠═5bb1b9c5-1291-450d-820f-9b75c732f2ec
-# ╠═362fc06c-61aa-4a48-a18e-ff859478f893
 # ╠═ce99c297-764a-4ead-972e-7bb48dc4887e
 # ╠═30af9114-2646-4940-95f7-817e3decdab4
 # ╠═69b9885f-96bd-4f8d-9bde-9ac09521f435
+# ╠═e82b0769-ad51-48fd-968c-98d3a7400126
 # ╠═9c5bf63e-8603-4a5d-8b8b-1f020c2586b1
+# ╠═94f8392c-db84-41ca-a097-a1e3f27ca809
+# ╠═274733a7-0502-450e-ad79-11824987b511
+# ╠═749a641e-9e76-4d21-ace9-2e435a694c7e
 # ╠═c90139ab-ef6b-400d-a68d-c143cb6b120f
 # ╠═6197487e-e47b-4d05-a8cd-4c2ffda05318
 # ╠═411eb962-73f9-42cd-a177-f32c8ffb41ec
-# ╠═8fcdef38-505e-4a12-b3cd-5036003b66fe
 # ╠═4c0f16c4-31f7-4f94-b6c5-e3e928ce440e
 # ╠═8cc063c2-fbb7-4804-a29f-4a3294f5073b
 # ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
