@@ -273,8 +273,11 @@ async function server_actions_handler (event) {
                     ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You win! :)` }));
                 };
 
+                // reset UI
+                ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
+
                 // trigger winning animation 
-                await win_animation();
+                await win_animation(); 
 
             // opponent wins
             } else {
@@ -283,12 +286,12 @@ async function server_actions_handler (event) {
                 endGame_lose_playS();
 
                 ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You lose! :(` }));
+
+                // reset UI
+                ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
             };
 
-        // reset UI
-        ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
-
-        // NOTE -> force disconnect from server here, to prevent additional messages
+        // NOTE -> force disconnect from server here, to prevent additional messages -> idea: disconnect on END message?
         
         console.log("LOG - GAME COMPLETED");
 

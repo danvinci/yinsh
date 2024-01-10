@@ -19,6 +19,18 @@ using HTTP, JSON3
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
 
+# ╔═╡ 1df30830-1a44-49f5-bb9a-309a8e9f2274
+using JET
+
+# ╔═╡ 20bc797e-c99b-417d-8921-9b95c8e21679
+using BenchmarkTools
+
+# ╔═╡ cfc14bd5-8d00-4c71-a4df-5f62d63d2179
+using OwnTime
+
+# ╔═╡ 1ca0b7ea-1b46-462e-9f3d-99c037d74f00
+using Profile, ProfileSVG
+
 # ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
 # prod packages
 
@@ -279,15 +291,7 @@ mm_yinsh_01 = map(x -> if x == 1 0 elseif x == 2 1 elseif x==0 0 end, mm_yinsh)
 mm_states = fill("",19,11)
 
 # ╔═╡ 5fcd1944-57c8-4923-8f04-fc9ed24cd25c
-function bounds_check(row::Int, col::Int)
-	
-	if mm_yinsh_01[row, col] == 1
-		return true
-	else
-		return false
-	end
-	
-end
+bounds_check(row::Int, col::Int)::Bool = mm_yinsh_01[row, col] == 1
 
 # ╔═╡ b2387e60-5107-4f66-924f-ff56e6127037
 locz = findall(x -> x==1, mm_yinsh_01);
@@ -434,7 +438,9 @@ md"### Search spaces generation"
 
 # ╔═╡ 003f670b-d3b1-4905-b105-67504f16ba19
 # populate dictionary of locations search space 
-function populate_searchSpace!(store_dict::Dict)
+function new_searchSpace()::Dict{CartesianIndex, Array{Array{CartesianIndex}}}
+
+	_ret = Dict{CartesianIndex, Array{Array{CartesianIndex}}}()
 
 	# board bounds 
 	last_row = 19
@@ -520,19 +526,17 @@ function populate_searchSpace!(store_dict::Dict)
 
 		
 		## Write array of cartesian locations to dictionary
-		setindex!(store_dict, cartIndex_ranges, key)
+		setindex!(_ret, cartIndex_ranges, key)
 
 	end
+
+	return _ret
 
 end
 
 # ╔═╡ 1d811aa5-940b-4ddd-908d-e94fe3635a6a
 # pre-populate dictionary with search space for each starting location
-
-begin
-	locs_searchSpace = Dict{CartesianIndex, Any}()
-	populate_searchSpace!(locs_searchSpace)
-end
+const locs_searchSpace = new_searchSpace()
 
 # ╔═╡ f0e9e077-f435-4f4b-bd69-f495dfccec27
 function sub_spaces_split(input_array, key)
@@ -573,9 +577,135 @@ len_array = length(input_array)
 
 end
 
+# ╔═╡ a5dd9646-98fd-446f-a509-fb3957f91379
+# populate dictionary of locations search space for SCORING
+function new_searchSpace_scoring_set()::Dict{CartesianIndex, Set{Set{CartesianIndex}}}
+
+	_ret::Dict{CartesianIndex, Set{Set{CartesianIndex}}} = Dict()
+
+# first part of the function could be shared with other and bifurcated instead of duplicated
+
+	# board bounds 
+	last_row = 19
+	last_col = 11
+
+	# keys mapping to valid board locations
+	keys_loc = findall(x -> x==1, mm_yinsh_01)
+	
+	for key in keys_loc
+
+		## Generate zip ranges for each direction
+		# get row/col from each cart_index location
+		row_start = key[1]
+		col_start = key[2]
+	
+		# Init array for zip ranges
+		zip_ranges = []
+
+		## Vertical line
+	
+			## vertical line
+		
+			# straight up to first row, k stays the same (j-2, k = k)
+			j_range = row_start-2:-2:1
+			k_range = [col_start for _ in j_range]
+		
+				temp = [z for z in zip(j_range, k_range)]
+		
+			# straight down to last row, k stays the same (j+2, k = k)
+			j_range = row_start+2:2:last_row
+			k_range = [col_start for _ in j_range]
+
+				# unite ranges
+				append!(temp, [z for z in zip(j_range, k_range)])
+
+				push!(zip_ranges, temp)
+
+		## diagonal left to right up
+
+			# diagonal down left (j+1, k-1)
+			j_range = row_start+1:last_row
+			k_range = col_start-1:-1:1
+		
+				temp = [z for z in zip(j_range, k_range)]
+			
+			# diagonal up right (j-1, k+1)
+			j_range = row_start-1:-1:1
+			k_range = col_start+1:last_col
+
+				# must leverage zipping to ensure ranges are correct
+				# especially true on diagonals are starts/ends for row/col mismatch
+				append!(temp, [z for z in zip(j_range, k_range)])
+		
+				push!(zip_ranges, temp)
+
+
+		## diagonal left to right down
+
+			# diagonal up left (j-1, k-1)
+			j_range = row_start-1:-1:1
+			k_range = col_start-1:-1:1
+		
+				temp = [z for z in zip(j_range, k_range)]
+			
+			# diagonal down right (j+1, k+1)
+			j_range = row_start+1:last_row
+			k_range = col_start+1:last_col
+		
+	
+				append!(temp, [z for z in zip(j_range, k_range)])
+
+				push!(zip_ranges, temp)
+
+		
+		## Convert locations to cart_index
+		# Init array for zip ranges
+		cartIndex_ranges = Set()
+
+		for range in zip_ranges
+
+			# if not included, add starting location range
+			# the check shouldn't be needed but good practice
+			if !((row_start, col_start) in range)
+				append!(range, [(row_start, col_start)])
+			end
+
+			# sorted direction array (vertical, diag up, diag down) with cart indexes
+			ci_range = sort([CartesianIndex(z[1], z[2]) for z in range])
+
+			# keep only valid locations
+			filter!(c -> c in keys_loc, ci_range)
+			
+			## split in subarrays of len=5 that contain the starting location
+			sub_arrays = sub_spaces_split(ci_range, key)
+
+			# save results of splitting
+			for sub in sub_arrays
+				push!(cartIndex_ranges, Set(sub))
+			end
+
+			
+		end
+
+		
+		## Write array of cartesian locations to dictionary
+		setindex!(_ret, cartIndex_ranges, key)
+
+	end
+
+	return _ret
+
+end
+
+# ╔═╡ 51f73d54-9cfd-471b-b30e-8ffde44750ef
+# pre-populate dictionary with search space (scoring)
+const locs_searchSpace_scoring_set = new_searchSpace_scoring_set()
+
 # ╔═╡ a96a9a78-0aeb-4b00-8f3c-db61839deb5c
 # populate dictionary of locations search space for SCORING
-function populate_searchSpace_scoring!(store_dict::Dict)
+function new_searchSpace_scoring()::Dict{CartesianIndex, Array{Array{CartesianIndex}}}
+
+	_ret = Dict{CartesianIndex, Array{Array{CartesianIndex}}}()
 
 # first part of the function could be shared with other and bifurcated instead of duplicated
 
@@ -683,19 +813,17 @@ function populate_searchSpace_scoring!(store_dict::Dict)
 
 		
 		## Write array of cartesian locations to dictionary
-		setindex!(store_dict, cartIndex_ranges, key)
+		setindex!(_ret, cartIndex_ranges, key)
 
 	end
+
+	return _ret
 
 end
 
 # ╔═╡ 2cee3e2b-5061-40f4-a205-94d80cfdc20b
 # pre-populate dictionary with search space (scoring)
-
-begin
-	locs_searchSpace_scoring = Dict{CartesianIndex, Any}()
-	populate_searchSpace_scoring!(locs_searchSpace_scoring)
-end
+const locs_searchSpace_scoring = new_searchSpace_scoring()
 
 # ╔═╡ 9700ea30-a99c-4832-a181-7ef23c86030a
 function _pick_rand_locsRow()
@@ -810,146 +938,6 @@ function markers_toFlip_search(state, input_array)
 
 	# returns true/false if markers flip and their locations 
 	return flip_flag, loc_array
-
-end
-
-# ╔═╡ 53dec9b0-dac1-47a6-b242-9696ff45b91b
-function score_lookup(state, mks_toFlip_ids)
-	# look at the game state to check if a score was made
-	# passing markers about to flip as their state hasn't changed yet
-
-	# all markers locations
-	gs_markers_locs = findall(i -> contains(i, "M"), state)
-	
-	# as the markers haven't been flipped (yet) we must anticipate it
-	## build object to reference when it comes to about-to-be mk states
-	anticipated_states = Dict()
-
-		# for each marker to be flipped, swapped its current state
-		# assumed that state will only return MW or MB - i.e. a marker is there
-		for mk_index in mks_toFlip_ids
-	
-			ant_mk_state = (state[mk_index] == "MW") ? "MB" : "MW"
-	
-			setindex!(anticipated_states, ant_mk_state, mk_index)
-			
-		end
-
-	# values to be returned
-	num_scoring_rows = Dict(:tot => 0, :B => 0, :W => 0)
-	scoring_details = []
-
-	# helper array to store found locations for scoring markers
-	found_ss_locs = []
-
-	for mk_index in gs_markers_locs
-
-		# for each marker retrieve search space for scoring
-		ss_locs_arrays = locs_searchSpace_scoring[mk_index]
-
-		for ss_locs in ss_locs_arrays
-				
-			# reading states for all indexes in loc search array
-			# if the index is of a flipped array, read from anticipated states
-			# otherwise read from the existing state
-
-			states_array = []
-			for index in ss_locs
-				
-				if index in mks_toFlip_ids
-					push!(states_array, anticipated_states[index])
-				else
-					push!(states_array, state[index])
-				end
-					
-			end
-	
-			# search if a score was made in loc
-			MB_count = count(s -> isequal(s, "MB"), states_array)
-				black_scoring = MB_count == 5 ? true : false
-			
-			MW_count = count(s -> isequal(s, "MW"), states_array)
-				white_scoring = MW_count == 5 ? true : false
-
-			# if a score was made
-			if black_scoring || white_scoring
-				# log who's the player
-				scoring_player = black_scoring ? "B" : "W"
-
-				# save the row but check that scoring row wasn't saved already
-				# scoring locs are the same for each marker in it due to sorting
-				# if not found already, save it
-				if !(ss_locs in found_ss_locs)
-
-					# save score_row details
-					score_row = Dict(:mk_locs => ss_locs, :player => scoring_player)
-			
-					push!(scoring_details, score_row)
-					
-					# keep count of scoring rows (total and per player)
-					num_scoring_rows[:tot] += 1	
-					
-						if black_scoring
-							num_scoring_rows[:B] += 1
-						elseif white_scoring
-							num_scoring_rows[:W] += 1
-						end
-
-					# save array of locations to simplify future checks
-					push!(found_ss_locs, ss_locs)
-				
-				end		
-				
-			end	
-		end
-	end
-
-	## handling case of multiple scoring rows in the same move + row selection
-	if num_scoring_rows[:tot] >= 1
-
-		# scoring rows: find markers outside intersection and use them for selection
-		# guaranteed to find at least 1 for each series (found_locs helps)
-
-		all_scoring_mk_ids = []
-		for row in scoring_details
-			append!(all_scoring_mk_ids, row[:mk_locs])
-		end
-
-		# frequency count of each marker location ID
-		mk_ids_fCount = countmap(all_scoring_mk_ids)
-
-		# keep track of sel markers already taken (by CartIndex)
-		mk_sel_taken = []
-		
-		for (row_id, row) in enumerate(scoring_details)
-
-			# temp copy of locations, to avoid modifying the original array
-			temp_locs = copy(row[:mk_locs])
-
-			# build search array of locations in row by exluding taken locations
-			if !isempty(mk_sel_taken)
-
-				indexes_toRemove = findall(m -> m in mk_sel_taken, temp_locs)
-				if !isempty(indexes_toRemove)
-
-					deleteat!(temp_locs, indexes_toRemove)
-				end
-			end
-				
-
-			# find marker with min frequency that hasn't been already taken
-			min_fr, min_fr_index = findmin(i -> mk_ids_fCount[i], temp_locs)
-			mk_sel = temp_locs[min_fr_index]
-				
-			# save mk_sel in row collection to be returned
-			setindex!(scoring_details[row_id], mk_sel, :mk_sel)
-
-			# store mk_sel in array (useful for solving conflicts later)
-			push!(mk_sel_taken, mk_sel)
-		end
-	end
-
-	return num_scoring_rows, scoring_details
 
 end
 
@@ -1191,76 +1179,8 @@ return reshape_out(search_return) # convert to linear indexes
 
 end
 
-# ╔═╡ 8f2e4816-b60d-40eb-a9d8-acf4240c646a
-function markers_actions(client_state, client_start_index, client_end_index)
-
-	# it's useful that state is queried only once and then passed as an argument downstream (if/when the state will be stored somewhere all could be passed could be a game ID that points to an object that's updated by a separate function)
-	# to measure changes in latency under load
-
-	## HANDLE INPUT FROM CLIENT
-	# the client state must be reshaped
-	ref_state = reshape([s for s in client_state], 19, 11)
-
-	# the client start index needs to be converted to CI (row, col)
-	start_index = reshape_in(client_start_index)
-	end_index = reshape_in(client_end_index)
-	
-	## DOES STUFF
-	# checks that end both start and end are valid -> otherwise return no markers
-	valid_locs = keys(locs_searchSpace)
-	if (!(start_index in valid_locs) || !(end_index in valid_locs))
-		return [] 
-	end
-
-	# case of ring picked up and dropped in same location
-	if start_index == end_index 
-		return [] 
-	end
-
-	# retrieve search space for the starting point
-	search_space = locs_searchSpace[start_index]
-
-
-	direction = 0
-
-	# spot direction/array that contains the ring 
-	for (i, range) in enumerate(search_space)
-
-		# check if search_temp contains end_index
-		if (end_index in range)
-			 direction = i
-			break
-		end
-	end
-
-	# return flag + markers to flip in direction of movement
-	flip_flag, markers_toFlip = markers_toFlip_search(ref_state, search_space[direction])
-
-	# pass markers about to flip for checking score
-	num_sc_rows, sc_details = score_lookup(ref_state, markers_toFlip)
-
-	# reshape indexes for scoring rows and mk_sel (if any) before returning
-	if num_sc_rows[:tot] > 0
-		for (row_id, row) in enumerate(sc_details)
-			sc_details[row_id][:mk_locs] = reshape_out(row[:mk_locs])
-			sc_details[row_id][:mk_sel] = reshape_out(row[:mk_sel])
-		end
-	end
-
-	# reshaping index of results -> doing this after array has been used as input
-	markers_toFlip = reshape_out(markers_toFlip)
-
-	
-	return Dict("flip_flag" => flip_flag, 
-				"markers_toFlip" => markers_toFlip,
-				"num_scoring_rows" => num_sc_rows,
-				"scoring_details" => sc_details)
-
-
-end
-
 # ╔═╡ c334b67e-594f-49fc-8c11-be4ea11c33b5
-function gen_random_gameState(white_ring, black_ring, _near_score_mks = false)
+function gen_random_gameState(white_ring, black_ring, _near_score_mks = false, mks=0)
 # generate a new random game state (server format)
 
 	## pick 10 random starting valid locations (without replacement)
@@ -1307,6 +1227,17 @@ function gen_random_gameState(white_ring, black_ring, _near_score_mks = false)
 		end
 
 	end
+
+
+	if mks != 0
+
+		_pool = setdiff(locz, sampled_locs) |> l -> sample(l, mks, replace = false)
+
+		for loc in _pool
+			server_game_state[loc] = "M"*rand(["W", "B"])
+		end
+
+	end
 	
 
 	return server_game_state
@@ -1350,6 +1281,247 @@ function save_new_clientPkg!(games_log_ref, game_id, _client_pkg)
 
 	
 end
+
+# ╔═╡ be2a5e35-0040-49df-8fb7-64cb7df86fb8
+_sc_ = Dict(:id => Dict(:player_id => "W", :player_score => 0), :move_action => Dict(:start => CartesianIndex(15, 3), :end => CartesianIndex(9, 3)))
+
+# ╔═╡ 12909b46-9f85-4c69-858a-7cd3ca8d9ee8
+_gs = gen_random_gameState("RW","RB",false, 51)
+
+# ╔═╡ 9c5bf63e-8603-4a5d-8b8b-1f020c2586b1
+begin 
+	test_v1 = rand(locs_searchSpace_scoring).second[1]
+	test_v2 = rand(locs_searchSpace_scoring).second[1]
+	test_v3 = rand(locs_searchSpace_scoring).second[1]
+	test_v4 = rand(locs_searchSpace_scoring).second[1]
+	test_v5 = rand(locs_searchSpace_scoring).second[1]
+
+	t_rows_vec = [test_v1, test_v2, test_v3, test_v4, test_v5]
+end
+
+# ╔═╡ 411eb962-73f9-42cd-a177-f32c8ffb41ec
+function group_scoring_rows(rows::Vector{Vector{CartesianIndex}})
+# takes in input rows of locations (CI) and returns them split in groups [[][]]
+
+	len_range::UnitRange{Int64} = 1:length(rows)
+	f_grouped::Vector{Bool} = [false for i in len_range] # keep track 
+	grouped_rows::Vector{Vector{Vector{CartesianIndex}}} = []
+
+	for r_i in len_range
+
+		# skip if grouped
+		f_grouped[r_i] == true && @goto skip_row 
+
+		# start w/ its own lonely group
+		temp_group::Vector{Vector{CartesianIndex}} = []; 
+		push!(temp_group, rows[r_i]) 
+	
+		# check against all non-grouped following rows
+		not_grouped_rows_ids = findall(==(false), f_grouped)
+		for ngr_i in not_grouped_rows_ids
+			# only check following rows
+			if ngr_i > r_i
+				# group if they intersect
+				if !isdisjoint(rows[r_i], rows[ngr_i])
+					push!(temp_group, rows[ngr_i]) # save row in same group
+					f_grouped[ngr_i] = true # flag it as found
+				end
+			end
+		end
+
+		push!(grouped_rows, temp_group)
+		
+		@label skip_row
+	end
+
+	return grouped_rows
+	
+end
+
+# ╔═╡ 8fcdef38-505e-4a12-b3cd-5036003b66fe
+function group_scoring_rows(rows::Set{Set{CartesianIndex}})
+# takes in input rows of locations (CI) and returns them split in groups [[][]]
+
+	f_grouped = Dict(r => false for r in rows) # keep track of which we group
+	grouped_rows::Set{Set{Set{CartesianIndex}}} = Set()
+
+	for r in rows
+
+		# skip if grouped
+		f_grouped[r] == true && @goto skip_row 
+
+		# start w/ an empty group
+		temp_group = Set(); 
+		push!(temp_group, r) 
+	
+		# check against all non-grouped following rows
+		not_grouped_rows = Set(r for (r,flag) in f_grouped if flag == false)
+		setdiff!(not_grouped_rows, r) # remove comparison this/comparison row
+		
+		for ngr in not_grouped_rows			
+			# group if they intersect
+			if !isdisjoint(r, ngr)
+				push!(temp_group, ngr)
+				f_grouped[ngr] = true
+			end
+
+		end
+
+		push!(grouped_rows, temp_group)
+		
+		@label skip_row
+	end
+
+	return grouped_rows
+	
+end
+
+# ╔═╡ 69b9885f-96bd-4f8d-9bde-9ac09521f435
+function _score_lookup(gs::Matrix{String})
+# look at the game state as it is to check if there are scoring opportunities
+
+	# all markers locations
+	all_mks::Vector = findall(s -> contains(s, "M"), gs)
+
+	# to be returned
+	_scores::Dict{Symbol, Vector{Vector{Dict}}} = Dict()
+	# :B/:W -> container[ group[ score{} {}] [{} {}] ]
+	
+	num_scoring_rows::Dict{Symbol, Int} = Dict(:tot => 0, :B => 0, :W => 0) #del
+	scoring_details = [] # del
+
+	# helper array to store found locations for scoring markers
+	found_rows::Dict{Symbol, Vector{Vector{CartesianIndex}}} = Dict(:B=>[], :W=>[])
+
+	for mk_index in all_mks
+
+		# for each marker retrieve search space for scoring ops
+		mk_search_locs::Vector{Vector{CartesianIndex}} = locs_searchSpace_scoring[mk_index]
+
+		for locs_vec in mk_search_locs
+
+			# reading states for all locs in search array
+			states_vec::Vector{String} = []
+			for loc in locs_vec
+				@inbounds _s::String = gs[loc]
+				isempty(_s) ? (@goto skip_search_locs_vec) : push!(states_vec, _s)
+			end
+	
+			# search if a score was made within this search array
+			black_scoring::Bool = count(==("MB"), states_vec) == 5 ? true : false
+			white_scoring::Bool = count(==("MW"), states_vec) == 5 ? true : false
+
+
+			# if a score was made
+			if black_scoring || white_scoring
+				# log who's the scoring player
+				player::String = black_scoring ? "B" : "W"
+				player_key = Symbol(player) 
+
+				# save the row but check that scoring row wasn't saved already
+				# scoring locs are the same for each marker in it 
+				# -> if not found already, save it
+				if !(locs_vec in found_rows[player_key])
+
+					# save it
+					push!(found_rows[player_key], locs_vec)
+
+					# save score_row details
+					score_row = Dict(:mk_locs => locs_vec, :player => player)
+			
+					push!(scoring_details, score_row)
+					
+					# keep count of scoring rows (total and per player)
+						num_scoring_rows[:tot] += 1	
+	
+						if black_scoring
+							num_scoring_rows[:B] += 1
+						elseif white_scoring
+							num_scoring_rows[:W] += 1
+						end
+				
+				end		
+				
+			end	
+
+			@label skip_search_locs_vec
+		end
+	end
+
+	
+	# identify double scoring for each player
+	setindex!(_scores, group_scoring_rows(found_rows[:W]), :W)
+	setindex!(_scores, group_scoring_rows(found_rows[:B]), :B)
+	
+	## handling case of multiple scoring rows in the same move + row selection
+	if num_scoring_rows[:tot] >= 1
+
+		# scoring rows: find markers outside intersection and use them for selection
+		# guaranteed to find at least 1 for each series (found_locs helps)
+
+		all_scoring_mk_ids = []
+		for row in scoring_details
+			append!(all_scoring_mk_ids, row[:mk_locs])
+		end
+
+		# frequency count of each marker location ID
+		mk_ids_fCount = countmap(all_scoring_mk_ids)
+
+		# keep track of sel markers already taken (by CartIndex)
+		mk_sel_taken = []
+		
+		for (row_id, row) in enumerate(scoring_details)
+
+			# temp copy of locations, to avoid modifying the original array
+			temp_locs = copy(row[:mk_locs])
+
+			# build search array of locations in row by exluding taken locations
+			if !isempty(mk_sel_taken)
+
+				indexes_toRemove = findall(m -> m in mk_sel_taken, temp_locs)
+				if !isempty(indexes_toRemove)
+
+					deleteat!(temp_locs, indexes_toRemove)
+				end
+			end
+				
+
+			# find marker with min frequency that hasn't been already taken
+			min_fr, min_fr_index = findmin(i -> mk_ids_fCount[i], temp_locs)
+			mk_sel = temp_locs[min_fr_index]
+				
+			# save mk_sel in row collection to be returned
+			setindex!(scoring_details[row_id], mk_sel, :mk_sel)
+
+			# store mk_sel in array (useful for solving conflicts later)
+			push!(mk_sel_taken, mk_sel)
+		end
+	end
+
+	return num_scoring_rows, scoring_details, found_rows, _temp
+
+end
+
+# ╔═╡ 362fc06c-61aa-4a48-a18e-ff859478f893
+@report_opt _score_lookup(_gs)
+
+# ╔═╡ ce99c297-764a-4ead-972e-7bb48dc4887e
+# ╠═╡ disabled = true
+#=╠═╡
+@benchmark _score_lookup(_gs)
+  ╠═╡ =#
+
+# ╔═╡ 30af9114-2646-4940-95f7-817e3decdab4
+_score_lookup(_gs)
+
+# ╔═╡ c90139ab-ef6b-400d-a68d-c143cb6b120f
+group_scoring_rows(t_rows_vec)
+
+# ╔═╡ 6197487e-e47b-4d05-a8cd-4c2ffda05318
+@benchmark group_scoring_rows(t_rows_vec)
+
+# ╔═╡ 8cc063c2-fbb7-4804-a29f-4a3294f5073b
+#@benchmark sim_scenarioTree(games_log_dict["4D7CBM"][:server_states][end], "W",0)
 
 # ╔═╡ 18f8a5d6-c775-44a3-9490-cd11352c4a63
 function set_nested!(dict::Dict, val, first_key, second_key)
@@ -1768,8 +1940,17 @@ return scenario_tree
 
 end
 
+# ╔═╡ 4ee002d8-d30a-419c-ae11-5f289fef774f
+@report_opt static_score_lookup(_gs)
+
+# ╔═╡ 0d8f038f-e223-454d-89c6-13536cf35b02
+static_score_lookup(_gs)
+
+# ╔═╡ 5bb1b9c5-1291-450d-820f-9b75c732f2ec
+@benchmark static_score_lookup(_gs)
+
 # ╔═╡ a27e0adf-aa09-42ee-97f5-ede084a9edc3
-function sim_new_gameState(ex_game_state::Matrix, sc::Dict, fn_mode::Symbol)::Dict
+function sim_new_gameState(ex_game_state::Matrix, sc::Dict, fn_mode::Symbol)
 	
 #=
 This function has three modes of use:
@@ -1820,16 +2001,16 @@ Making sense of move/flip data depends on the mode the function was called in.
 	_f_score_action = haskey(sc, :score_action)
 
 	# extract player_id (B/W)
-	_player_id = sc[:id][:player_id]
-	_opp_id = _player_id == "W" ? "B" : "W"
+	_player_id::String = sc[:id][:player_id]
+	_opp_id::String = _player_id == "W" ? "B" : "W"
 
 	# baseline game state that we'll modify and return later
 	new_gs = copy(ex_game_state)
-	new_player_score = sc[:id][:player_score]
-	# new_opp_score = sc[:id][:opp_score] # it won't be touched
+	new_player_score::Int = sc[:id][:player_score]
+	#new_opp_score::Int = sc[:id][:opp_score] # returned as-is, we can't pick opp ring
 
 	# dict to return w/ game state delta - used for replay or add leaves to the tree
-	_return = Dict()
+	_return = Dict{Symbol, Union{Dict, Array, Matrix, Int, Symbol}}()
 
 	#= OUTPUT structure - fields are added only if valued
 	
@@ -1841,10 +2022,9 @@ Making sense of move/flip data depends on the mode the function was called in.
 		:score_avail_player => Dict[] # (mk_locs, mk_sel, player)
 
 		:new_game_state => Matrix
-		:mode => sames as how this fn was called
+		:mode => Symbol (sames as how this fn was called)
 		:new_player_score => Int
-		
-		(not added for now -> :new_opp_score) opponent's score
+		:new_opp_score => Int
 
 	=#
 	
@@ -1994,7 +2174,7 @@ function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::
 # takes as input an ex game state (server format) and info of next moving player
 # computes results for all possible moves of next moving player
 
-	scenario_tree = Dict() # to be returned
+	scenario_tree = Dict{Symbol, Union{Dict, Array}}() # to be returned
 
 	#= SCENARIO TREE structure
 	
@@ -2007,18 +2187,19 @@ function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::
 	
 
 	# identify any pre-move score to be acted on - ie. left by previous player
-	_pms_id = Dict(:id => Dict( :player_id => nx_player_id, 
+	_pms_id::Dict{Symbol, Union{Dict, Int}} = Dict(
+								:id => Dict( :player_id => nx_player_id, 
 								:player_score => nx_player_score))
 	
 	_inspect_res = sim_new_gameState(ex_gs, _pms_id, :inspect)
-	flag_pms = haskey(_inspect_res, :score_avail_player)
+	flag_pms::Bool = haskey(_inspect_res, :score_avail_player)
 
 	# act on score opportunity if present
-	_g_trees_array = []
+	_g_trees_array::Array{Dict} = []
 	if flag_pms
 
 		# there could be multiple choices for opp_score -> array of new game states
-		_pms_choices = _inspect_res[:score_avail_player]
+		_pms_choices::Array{Dict} = _inspect_res[:score_avail_player]
 
 		# save choices in tree to be returned
 		setindex!(scenario_tree, _pms_choices, :score_preMove_avail)
@@ -2097,7 +2278,6 @@ function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::
 
 		# for each start
 		for move_start in rings # keys of the nx_legal_moves dict anyway
-
 			# for each move end
 			for move_end in nx_legal_moves[move_start]
 				if move_start != move_end # -> ring not dropped in-place
@@ -2166,8 +2346,8 @@ function gen_newGame(vs_ai=false)
 	next_movingPlayer = white_id 
 
 	# generate random initial game state (server format)
-	# TEMP GENERATING STATES w/ 4MKS in a row for random player
-	_game_state = gen_random_gameState(white_ring, black_ring, true)
+	# true param => GENERATING STATES w/ 4MKS in a row for a randomly picked player
+	_game_state = gen_random_gameState(white_ring, black_ring)
 
 	# RINGS
 		# retrieves location ids in client format 
@@ -2256,6 +2436,9 @@ function gen_newGame(vs_ai=false)
 	
 end
 
+# ╔═╡ 40174fcb-3064-4f47-af01-9bb99944472f
+@report_opt sim_scenarioTree(games_log_dict["4D7CBM"][:server_states][end], "W",0)
+
 # ╔═╡ cf587261-6193-4e7a-a3e8-e24ba27929c7
 function getLast_clientPkg(game_id)
 # looks in the games log and retrieves last client package
@@ -2293,27 +2476,41 @@ function getLast_clientDelta(game_id)
 end
 
 # ╔═╡ f86b195e-06a9-493d-8536-16bdcaadd60e
-function print_gameState(server_game_state)
-	# print matrix easy copying in js code
-	mm_to_print = ""
+function print_gameState(gs, symbols = false)	
+# print matrix easy copying in js code
+# https://commons.m.wikimedia.org/wiki/Unicode_circle_shaped_symbols
+# https://unicodeplus.com/U+20DD
+
+	#〚 〛 〖 〗 〘 〙 ⃝  ⃟  ⃞ 
+ 	sym_map = Dict("MW" => "⏺", "MB" => "⚬", "RB" => " ⃟ ", "RW" => " ⃝ ") 
+	empty_sym = "   "
+	empty_txt = "    "
 	
+	mm_to_print = ""
+
 	for i in 1:row_m
 		for j in 1:col_m
 
-			if server_game_state[i,j] == ""
-				print_val = "  "
+			# prep values
+			if gs[i,j] == ""
+				print_val = symbols ? empty_sym : empty_txt
 			else
-				print_val = server_game_state[i,j]
+
+				_val = symbols ? sym_map[gs[i,j]] : gs[i,j]
+				
+				print_val = symbols && contains(gs[i,j], "R") ? _val : " "*_val*" "
+				
 			end
-			
+
+			# build matrix
 			if j == 1 
-				mm_to_print *= "[" * string(print_val) * ", "
+				mm_to_print *= "[" * string(print_val) * ""
 			
 			elseif j == col_m 
 				mm_to_print *= string(print_val) * "] \n"
 				
 			else
-				mm_to_print *= string(print_val) * ", "
+				mm_to_print *= string(print_val) * ""
 			end
 		end
 	end
@@ -2321,6 +2518,9 @@ function print_gameState(server_game_state)
 print(mm_to_print)
 
 end
+
+# ╔═╡ 210bf59a-06dc-4dd2-b4c4-c569658fcaff
+print_gameState(_gs, true)
 
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
@@ -2837,7 +3037,11 @@ end
 swap_player_id(player_id) = ( player_id == "W") ? "B" : "W"
 
 # ╔═╡ f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
-get_last_srv_gameState(game_id) = games_log_dict[game_id][:server_states][end]
+function get_last_srv_gameState(game_id::String, param::Int = 0)::Matrix
+
+	return games_log_dict[game_id][:server_states][end-param]
+
+end
 
 # ╔═╡ e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 function gen_new_clientPkg(game_id, moving_client_id)
@@ -2904,6 +3108,15 @@ function gen_new_clientPkg(game_id, moving_client_id)
 	
 	
 end
+
+# ╔═╡ a790c6e7-e606-4834-9243-f2bf80790548
+@report_opt sim_new_gameState(get_last_srv_gameState("4D7CBM"), _sc_,:move)
+
+# ╔═╡ 60aaf371-48f0-443b-80c2-4094efd486e4
+@report_opt static_score_lookup(get_last_srv_gameState("4D7CBM"))
+
+# ╔═╡ 4c0f16c4-31f7-4f94-b6c5-e3e928ce440e
+static_score_lookup(get_last_srv_gameState("4D7CBM",1))
 
 # ╔═╡ f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = false)
@@ -3107,8 +3320,54 @@ function get_last_turn_details(game_code::String)
 
 end
 
-# ╔═╡ ae781274-0bb2-47a3-9184-4bc070a886e7
-games_log_dict["S4YTFY"]
+# ╔═╡ 3bb8e65d-3900-4948-9f7a-06b5d1c292dc
+# ╠═╡ disabled = true
+#=╠═╡
+@benchmark play_turn_server("4D7CBM", "W", 0)
+  ╠═╡ =#
+
+# ╔═╡ 96951a3b-562f-4790-9ea9-162c15953984
+# ╠═╡ disabled = true
+#=╠═╡
+@benchmark sim_scenarioTree(get_last_srv_gameState("4D7CBM",0), "W",0)
+  ╠═╡ =#
+
+# ╔═╡ fd39104f-3fd3-43ff-8c19-67013fb46019
+_ss = sim_scenarioTree(get_last_srv_gameState("4D7CBM",0), "W",0)
+
+# ╔═╡ 65513891-c2f7-4b9f-912a-215030ef56b8
+# ╠═╡ disabled = true
+#=╠═╡
+@benchmark inspect_trees_sums(_ss[:move_trees])
+  ╠═╡ =#
+
+# ╔═╡ 8e1673fe-5286-43cd-8830-fba353f1cd89
+function prune_tree_fn(d::Dict{CartesianIndex, Dict}, sc::Dict)::Dict{CartesianIndex, Dict}
+# deletes the nested level in a dictionary sc(A -> B)
+# deletes also the parent A if B was the only item
+# returns a modified copy of the original collection
+
+	_ret = deepcopy(d)
+
+	_a_kp = sc[:start]
+	_b_kp = sc[:end]
+
+	for (ak, av) in d
+		for (bk, bv) in d[ak]
+			
+			if ak == _a_kp && bk == _b_kp # delete nested key
+				delete!(_ret[ak], bk)
+				
+				if isempty(_ret[ak]) # delete parent if empty
+					delete!(_ret, ak)
+				end
+			end
+
+		end
+	end
+
+	return _ret
+end
 
 # ╔═╡ ea7779ea-cd11-4f9e-8022-ff4f370ffddd
 function inspect_trees_sums(treepots::Array)::Dict{Symbol, Bool}
@@ -3117,10 +3376,6 @@ function inspect_trees_sums(treepots::Array)::Dict{Symbol, Bool}
 # note: input tree is simulated from the point of view of the 'player'
 
 # data: sim -> treepots/[:move_trees] -> :tree_summary -> [score_sc opp/player]
-
-
-	_player_score_possible = false
-	_opp_score_possible = false
 
 f_opp = findfirst(tp -> !isempty(tp[:tree_summary][:score_opp_sc]), treepots)
 f_player = findfirst(tp -> !isempty(tp[:tree_summary][:score_player_sc]), treepots)
@@ -3132,9 +3387,6 @@ f_player = findfirst(tp -> !isempty(tp[:tree_summary][:score_player_sc]), treepo
 				:player_score_possible => PLAYER_score_possible)
 
 end
-
-# ╔═╡ c3590e03-e319-4642-911b-9e036a3d82b8
-
 
 # ╔═╡ 3d09a15d-685b-4d9b-a47f-95067441928d
 function get_new_gs(tree::Dict, move_sc::Dict)::Matrix
@@ -3161,9 +3413,11 @@ end
 end
 
 # ╔═╡ fdb40907-1047-41e5-9d39-3f94b06b91c0
-function play_turn_server(game_code::String, srv_player_id::String)::Dict
+function play_turn_server(game_code::String, srv_player_id::String, prev::Int = 0)::Dict
 # assumes turns and game state are updated
 # input srv_player_id should be of the server/AI
+
+	_time_start = now()
 
 	# returning value
 	_turn_recap = Dict()
@@ -3179,7 +3433,7 @@ function play_turn_server(game_code::String, srv_player_id::String)::Dict
 =#
 
 	# last game state in srv format
-	ex_gs = get_last_srv_gameState(game_code)
+	ex_gs = get_last_srv_gameState(game_code, prev)
 
 	
 	# scenarios
@@ -3230,7 +3484,7 @@ function play_turn_server(game_code::String, srv_player_id::String)::Dict
 										:mk_locs => pick[:mk_locs],
 										:ring_score => ring_score)
 
-		setindex!(_turn_recap, _preMove_pick, :score_action_preMove)
+		setindex!(_turn_recap, _preMove_score_action, :score_action_preMove)
 
 		# increase score
 		_last_srv_score += 1
@@ -3244,6 +3498,7 @@ function play_turn_server(game_code::String, srv_player_id::String)::Dict
 
 	=#
 
+	__pick_txt = ""
 	
 	# pick starting game state and moves tree
 	treepot_id = 1 # default/only tree
@@ -3274,7 +3529,7 @@ function play_turn_server(game_code::String, srv_player_id::String)::Dict
 	# criterias for score pick
 	if !isempty(score_player_sc) && isempty(valid_scoring_sc)
 		# some options, but none valid -> pick one only if winning move
-		if _last_srv_score == 2 # to be made configurable, for quick option mode
+		if _last_srv_score == 2 # to be made configurable, for quick opt & 2x scores
 			_move_action = rand(score_player_sc)
 		end
 	elseif !isempty(valid_scoring_sc)
@@ -3290,23 +3545,137 @@ function play_turn_server(game_code::String, srv_player_id::String)::Dict
 			_start = _move_action[:start]
 			_end = _move_action[:end]
 			score_details = tree[_start][_end][:score_avail_player][begin]
+				# NOTE -> need to support double scoring for non-intersecting rows
 			
 				mk_sel = score_details[:mk_sel]
 				mk_locs = score_details[:mk_locs]
 
+			# a ring was moved -> swap start w/ end
+			post_rings_locs = replace(rings_locs, _start => _end)
+
 			# save scoring choice - random for scoring ring
 			_score_action = Dict( 	:mk_sel => mk_sel,
 								 	:mk_locs => mk_locs,
-									:ring_score => rand(rings_locs))
+									:ring_score => rand(post_rings_locs))
 
 			setindex!(_turn_recap, _score_action, :score_action)
 
 			# increase score
 			_last_srv_score += 1
 
+			__pick_txt = "score"
+
 		end
 
-	## NO-SCORING -> PLACE/FLIP
+
+	## NO-SCORING -> PLACE/FLIP : minimax depth 2
+	# split candidates in these groups; global found flags
+	candidate_moves_sc = []; len_cm = 0; max_i = 0 # candidate moves
+		best_sc = []; # closer to score for us
+		neutral_sc = []; # no close to score for us or opponent
+		worse_sc = []; # closer for both
+		bad_sc = []; # closer for opponent only
+		worst_sc = []; # we score for the opponent
+	
+	if isempty(_move_action) # no move action taken yet 
+
+		opp_player_id = srv_player_id == "W" ? "B" : "W"
+		
+		# traverse the whole tree, create move scenarios to categorize later
+		for move_start_k in keys(tree)
+			for move_end_k in keys(tree[move_start_k])
+
+				sc = Dict(:start => move_start_k, :end => move_end_k)
+				push!(candidate_moves_sc, sc)
+			end
+		end
+
+		len_cm = candidate_moves_sc |> length
+		for (i, sc) in enumerate(candidate_moves_sc) # categorize moves
+
+			max_i = i # keep track of how many scenarios we explored
+			
+			_gs = get_new_gs(tree, sc)
+			__sim = sim_scenarioTree(_gs, opp_player_id, 0) # any opp score
+
+			# prevent states that can lead opponent to score next
+				# no score_preMove_avail (root)
+				# no score_player_sc in (any tree)
+
+			if haskey(__sim, :score_preMove_avail) # no scoring for player
+				push!(worst_sc, sc) 
+				@goto skip_inspection
+			end
+
+			# inspect possible scoring outcomes 
+			sim_check = inspect_trees_sums(__sim[:move_trees])
+			#@info "LOG - Check $sc => $sim_check"
+
+				# in this case, the 'other' is the player
+				AI_score_px = sim_check[:opp_score_possible]
+				USR_score_px = sim_check[:player_score_possible]
+
+				# 2x2 possible outcomes: best > neutral > worse > bad 
+				f_best = AI_score_px == true && USR_score_px == false
+				f_neutral = AI_score_px == false && USR_score_px == false
+				f_worse = AI_score_px == true && USR_score_px == true
+				f_bad = AI_score_px == false && USR_score_px == true
+				
+					f_best && push!(best_sc, sc)
+					f_neutral && push!(neutral_sc, sc)
+					f_worse && push!(worse_sc, sc)
+					f_bad && push!(bad_sc, sc)
+
+					# break at first best choice (could be refined for double score)
+					if f_best
+						_move_action = sc
+						__pick_txt = "best"
+						break
+					end
+			
+			@label skip_inspection
+
+		end		
+	end
+
+	## NO BEST -> refine choices: okay > bad > worst
+	# NEUTRAL
+	if isempty(_move_action) && !isempty(neutral_sc)
+		_move_action = rand(neutral_sc)
+		__pick_txt = "neutral"
+	end
+
+	# WORSE
+	if isempty(_move_action) && !isempty(worse_sc)
+		_move_action = rand(worse_sc)
+		__pick_txt = "worse"
+	end
+
+	# POTENTIALLY BAD
+	if isempty(_move_action) && !isempty(bad_sc)
+		_move_action = rand(bad_sc)
+		__pick_txt = "maybe bad"
+	end
+
+	# WORST
+	if isempty(_move_action) && !isempty(worst_sc)
+		_move_action = rand(worst_sc)
+		__pick_txt = "worst"
+	end
+
+	#=
+	@info best_sc
+	@info neutral_sc
+	@info worse_sc
+	@info bad_sc
+	@info worst_sc
+	=#
+
+	#= BELOW : minimax for flip scenarios + random moves pruned of bad flips
+		Problem -> there could be bad scenarios hidden in non-flip moves we're not evaluating
+
+	## NO-SCORING -> PLACE/FLIP : minimax depth 2
+	_penalty_flip_sc = [] # keep track of when we scores for the opponent
 	if isempty(_move_action) # no move action taken yet 
 
 		# be less annoying > flip only if opponent has 4+ markers on the board
@@ -3316,6 +3685,7 @@ function play_turn_server(game_code::String, srv_player_id::String)::Dict
 		candidates_flip_sc = []
 		if num_opp_markers >= 4 && !isempty(flip_sc) # evaluate flip scenarios
 
+			#@info "LOG - pre px candidates: $flip_sc"
 			# loop over possible flip scenarios -> pick first that meets conditions
 			for sc in flip_sc
 
@@ -3327,23 +3697,27 @@ function play_turn_server(game_code::String, srv_player_id::String)::Dict
 					# no score_player_sc in (any tree)
 
 				if haskey(__sim, :score_preMove_avail)
+					#@info "LOG - skipped $sc"
+					push!(_penalty_flip_sc, sc) # save bad scenarios
 					@goto skip_scenario
 				end
 
 				# inspect possible scoring outcomes 
 				sim_check = inspect_trees_sums(__sim[:move_trees])
+				#@info "LOG - Check $sc => $sim_check"
 
 				# only keep scenarios that can result in the other NOT scoring
 				# in this case, the 'other' is the player
 				if sim_check[:player_score_possible] == false
 					push!(candidates_flip_sc, Dict(:sc => sc, :check => sim_check))
+					#@info "LOG - saved $sc"
 				end
 
 				@label skip_scenario
 			end
 		end
 
-
+		#@info "LOG - post px candidates: $candidates_flip_sc"
 		# refine choices among candidates
 		# if multiple, pick first that can lead to our scoring (score_opp_sc)
 		# player/opponent are flipped as it's a depth-2 simulation (ie. next turn)
@@ -3358,49 +3732,56 @@ function play_turn_server(game_code::String, srv_player_id::String)::Dict
 			else
 				_move_action = rand(candidates_flip_sc)[:sc]
 			end
+
+			#@info "LOG - flip candidate pick $_move_action"
 			
 		end
 			
 	end
 
-	## NO-SCORING -> RANDOM PLACE
+	#@info _penalty_flip_sc
+
+	## NO-SCORING -> RANDOM move avoid scoring for the opponent OR random
 	if isempty(_move_action) # no worthy flip scenarios -> random move
 
-		# random pick
-		_start = tree |> keys |> rand
-		_end = tree[_start] |> keys |> rand
+		pruned_tree = deepcopy(tree) # modifiable copy of the tree
+
+		# prune tree, remove penalty options
+		for bad_sc in _penalty_flip_sc 
+			pruned_tree = prune_tree_fn(pruned_tree, bad_sc)
+			#@info "LOG - pruned sc $bad_sc"
+		end
+
+		# use it, if we still have a tree once done pruning
+		f_use_pruned = !isempty(pruned_tree)
+		start_k = (f_use_pruned ? pruned_tree : tree) |> keys |> rand
+		end_k = (f_use_pruned ? pruned_tree : tree)[start_k] |> keys |> rand
 
 		# write move action
-		_move_action = Dict(:start => _start, :end => _end)
+		_move_action = Dict(:start => start_k, :end => end_k) 
+
+		#f_use_pruned && @info "LOG - random PRUNED pick $_move_action"
+		#!f_use_pruned && @info "LOG - random pick $_move_action"
 
 	end
+
+	=# 
 
 
 	# save move action in turn recap
 	setindex!(_turn_recap, _move_action, :move_action)
 
+	_runtime = (now() - _time_start).value
+	_expl_rate = round(max_i/len_cm*100, digits=2)
+
+	println("LOG - AI play, $__pick_txt pick - runtime: $(_runtime)ms, expl.rate: $(_expl_rate)%, # sc: $len_cm")
 	
 	return _turn_recap
 
 end
 
-# ╔═╡ 2d90b53c-cf08-4447-bb8e-266e76736e8e
-_srv_play_recap = play_turn_server("S4YTFY", "B")
-
-# ╔═╡ b5e93a68-94f5-43ae-bcfb-4193d8219997
-
-
-# ╔═╡ 0a82535c-952b-493b-b5c6-95546c89502f
-games_log_dict
-
-# ╔═╡ 7aba3bf6-c3ea-43db-84f4-ee41379fbf1a
-_sserv = games_log_dict["5V3071"][:server_states][end];
-
-# ╔═╡ b6b37ca6-e79a-4ccf-90ee-29427c631ffe
-print_gameState(_sserv)
-
-# ╔═╡ 2f223ce9-0bbe-4932-9d1b-ebf2a74f759c
-_sst = sim_scenarioTree(_sserv, "W", 0)
+# ╔═╡ 9c9f38c9-d86d-4d50-b7c3-dd470038256d
+play_turn_server("4D7CBM", "W", 0)
 
 # ╔═╡ 9fdbf307-1067-4f55-ac56-8335ecc84962
 function temp_ai_pick_translation(pick::Dict)::Dict
@@ -3785,13 +4166,12 @@ function game_runner(msg)
 
 					_ai_player_id = get_last_moving_player(_game_code)
 
-					# move ai AI > sync server data
+					# move by SERVER/AI > sync server data
 					#_pick = play_turn_AI(_game_code, _ai_player_id)
 					#update_serverStates!(_game_code, _ai_player_id, _pick)
 						
 					_pick = play_turn_server(_game_code, _ai_player_id)
-					@info _pick
-					update_serverStates!(_game_code, _ai_player_id, _pick)
+					update_serverStates!(_game_code, _ai_player_id, _pick, true)
 					
 					# mark turn completed
 					_no_turn_played_by_ai = get_last_turn_details(_game_code)[:turn_no]
@@ -4167,11 +4547,33 @@ md"#### Open issues "
 
 =#
 
-# ╔═╡ 20bc797e-c99b-417d-8921-9b95c8e21679
+# ╔═╡ 17b328a7-9b08-49c1-8c66-65c748df9c49
+function prof_test(N)
+
+	for i in 1:N
+	
+	sim_scenarioTree(games_log_dict["JVEELG"][:server_states][end], "W",0)
+
+	end
+end
+
+# ╔═╡ 6d8627df-dc29-4015-8eaa-23a2c9f220da
+@profile prof_test(1_000); 
+
+# ╔═╡ 5477b1f0-9c84-4138-9628-bfba91f5c81d
+owntime()
+
+# ╔═╡ 8937fb11-afe6-4f4d-80ec-785fa7f84289
+totaltime()
+
+# ╔═╡ b3970e15-7628-48cc-8ecf-b5c26efc0119
 # ╠═╡ disabled = true
 #=╠═╡
-using BenchmarkTools
+Profile.clear()
   ╠═╡ =#
+
+# ╔═╡ 384e108b-dff2-4b62-96bb-bfbf3c8f2c18
+Profile.print(combine = true, recur = :flat)
 
 # ╔═╡ c9d90fd5-4b65-435f-82e7-324340f31cd8
 # ╠═╡ disabled = true
@@ -4179,25 +4581,12 @@ using BenchmarkTools
 using Profile, PProf
   ╠═╡ =#
 
-# ╔═╡ 5d1ba3df-3e0d-49b8-a995-c27fab85ab54
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-
-	Profile.clear()
-	@profile gen_newGame(true)
-	
-	pprof()
-	
-end
-  ╠═╡ =#
-
 # ╔═╡ c6f5745b-4299-48d5-ac80-268260ac7e0f
 # ╠═╡ disabled = true
 #=╠═╡
 begin
 	Profile.clear()
-	@profile gen_scenarioTree(games_log_dict["OZMPUX"][:server_states][end], "W")
+	@profile sim_scenarioTree(games_log_dict["JVEELG"][:server_states][end], "W",0)
 
 	pprof()
 
@@ -4218,15 +4607,24 @@ wait(Condition())
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+OwnTime = "18732c20-e27e-497f-aa49-3bf01a8fc721"
+Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+ProfileSVG = "132c30aa-f267-4189-9183-c8a63c7e05e6"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
+BenchmarkTools = "~1.4.0"
 HTTP = "~1.9.15"
+JET = "~0.8.24"
 JSON3 = "~1.13.2"
+OwnTime = "~0.1.0"
+ProfileSVG = "~0.2.1"
 StatsBase = "~0.34.0"
 """
 
@@ -4236,7 +4634,16 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "72975cf3b7f1104ee482fae1a25cd20fdbd10245"
+project_hash = "cf43037be977d6af7c0f8ed09ac6080bcf20975d"
+
+[[deps.AbstractTrees]]
+git-tree-sha1 = "03e0550477d86222521d254b741d470ba17ea0b5"
+uuid = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+version = "0.3.4"
+
+[[deps.ArgTools]]
+uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
+version = "1.1.1"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -4244,22 +4651,46 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
+[[deps.BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "f1f03a9fa24271160ed7e73051fba3c1a759b53f"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.4.0"
+
 [[deps.BitFlags]]
-git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
+git-tree-sha1 = "2dc09997850d68179b69dafb58ae806167a32b1b"
 uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
-version = "0.1.7"
+version = "0.1.8"
+
+[[deps.CodeTracking]]
+deps = ["InteractiveUtils", "UUIDs"]
+git-tree-sha1 = "c0216e792f518b39b22212127d4a84dc31e4e386"
+uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
+version = "1.3.5"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
-git-tree-sha1 = "02aa26a4cf76381be7f66e020a3eddeb27b0a092"
+git-tree-sha1 = "cd67fc487743b2f0fd4380d4cbd3a24660d0eec8"
 uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
-version = "0.7.2"
+version = "0.7.3"
+
+[[deps.ColorTypes]]
+deps = ["FixedPointNumbers", "Random"]
+git-tree-sha1 = "eb7f0f8307f71fac7c606984ea5fb2817275d6e4"
+uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
+version = "0.11.4"
+
+[[deps.Colors]]
+deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
+git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
+uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
+version = "0.12.10"
 
 [[deps.Compat]]
 deps = ["UUIDs"]
-git-tree-sha1 = "e460f044ca8b99be31d35fe54fc33a5c33dd8ed7"
+git-tree-sha1 = "886826d76ea9e72b35fcd000e535588f7b60f21d"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.9.0"
+version = "4.10.1"
 weakdeps = ["Dates", "LinearAlgebra"]
 
     [deps.Compat.extensions]
@@ -4272,9 +4703,9 @@ version = "1.0.5+1"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
-git-tree-sha1 = "5372dbbf8f0bdb8c700db5367132925c0771ef7e"
+git-tree-sha1 = "8cfa272e8bdedfa88b6aefbbca7c19f1befac519"
 uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
-version = "2.2.1"
+version = "2.3.0"
 
 [[deps.DataAPI]]
 git-tree-sha1 = "8da84edb865b0b5b0100c0666a9bc9a0b71c553c"
@@ -4283,13 +4714,17 @@ version = "1.15.0"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
-git-tree-sha1 = "3dbd312d370723b6bb43ba9d02fc36abade4518d"
+git-tree-sha1 = "ac67408d9ddf207de5cfa9a97e114352430f01ed"
 uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-version = "0.18.15"
+version = "0.18.16"
 
 [[deps.Dates]]
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
+
+[[deps.Distributed]]
+deps = ["Random", "Serialization", "Sockets"]
+uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -4297,17 +4732,48 @@ git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.9.3"
 
+[[deps.Downloads]]
+deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
+uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+version = "1.6.0"
+
 [[deps.ExceptionUnwrapping]]
 deps = ["Test"]
-git-tree-sha1 = "e90caa41f5a86296e014e148ee061bd6c3edec96"
+git-tree-sha1 = "dcb08a0d93ec0b1cdc4af184b26b591e9695423a"
 uuid = "460bff9d-24e4-43bc-9d9f-a8973cb893f4"
-version = "0.1.9"
+version = "0.1.10"
+
+[[deps.FileIO]]
+deps = ["Pkg", "Requires", "UUIDs"]
+git-tree-sha1 = "c5c28c245101bd59154f649e19b038d15901b5dc"
+uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+version = "1.16.2"
+
+[[deps.FileWatching]]
+uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
+
+[[deps.FixedPointNumbers]]
+deps = ["Statistics"]
+git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
+uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
+version = "0.8.4"
+
+[[deps.FlameGraphs]]
+deps = ["AbstractTrees", "Colors", "FileIO", "FixedPointNumbers", "IndirectArrays", "LeftChildRightSiblingTrees", "Profile"]
+git-tree-sha1 = "d9eee53657f6a13ee51120337f98684c9c702264"
+uuid = "08572546-2f56-4bcf-ba4e-bab62c3a3f89"
+version = "0.2.10"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
 git-tree-sha1 = "19e974eced1768fb46fd6020171f2cec06b1edb5"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 version = "1.9.15"
+
+[[deps.IndirectArrays]]
+git-tree-sha1 = "012e604e1c7458645cb8b436f8fba789a51b257f"
+uuid = "9b13fd28-a010-5f03-acff-a1bbcff69959"
+version = "1.0.0"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -4318,17 +4784,51 @@ git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.2.2"
 
+[[deps.JET]]
+deps = ["InteractiveUtils", "JuliaInterpreter", "LoweredCodeUtils", "MacroTools", "Pkg", "PrecompileTools", "Preferences", "Revise", "Test"]
+git-tree-sha1 = "9587e44f478b5fddc70fc3baae60a587deaa3a31"
+uuid = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+version = "0.8.24"
+
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
 git-tree-sha1 = "7e5d6779a1e09a36db2a7b6cff50942a0a7d0fca"
 uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
 version = "1.5.0"
 
+[[deps.JSON]]
+deps = ["Dates", "Mmap", "Parsers", "Unicode"]
+git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
+uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+version = "0.21.4"
+
 [[deps.JSON3]]
 deps = ["Dates", "Mmap", "Parsers", "PrecompileTools", "StructTypes", "UUIDs"]
 git-tree-sha1 = "95220473901735a0f4df9d1ca5b171b568b2daa3"
 uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 version = "1.13.2"
+
+[[deps.JuliaInterpreter]]
+deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
+git-tree-sha1 = "04663b9e1eb0d0eabf76a6d0752e0dac83d53b36"
+uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
+version = "0.9.28"
+
+[[deps.LeftChildRightSiblingTrees]]
+deps = ["AbstractTrees"]
+git-tree-sha1 = "b864cb409e8e445688bc478ef87c0afe4f6d1f8d"
+uuid = "1d6d02ad-be62-4b6b-8a6d-2f90e265016e"
+version = "0.1.3"
+
+[[deps.LibCURL]]
+deps = ["LibCURL_jll", "MozillaCACerts_jll"]
+uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
+version = "0.6.4"
+
+[[deps.LibCURL_jll]]
+deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
+uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
+version = "8.4.0+0"
 
 [[deps.LibGit2]]
 deps = ["Base64", "LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
@@ -4372,19 +4872,31 @@ uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
 [[deps.LoggingExtras]]
 deps = ["Dates", "Logging"]
-git-tree-sha1 = "0d097476b6c381ab7906460ef1ef1638fbce1d91"
+git-tree-sha1 = "c1dd6d7978c12545b4179fb6153b9250c96b0075"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
-version = "1.0.2"
+version = "1.0.3"
+
+[[deps.LoweredCodeUtils]]
+deps = ["JuliaInterpreter"]
+git-tree-sha1 = "0b8cf121228f7dae022700c1c11ac1f04122f384"
+uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
+version = "2.3.2"
+
+[[deps.MacroTools]]
+deps = ["Markdown", "Random"]
+git-tree-sha1 = "b211c553c199c111d998ecdaf7623d1b89b69f93"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.12"
 
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[deps.MbedTLS]]
-deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "Random", "Sockets"]
-git-tree-sha1 = "03a9b9718f5682ecb107ac9f7308991db4ce395b"
+deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "NetworkOptions", "Random", "Sockets"]
+git-tree-sha1 = "c067a280ddc25f196b5e7df3877c6b226d390aaf"
 uuid = "739be429-bea8-5141-9913-cc70e7f3736d"
-version = "1.1.7"
+version = "1.1.9"
 
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -4421,20 +4933,31 @@ version = "1.4.1"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "bbb5c2115d63c2f1451cb70e5ef75e8fe4707019"
+git-tree-sha1 = "cc6e1927ac521b659af340e0ca45828a3ffc748f"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "1.1.22+0"
+version = "3.0.12+0"
 
 [[deps.OrderedCollections]]
-git-tree-sha1 = "2e73fe17cac3c62ad1aebe70d44c963c3cfdc3e3"
+git-tree-sha1 = "dfdf5519f235516220579f949664f1bf44e741c5"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-version = "1.6.2"
+version = "1.6.3"
+
+[[deps.OwnTime]]
+deps = ["Printf", "Profile"]
+git-tree-sha1 = "00d9140789be6f702ef5846fc9b9e34a62cb8c8b"
+uuid = "18732c20-e27e-497f-aa49-3bf01a8fc721"
+version = "0.1.0"
 
 [[deps.Parsers]]
 deps = ["Dates", "PrecompileTools", "UUIDs"]
-git-tree-sha1 = "716e24b21538abc91f6205fd1d8363f39b442851"
+git-tree-sha1 = "8489905bcdbcfac64d1daa51ca07c0d8f0283821"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.7.2"
+version = "2.8.1"
+
+[[deps.Pkg]]
+deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
+uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+version = "1.10.0"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -4444,17 +4967,48 @@ version = "1.2.0"
 
 [[deps.Preferences]]
 deps = ["TOML"]
-git-tree-sha1 = "7eb1686b4f04b82f96ed7a4ea5890a4f0c7a09f1"
+git-tree-sha1 = "00805cd429dcb4870060ff49ef443486c262e38e"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
-version = "1.4.0"
+version = "1.4.1"
 
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
+[[deps.Profile]]
+deps = ["Printf"]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+
+[[deps.ProfileSVG]]
+deps = ["Colors", "FlameGraphs", "Profile", "UUIDs"]
+git-tree-sha1 = "e4df82a5dadc26736f106f8d7fc97c42cc6c91ae"
+uuid = "132c30aa-f267-4189-9183-c8a63c7e05e6"
+version = "0.2.1"
+
+[[deps.REPL]]
+deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
+uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
+
 [[deps.Random]]
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[[deps.Reexport]]
+git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
+uuid = "189a3867-3050-52da-a836-e630ba90ab69"
+version = "1.2.2"
+
+[[deps.Requires]]
+deps = ["UUIDs"]
+git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
+uuid = "ae029012-a4dd-5104-9daa-d747884805df"
+version = "1.3.0"
+
+[[deps.Revise]]
+deps = ["CodeTracking", "Distributed", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Pkg", "REPL", "Requires", "UUIDs", "Unicode"]
+git-tree-sha1 = "3fe4e5b9cdbb9bbc851c57b149e516acc07f8f72"
+uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
+version = "3.5.13"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -4473,9 +5027,9 @@ uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 
 [[deps.SortingAlgorithms]]
 deps = ["DataStructures"]
-git-tree-sha1 = "c60ec5c62180f27efea3ba2908480f8055e17cee"
+git-tree-sha1 = "66e0a8e672a0bdfca2c3f5937efb8538b9ddc085"
 uuid = "a2af1166-a08f-5f64-846c-94a0d3cef48c"
-version = "1.1.1"
+version = "1.2.1"
 
 [[deps.SparseArrays]]
 deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
@@ -4515,20 +5069,28 @@ deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 version = "1.0.3"
 
+[[deps.Tar]]
+deps = ["ArgTools", "SHA"]
+uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+version = "1.10.0"
+
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.TranscodingStreams]]
-deps = ["Random", "Test"]
-git-tree-sha1 = "9a6ae7ed916312b41236fcef7e0af564ef934769"
+git-tree-sha1 = "1fbeaaca45801b4ba17c251dd8603ef24801dd84"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.9.13"
+version = "0.10.2"
+weakdeps = ["Random", "Test"]
+
+    [deps.TranscodingStreams.extensions]
+    TestExt = ["Test", "Random"]
 
 [[deps.URIs]]
-git-tree-sha1 = "b7a5e99f24892b6824a954199a45e9ffcc1c70f0"
+git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
 uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
-version = "1.5.0"
+version = "1.5.1"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
@@ -4546,6 +5108,16 @@ version = "1.2.13+1"
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
 version = "5.8.0+1"
+
+[[deps.nghttp2_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+version = "1.52.0+1"
+
+[[deps.p7zip_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "17.4.0+2"
 """
 
 # ╔═╡ Cell order:
@@ -4589,6 +5161,8 @@ version = "5.8.0+1"
 # ╠═1d811aa5-940b-4ddd-908d-e94fe3635a6a
 # ╟─003f670b-d3b1-4905-b105-67504f16ba19
 # ╠═2cee3e2b-5061-40f4-a205-94d80cfdc20b
+# ╠═51f73d54-9cfd-471b-b30e-8ffde44750ef
+# ╟─a5dd9646-98fd-446f-a509-fb3957f91379
 # ╟─a96a9a78-0aeb-4b00-8f3c-db61839deb5c
 # ╟─f0e9e077-f435-4f4b-bd69-f495dfccec27
 # ╟─bf2dce8c-f026-40e3-89db-d72edb0b041c
@@ -4596,9 +5170,7 @@ version = "5.8.0+1"
 # ╟─9700ea30-a99c-4832-a181-7ef23c86030a
 # ╟─9d153cf1-3e3b-49c0-abe7-ebd0f524557c
 # ╟─52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
-# ╟─8f2e4816-b60d-40eb-a9d8-acf4240c646a
 # ╟─c67154cb-c8cc-406c-90a8-0ea8241d8571
-# ╟─53dec9b0-dac1-47a6-b242-9696ff45b91b
 # ╟─148d1418-76a3-462d-9049-d30e85a45f06
 # ╟─fc68fa36-e2ea-40fa-9d0e-722167a2506e
 # ╟─7fe89538-b2fe-47db-a961-fdbdd4278963
@@ -4606,9 +5178,9 @@ version = "5.8.0+1"
 # ╟─b56084e8-7286-404b-9088-094070331afe
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
-# ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
+# ╠═c334b67e-594f-49fc-8c11-be4ea11c33b5
 # ╠═29a93299-f577-4114-b77f-dbc079392090
-# ╠═f1949d12-86eb-4236-b887-b750916d3493
+# ╟─f1949d12-86eb-4236-b887-b750916d3493
 # ╠═e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╟─61a0e2bf-2fed-4141-afc0-c8b5507679d1
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
@@ -4617,10 +5189,31 @@ version = "5.8.0+1"
 # ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
 # ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
 # ╠═156c508f-2026-4619-9632-d679ca2cae50
+# ╠═1df30830-1a44-49f5-bb9a-309a8e9f2274
+# ╠═40174fcb-3064-4f47-af01-9bb99944472f
+# ╠═be2a5e35-0040-49df-8fb7-64cb7df86fb8
+# ╠═12909b46-9f85-4c69-858a-7cd3ca8d9ee8
+# ╠═4ee002d8-d30a-419c-ae11-5f289fef774f
+# ╠═0d8f038f-e223-454d-89c6-13536cf35b02
+# ╠═210bf59a-06dc-4dd2-b4c4-c569658fcaff
+# ╠═a790c6e7-e606-4834-9243-f2bf80790548
+# ╠═60aaf371-48f0-443b-80c2-4094efd486e4
+# ╠═5bb1b9c5-1291-450d-820f-9b75c732f2ec
+# ╠═362fc06c-61aa-4a48-a18e-ff859478f893
+# ╠═ce99c297-764a-4ead-972e-7bb48dc4887e
+# ╠═30af9114-2646-4940-95f7-817e3decdab4
+# ╠═69b9885f-96bd-4f8d-9bde-9ac09521f435
+# ╠═9c5bf63e-8603-4a5d-8b8b-1f020c2586b1
+# ╠═c90139ab-ef6b-400d-a68d-c143cb6b120f
+# ╠═6197487e-e47b-4d05-a8cd-4c2ffda05318
+# ╠═411eb962-73f9-42cd-a177-f32c8ffb41ec
+# ╠═8fcdef38-505e-4a12-b3cd-5036003b66fe
+# ╠═4c0f16c4-31f7-4f94-b6c5-e3e928ce440e
+# ╠═8cc063c2-fbb7-4804-a29f-4a3294f5073b
 # ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
 # ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
 # ╠═a27e0adf-aa09-42ee-97f5-ede084a9edc3
-# ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
+# ╠═5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
@@ -4642,7 +5235,7 @@ version = "5.8.0+1"
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╟─ca346015-b2c9-45da-8c1e-17493274aca2
-# ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
+# ╟─88616e0f-6c85-4bb2-a856-ea7cee1b187d
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
 # ╟─5d6e868b-50a9-420b-8533-5db4c5d8f72c
@@ -4657,7 +5250,7 @@ version = "5.8.0+1"
 # ╟─276dd93c-05f9-46b1-909c-1d449c07e2b5
 # ╟─8797a304-aa98-4ce0-ab0b-759df0256fa7
 # ╟─4f3e9400-6eb7-4ffb-bf5b-887d523e00a4
-# ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
+# ╟─f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
@@ -4667,19 +5260,17 @@ version = "5.8.0+1"
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 # ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 # ╠═fdb40907-1047-41e5-9d39-3f94b06b91c0
-# ╠═2d90b53c-cf08-4447-bb8e-266e76736e8e
-# ╠═ae781274-0bb2-47a3-9184-4bc070a886e7
-# ╠═ea7779ea-cd11-4f9e-8022-ff4f370ffddd
-# ╠═c3590e03-e319-4642-911b-9e036a3d82b8
-# ╠═3d09a15d-685b-4d9b-a47f-95067441928d
-# ╠═a801e1ad-1d10-4cf3-bf6e-4bf55b535b65
-# ╠═b5e93a68-94f5-43ae-bcfb-4193d8219997
-# ╠═0a82535c-952b-493b-b5c6-95546c89502f
-# ╠═7aba3bf6-c3ea-43db-84f4-ee41379fbf1a
-# ╠═b6b37ca6-e79a-4ccf-90ee-29427c631ffe
-# ╠═2f223ce9-0bbe-4932-9d1b-ebf2a74f759c
+# ╠═3bb8e65d-3900-4948-9f7a-06b5d1c292dc
+# ╠═9c9f38c9-d86d-4d50-b7c3-dd470038256d
+# ╠═96951a3b-562f-4790-9ea9-162c15953984
+# ╠═fd39104f-3fd3-43ff-8c19-67013fb46019
+# ╠═65513891-c2f7-4b9f-912a-215030ef56b8
+# ╟─8e1673fe-5286-43cd-8830-fba353f1cd89
+# ╟─ea7779ea-cd11-4f9e-8022-ff4f370ffddd
+# ╟─3d09a15d-685b-4d9b-a47f-95067441928d
+# ╟─a801e1ad-1d10-4cf3-bf6e-4bf55b535b65
 # ╟─9fdbf307-1067-4f55-ac56-8335ecc84962
-# ╠═14aa5b7c-9065-4ca3-b0e9-19c104b1854d
+# ╟─14aa5b7c-9065-4ca3-b0e9-19c104b1854d
 # ╟─4976c9c5-d60d-4b19-aa72-0e135ad37361
 # ╟─1c970cc9-de1f-48cf-aa81-684d209689e0
 # ╟─e6cc0cf6-617a-4231-826d-63f36d6136a5
@@ -4690,8 +5281,15 @@ version = "5.8.0+1"
 # ╟─5ce26cae-4604-4ad8-8d15-15f0bfc9a81a
 # ╠═9b8a5995-d8f0-4528-ad62-a2113d5790fd
 # ╠═20bc797e-c99b-417d-8921-9b95c8e21679
+# ╠═17b328a7-9b08-49c1-8c66-65c748df9c49
+# ╠═6d8627df-dc29-4015-8eaa-23a2c9f220da
+# ╠═5477b1f0-9c84-4138-9628-bfba91f5c81d
+# ╠═8937fb11-afe6-4f4d-80ec-785fa7f84289
+# ╠═b3970e15-7628-48cc-8ecf-b5c26efc0119
+# ╠═cfc14bd5-8d00-4c71-a4df-5f62d63d2179
+# ╠═384e108b-dff2-4b62-96bb-bfbf3c8f2c18
+# ╠═1ca0b7ea-1b46-462e-9f3d-99c037d74f00
 # ╠═c9d90fd5-4b65-435f-82e7-324340f31cd8
-# ╠═5d1ba3df-3e0d-49b8-a995-c27fab85ab54
 # ╠═c6f5745b-4299-48d5-ac80-268260ac7e0f
 # ╠═c367153b-703d-44f5-97ad-635b61bb9043
 # ╠═24185d12-d29c-4e72-a1de-a28319b4d369
