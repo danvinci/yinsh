@@ -438,9 +438,9 @@ md"### Search spaces generation"
 
 # ╔═╡ 003f670b-d3b1-4905-b105-67504f16ba19
 # populate dictionary of locations search space 
-function new_searchSpace()::Dict{CartesianIndex, Array{Array{CartesianIndex}}}
+function new_searchSpace()::Dict{CartesianIndex, Vector{Vector{CartesianIndex}}}
 
-	_ret = Dict{CartesianIndex, Array{Array{CartesianIndex}}}()
+	_ret::Dict{CartesianIndex, Vector{Vector{CartesianIndex}}} = Dict()
 
 	# board bounds 
 	last_row = 19
@@ -505,7 +505,7 @@ function new_searchSpace()::Dict{CartesianIndex, Array{Array{CartesianIndex}}}
 
 		## Convert locations to cart_index
 		# Init array for zip ranges
-		cartIndex_ranges = []
+		cartIndex_ranges::Vector{Vector{CartesianIndex}} = []
 
 		for range in zip_ranges
 
@@ -577,135 +577,11 @@ len_array = length(input_array)
 
 end
 
-# ╔═╡ a5dd9646-98fd-446f-a509-fb3957f91379
-# populate dictionary of locations search space for SCORING
-function new_searchSpace_scoring_set()::Dict{CartesianIndex, Set{Set{CartesianIndex}}}
-
-	_ret::Dict{CartesianIndex, Set{Set{CartesianIndex}}} = Dict()
-
-# first part of the function could be shared with other and bifurcated instead of duplicated
-
-	# board bounds 
-	last_row = 19
-	last_col = 11
-
-	# keys mapping to valid board locations
-	keys_loc = findall(x -> x==1, mm_yinsh_01)
-	
-	for key in keys_loc
-
-		## Generate zip ranges for each direction
-		# get row/col from each cart_index location
-		row_start = key[1]
-		col_start = key[2]
-	
-		# Init array for zip ranges
-		zip_ranges = []
-
-		## Vertical line
-	
-			## vertical line
-		
-			# straight up to first row, k stays the same (j-2, k = k)
-			j_range = row_start-2:-2:1
-			k_range = [col_start for _ in j_range]
-		
-				temp = [z for z in zip(j_range, k_range)]
-		
-			# straight down to last row, k stays the same (j+2, k = k)
-			j_range = row_start+2:2:last_row
-			k_range = [col_start for _ in j_range]
-
-				# unite ranges
-				append!(temp, [z for z in zip(j_range, k_range)])
-
-				push!(zip_ranges, temp)
-
-		## diagonal left to right up
-
-			# diagonal down left (j+1, k-1)
-			j_range = row_start+1:last_row
-			k_range = col_start-1:-1:1
-		
-				temp = [z for z in zip(j_range, k_range)]
-			
-			# diagonal up right (j-1, k+1)
-			j_range = row_start-1:-1:1
-			k_range = col_start+1:last_col
-
-				# must leverage zipping to ensure ranges are correct
-				# especially true on diagonals are starts/ends for row/col mismatch
-				append!(temp, [z for z in zip(j_range, k_range)])
-		
-				push!(zip_ranges, temp)
-
-
-		## diagonal left to right down
-
-			# diagonal up left (j-1, k-1)
-			j_range = row_start-1:-1:1
-			k_range = col_start-1:-1:1
-		
-				temp = [z for z in zip(j_range, k_range)]
-			
-			# diagonal down right (j+1, k+1)
-			j_range = row_start+1:last_row
-			k_range = col_start+1:last_col
-		
-	
-				append!(temp, [z for z in zip(j_range, k_range)])
-
-				push!(zip_ranges, temp)
-
-		
-		## Convert locations to cart_index
-		# Init array for zip ranges
-		cartIndex_ranges = Set()
-
-		for range in zip_ranges
-
-			# if not included, add starting location range
-			# the check shouldn't be needed but good practice
-			if !((row_start, col_start) in range)
-				append!(range, [(row_start, col_start)])
-			end
-
-			# sorted direction array (vertical, diag up, diag down) with cart indexes
-			ci_range = sort([CartesianIndex(z[1], z[2]) for z in range])
-
-			# keep only valid locations
-			filter!(c -> c in keys_loc, ci_range)
-			
-			## split in subarrays of len=5 that contain the starting location
-			sub_arrays = sub_spaces_split(ci_range, key)
-
-			# save results of splitting
-			for sub in sub_arrays
-				push!(cartIndex_ranges, Set(sub))
-			end
-
-			
-		end
-
-		
-		## Write array of cartesian locations to dictionary
-		setindex!(_ret, cartIndex_ranges, key)
-
-	end
-
-	return _ret
-
-end
-
-# ╔═╡ 51f73d54-9cfd-471b-b30e-8ffde44750ef
-# pre-populate dictionary with search space (scoring)
-const locs_searchSpace_scoring_set = new_searchSpace_scoring_set()
-
 # ╔═╡ a96a9a78-0aeb-4b00-8f3c-db61839deb5c
 # populate dictionary of locations search space for SCORING
-function new_searchSpace_scoring()::Dict{CartesianIndex, Array{Array{CartesianIndex}}}
+function new_searchSpace_scoring()::Dict{CartesianIndex, Vector{Vector{CartesianIndex}}}
 
-	_ret = Dict{CartesianIndex, Array{Array{CartesianIndex}}}()
+	_ret::Dict{CartesianIndex, Vector{Vector{CartesianIndex}}} = Dict()
 
 # first part of the function could be shared with other and bifurcated instead of duplicated
 
@@ -784,7 +660,7 @@ function new_searchSpace_scoring()::Dict{CartesianIndex, Array{Array{CartesianIn
 		
 		## Convert locations to cart_index
 		# Init array for zip ranges
-		cartIndex_ranges = []
+		cartIndex_ranges::Vector{Vector{CartesianIndex}} = []
 
 		for range in zip_ranges
 
@@ -1288,6 +1164,9 @@ _sc_ = Dict(:id => Dict(:player_id => "W", :player_score => 0), :move_action => 
 # ╔═╡ 12909b46-9f85-4c69-858a-7cd3ca8d9ee8
 _gs = gen_random_gameState("RW","RB",false, 60)
 
+# ╔═╡ 30af9114-2646-4940-95f7-817e3decdab4
+_score_lookup(_gs)
+
 # ╔═╡ e82b0769-ad51-48fd-968c-98d3a7400126
 vcat([[1,2,3],[4,45,6]]...)
 
@@ -1302,17 +1181,11 @@ begin
 	t_rows_vec = [test_v1, test_v2, test_v3, test_v4, test_v5]
 end
 
-# ╔═╡ 94f8392c-db84-41ca-a097-a1e3f27ca809
-ccmap = countmap(vcat(t_rows_vec...))
-
-# ╔═╡ 274733a7-0502-450e-ad79-11824987b511
-freq, id = findmin(i -> ccmap[i], [CartesianIndex(16,2),CartesianIndex(14,2),CartesianIndex(10,2)])
-
 # ╔═╡ 749a641e-9e76-4d21-ace9-2e435a694c7e
 
 
 # ╔═╡ 411eb962-73f9-42cd-a177-f32c8ffb41ec
-function group_scoring_rows(rows::Vector{Vector{CartesianIndex}})
+function group_scoringRows(rows::Vector{Vector{CartesianIndex}})
 # takes in input rows of locations (CI) and returns them split in groups [[][]]
 
 	len_range::UnitRange{Int64} = 1:length(rows)
@@ -1351,7 +1224,7 @@ function group_scoring_rows(rows::Vector{Vector{CartesianIndex}})
 end
 
 # ╔═╡ 69b9885f-96bd-4f8d-9bde-9ac09521f435
-function _score_lookup(gs::Matrix{String})
+function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Vector{Vector{Dict}}}
 # look at the game state as it is to check if there are scoring opportunities
 
 	# to be returned
@@ -1367,7 +1240,7 @@ function _score_lookup(gs::Matrix{String})
 	for mk_index in all_mks
 
 		# for each marker retrieve search space for scoring ops
-		mk_search_locs::Vector{Vector{CartesianIndex}} = locs_searchSpace_scoring[mk_index]
+		@inbounds mk_search_locs::Vector{Vector{CartesianIndex}} = locs_searchSpace_scoring[mk_index]
 
 		for locs_vec in mk_search_locs
 
@@ -1407,7 +1280,8 @@ function _score_lookup(gs::Matrix{String})
 	# identify mk_sel for row selection within same groups
 	mk_sel_taken::Vector{CartesianIndex}=[] # keep track of ones already taken
 	for player in keys(found_rows)
-		score_groups = group_scoring_rows(found_rows[player])
+		
+		score_groups = group_scoringRows(found_rows[player])
 		
 		for group in score_groups
 			
@@ -1421,8 +1295,8 @@ function _score_lookup(gs::Matrix{String})
 				mk_sel_avail::Vector{CartesianIndex} = setdiff(row, mk_sel_taken)
 
 				# find marker with min frequency and save it
-				freq::Int64, id::Int64 = findmin(i -> mk_freq[i], mk_sel_avail)
-				mk_sel::CartesianIndex = mk_sel_avail[id]
+				_, id::Int64 = findmin(i -> mk_freq[i], mk_sel_avail)
+				@inbounds mk_sel::CartesianIndex = mk_sel_avail[id]
 				push!(mk_sel_taken, mk_sel)
 
 				# package score information
@@ -1444,19 +1318,13 @@ function _score_lookup(gs::Matrix{String})
 end
 
 # ╔═╡ ce99c297-764a-4ead-972e-7bb48dc4887e
-@benchmark _score_lookup(_gs)
-
-# ╔═╡ 30af9114-2646-4940-95f7-817e3decdab4
-_score_lookup(_gs)
+@benchmark search_scores_gs(_gs)
 
 # ╔═╡ c90139ab-ef6b-400d-a68d-c143cb6b120f
-group_scoring_rows(t_rows_vec)
+group_scoringRows(t_rows_vec)
 
 # ╔═╡ 6197487e-e47b-4d05-a8cd-4c2ffda05318
-@benchmark group_scoring_rows(t_rows_vec)
-
-# ╔═╡ 8cc063c2-fbb7-4804-a29f-4a3294f5073b
-#@benchmark sim_scenarioTree(games_log_dict["4D7CBM"][:server_states][end], "W",0)
+@benchmark group_scoringRows(t_rows_vec)
 
 # ╔═╡ 18f8a5d6-c775-44a3-9490-cd11352c4a63
 function set_nested!(dict::Dict, val, first_key, second_key)
@@ -1875,14 +1743,8 @@ return scenario_tree
 
 end
 
-# ╔═╡ 0d8f038f-e223-454d-89c6-13536cf35b02
-static_score_lookup(_gs)
-
 # ╔═╡ 5bb1b9c5-1291-450d-820f-9b75c732f2ec
-# ╠═╡ disabled = true
-#=╠═╡
 @benchmark static_score_lookup(_gs)
-  ╠═╡ =#
 
 # ╔═╡ a27e0adf-aa09-42ee-97f5-ede084a9edc3
 function sim_new_gameState(ex_game_state::Matrix, sc::Dict, fn_mode::Symbol)
@@ -1931,16 +1793,16 @@ Making sense of move/flip data depends on the mode the function was called in.
 =#
 
 	## extract relevant flags from input (given by presence of keys in dict)
-	_f_score_action_preMove = haskey(sc, :score_action_preMove)
-	_f_move_action = haskey(sc, :move_action)
-	_f_score_action = haskey(sc, :score_action)
+	f_score_act_preMove::Bool = haskey(sc, :score_action_preMove)
+	f_move_act::Bool = haskey(sc, :move_action)
+	f_score_act::Bool = haskey(sc, :score_action)
 
 	# extract player_id (B/W)
 	_player_id::String = sc[:id][:player_id]
 	_opp_id::String = _player_id == "W" ? "B" : "W"
 
 	# baseline game state that we'll modify and return later
-	new_gs = copy(ex_game_state)
+	new_gs::Matrix{String} = deepcopy(ex_game_state)
 	new_player_score::Int = sc[:id][:player_score]
 	#new_opp_score::Int = sc[:id][:opp_score] # returned as-is, we can't pick opp ring
 
@@ -1990,7 +1852,7 @@ Making sense of move/flip data depends on the mode the function was called in.
 		_end_move_id = sc[:move_action][:end]
 
 		# get ring details
-		moved_ring = ex_game_state[_start_move_id]
+		@inbounds moved_ring = ex_game_state[_start_move_id]
 		_ring_color = moved_ring[end] # B || W
 
 		# marker placed in start_move (same color as picked ring / player_id)
@@ -2002,18 +1864,19 @@ Making sense of move/flip data depends on the mode the function was called in.
 		# flip markers in the moving direction
 
 		# retrieve search space for the starting point, ie. ring directions
-		r_dirs = locs_searchSpace[_start_move_id]
+		r_dirs::Vector{Vector{CartesianIndex}} = locs_searchSpace[_start_move_id]
 
 		# spot direction/array that contains the ring 
 		dir_no = findfirst(rd -> (_end_move_id in rd), r_dirs)
 	
 		# return flag + ids of markers to flip in direction of movement
-		_flip_flag, mks_toFlip = markers_toFlip_search(new_gs, r_dirs[dir_no])
+		_flip_flag::Bool, mks_toFlip = markers_toFlip_search(new_gs, r_dirs[dir_no])
 
 		if _flip_flag # flip markers in game state
 			for m_id in mks_toFlip
-				if contains(new_gs[m_id], "M")
-					new_gs[m_id] = (new_gs[m_id] == "MW") ? "MB" : "MW" 
+				@inbounds s::String = new_gs[m_id]
+				if (s == "MB" || s == "MW")
+					new_gs[m_id] = (s == "MW") ? "MB" : "MW" 
 				end
 			end
 		end
@@ -2075,13 +1938,13 @@ Making sense of move/flip data depends on the mode the function was called in.
 	################## ACTING on input mode
 	if fn_mode == :replay # whole turn
 		
-		_f_score_action_preMove && score_preMove_do!() 
-		_f_move_action && move_do!()
-		_f_score_action && score_do!()
+		f_score_act_preMove && score_preMove_do!() # -> win check
+		f_move_act && move_do!()
+		f_score_act && score_do!()
 
 	elseif fn_mode == :move # single move -> check score
 
-		_f_move_action && move_do!()
+		f_move_act && move_do!()
 		score_check!()
 	
 	elseif fn_mode == :inspect # just check
@@ -2092,8 +1955,8 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 	# add updated player score
 	setindex!(_return, new_player_score, :new_player_score)
-	# add opp score as-is
-	# setindex!(_return, new_opp_score, :new_opp_score)
+	# add opp score as-is -> needs to be given as input first -> useful to check for win
+	#setindex!(_return, new_opp_score, :new_opp_score)
 
 	# add last game state and calling mode to _return
 	setindex!(_return, new_gs, :new_game_state)
@@ -2373,6 +2236,12 @@ end
 
 # ╔═╡ 40174fcb-3064-4f47-af01-9bb99944472f
 @report_opt sim_scenarioTree(games_log_dict["4D7CBM"][:server_states][end], "W",0)
+
+# ╔═╡ 8cc063c2-fbb7-4804-a29f-4a3294f5073b
+@benchmark sim_scenarioTree(games_log_dict["4D7CBM"][:server_states][end], "W",0)
+
+# ╔═╡ ad164494-5c2d-454b-a310-b381ad57450f
+sim_scenarioTree(games_log_dict["4D7CBM"][:server_states][end], "W",0)
 
 # ╔═╡ cf587261-6193-4e7a-a3e8-e24ba27929c7
 function getLast_clientPkg(game_id)
@@ -3249,12 +3118,6 @@ function get_last_turn_details(game_code::String)
 
 end
 
-# ╔═╡ 3bb8e65d-3900-4948-9f7a-06b5d1c292dc
-# ╠═╡ disabled = true
-#=╠═╡
-@benchmark play_turn_server("4D7CBM", "W", 0)
-  ╠═╡ =#
-
 # ╔═╡ 96951a3b-562f-4790-9ea9-162c15953984
 # ╠═╡ disabled = true
 #=╠═╡
@@ -3299,7 +3162,7 @@ function prune_tree_fn(d::Dict{CartesianIndex, Dict}, sc::Dict)::Dict{CartesianI
 end
 
 # ╔═╡ ea7779ea-cd11-4f9e-8022-ff4f370ffddd
-function inspect_trees_sums(treepots::Array)::Dict{Symbol, Bool}
+function inspect_trees_sums(treepots::Vector{Dict})::Dict{Symbol, Bool}
 # given the treepots array of sim results, inspects summaries of all the trees in it
 # returns flags for the presence of scoring opportunities for either player/opponent
 # note: input tree is simulated from the point of view of the 'player'
@@ -3405,8 +3268,8 @@ function play_turn_server(game_code::String, srv_player_id::String, prev::Int = 
 	
 		pick = rand(sim[:score_preMove_avail])
 
-		rings_locs = findall(i -> isequal(i, "R"*srv_player_id), ex_gs)
-		ring_score = rand(rings_locs) 
+		rings_locs::Vector{CartesianIndex} = findall(==("R"*srv_player_id), ex_gs)
+		ring_score::CartesianIndex = rand(rings_locs) 
 
 		# save choice
 		_preMove_score_action = Dict( 	:mk_sel => pick[:mk_sel],
@@ -3427,7 +3290,7 @@ function play_turn_server(game_code::String, srv_player_id::String, prev::Int = 
 
 	=#
 
-	__pick_txt = ""
+	__pick_txt::String = ""
 	
 	# pick starting game state and moves tree
 	treepot_id = 1 # default/only tree
@@ -3438,22 +3301,22 @@ function play_turn_server(game_code::String, srv_player_id::String, prev::Int = 
 
 	# starting game state
 	treepot = sim[:move_trees][treepot_id] # container for tree and other data
-	tree = treepot[:tree]
-	gs_move = treepot[:gs_start] # starting game state for move
+	tree::Dict{CartesianIndex,Dict{CartesianIndex,Dict}} = treepot[:tree]
+	gs_move::Matrix{String} = treepot[:gs_start] # starting game state for move
 	rings_locs = findall(i -> isequal(i, "R"*srv_player_id), gs_move) # player rings
 
 	# pick a move scenario (score/no-score), empty default used as a true/false later
-	_move_action = Dict() 
+	_move_action::Dict{Symbol, CartesianIndex} = Dict() 
 
 	# extract info from summary
-	score_player_sc = treepot[:tree_summary][:score_player_sc]
-	score_opp_sc = treepot[:tree_summary][:score_opp_sc]
-	flip_sc = treepot[:tree_summary][:flip_sc]
+	score_player_sc::Vector{Dict{Symbol, CartesianIndex}} = treepot[:tree_summary][:score_player_sc]
+	score_opp_sc::Vector{Dict{Symbol, CartesianIndex}} = treepot[:tree_summary][:score_opp_sc]
+	flip_sc::Vector{Dict{Symbol, CartesianIndex}} = treepot[:tree_summary][:flip_sc]
 
 
 	## SCORING
 	# valid scoring scenarios: we're also not scoring for the opponent
-	valid_scoring_sc = setdiff(score_player_sc, score_opp_sc)
+	valid_scoring_sc::Vector{Dict} = setdiff(score_player_sc, score_opp_sc)
 
 	# criterias for score pick
 	if !isempty(score_player_sc) && isempty(valid_scoring_sc)
@@ -3476,8 +3339,8 @@ function play_turn_server(game_code::String, srv_player_id::String, prev::Int = 
 			score_details = tree[_start][_end][:score_avail_player][begin]
 				# NOTE -> need to support double scoring for non-intersecting rows
 			
-				mk_sel = score_details[:mk_sel]
-				mk_locs = score_details[:mk_locs]
+				mk_sel::CartesianIndex = score_details[:mk_sel]
+				mk_locs::Vector{CartesianIndex} = score_details[:mk_locs]
 
 			# a ring was moved -> swap start w/ end
 			post_rings_locs = replace(rings_locs, _start => _end)
@@ -3499,33 +3362,33 @@ function play_turn_server(game_code::String, srv_player_id::String, prev::Int = 
 
 	## NO-SCORING -> PLACE/FLIP : minimax depth 2
 	# split candidates in these groups; global found flags
-	candidate_moves_sc = []; len_cm = 0; max_i = 0 # candidate moves
-		best_sc = []; # closer to score for us
-		neutral_sc = []; # no close to score for us or opponent
-		worse_sc = []; # closer for both
-		bad_sc = []; # closer for opponent only
-		worst_sc = []; # we score for the opponent
+	candidate_moves_sc::Vector{Dict} = []; len_cm = 0; max_i = 0 # candidate moves
+		best_sc::Vector{Dict} = []; # closer to score for us
+		neutral_sc::Vector{Dict} = []; # no close to score for us or opponent
+		worse_sc::Vector{Dict} = []; # closer for both
+		bad_sc::Vector{Dict} = []; # closer for opponent only
+		worst_sc::Vector{Dict} = []; # we score for the opponent
 	
 	if isempty(_move_action) # no move action taken yet 
 
-		opp_player_id = srv_player_id == "W" ? "B" : "W"
+		opp_player_id::String = srv_player_id == "W" ? "B" : "W"
 		
 		# traverse the whole tree, create move scenarios to categorize later
 		for move_start_k in keys(tree)
 			for move_end_k in keys(tree[move_start_k])
 
-				sc = Dict(:start => move_start_k, :end => move_end_k)
+				sc::Dict{Symbol, CartesianIndex} = Dict(:start => move_start_k, :end => move_end_k)
 				push!(candidate_moves_sc, sc)
 			end
 		end
 
-		len_cm = candidate_moves_sc |> length
+		len_cm::Int = candidate_moves_sc |> length
 		for (i, sc) in enumerate(candidate_moves_sc) # categorize moves
 
-			max_i = i # keep track of how many scenarios we explored
+			max_i::Int = i # keep track of how many scenarios we explored
 			
-			_gs = get_new_gs(tree, sc)
-			__sim = sim_scenarioTree(_gs, opp_player_id, 0) # any opp score
+			_gs::Matrix{String} = get_new_gs(tree, sc)
+			__sim::Dict{Symbol, Any} = sim_scenarioTree(_gs, opp_player_id, 0) # any opp score
 
 			# prevent states that can lead opponent to score next
 				# no score_preMove_avail (root)
@@ -3533,11 +3396,11 @@ function play_turn_server(game_code::String, srv_player_id::String, prev::Int = 
 
 			if haskey(__sim, :score_preMove_avail) # no scoring for player
 				push!(worst_sc, sc) 
-				@goto skip_inspection
+				@goto skip_sc_inspection
 			end
 
 			# inspect possible scoring outcomes 
-			sim_check = inspect_trees_sums(__sim[:move_trees])
+			sim_check::Dict{Symbol, Bool} = inspect_trees_sums(__sim[:move_trees])
 			#@info "LOG - Check $sc => $sim_check"
 
 				# in this case, the 'other' is the player
@@ -3545,10 +3408,10 @@ function play_turn_server(game_code::String, srv_player_id::String, prev::Int = 
 				USR_score_px = sim_check[:player_score_possible]
 
 				# 2x2 possible outcomes: best > neutral > worse > bad 
-				f_best = AI_score_px == true && USR_score_px == false
-				f_neutral = AI_score_px == false && USR_score_px == false
-				f_worse = AI_score_px == true && USR_score_px == true
-				f_bad = AI_score_px == false && USR_score_px == true
+				f_best::Bool = AI_score_px == true && USR_score_px == false
+				f_neutral::Bool = AI_score_px == false && USR_score_px == false
+				f_worse::Bool = AI_score_px == true && USR_score_px == true
+				f_bad::Bool = AI_score_px == false && USR_score_px == true
 				
 					f_best && push!(best_sc, sc)
 					f_neutral && push!(neutral_sc, sc)
@@ -3562,7 +3425,7 @@ function play_turn_server(game_code::String, srv_player_id::String, prev::Int = 
 						break
 					end
 			
-			@label skip_inspection
+			@label skip_sc_inspection
 
 		end		
 	end
@@ -3600,114 +3463,23 @@ function play_turn_server(game_code::String, srv_player_id::String, prev::Int = 
 	@info worst_sc
 	=#
 
-	#= BELOW : minimax for flip scenarios + random moves pruned of bad flips
-		Problem -> there could be bad scenarios hidden in non-flip moves we're not evaluating
-
-	## NO-SCORING -> PLACE/FLIP : minimax depth 2
-	_penalty_flip_sc = [] # keep track of when we scores for the opponent
-	if isempty(_move_action) # no move action taken yet 
-
-		# be less annoying > flip only if opponent has 4+ markers on the board
-		opp_player_id = srv_player_id == "W" ? "B" : "W"
-		num_opp_markers = length(findall(i -> isequal(i, "M"*opp_player_id), gs_move))
-
-		candidates_flip_sc = []
-		if num_opp_markers >= 4 && !isempty(flip_sc) # evaluate flip scenarios
-
-			#@info "LOG - pre px candidates: $flip_sc"
-			# loop over possible flip scenarios -> pick first that meets conditions
-			for sc in flip_sc
-
-				_gs = get_new_gs(tree, sc) # get post-move game state
-				__sim = sim_scenarioTree(_gs, opp_player_id, 0) # any opp score
-
-				# prevent states that can lead opponent to score next
-					# no score_preMove_avail (root)
-					# no score_player_sc in (any tree)
-
-				if haskey(__sim, :score_preMove_avail)
-					#@info "LOG - skipped $sc"
-					push!(_penalty_flip_sc, sc) # save bad scenarios
-					@goto skip_scenario
-				end
-
-				# inspect possible scoring outcomes 
-				sim_check = inspect_trees_sums(__sim[:move_trees])
-				#@info "LOG - Check $sc => $sim_check"
-
-				# only keep scenarios that can result in the other NOT scoring
-				# in this case, the 'other' is the player
-				if sim_check[:player_score_possible] == false
-					push!(candidates_flip_sc, Dict(:sc => sc, :check => sim_check))
-					#@info "LOG - saved $sc"
-				end
-
-				@label skip_scenario
-			end
-		end
-
-		#@info "LOG - post px candidates: $candidates_flip_sc"
-		# refine choices among candidates
-		# if multiple, pick first that can lead to our scoring (score_opp_sc)
-		# player/opponent are flipped as it's a depth-2 simulation (ie. next turn)
-		if !isempty(candidates_flip_sc)
-
-			# prefer scenario that favors us, otherwise pick any other
-			sc_id = findfirst(c_sc -> c_sc[:check][:opp_score_possible] == true, candidates_flip_sc)
-			
-			
-			if !isnothing(sc_id) 
-				_move_action = candidates_flip_sc[sc_id][:sc]
-			else
-				_move_action = rand(candidates_flip_sc)[:sc]
-			end
-
-			#@info "LOG - flip candidate pick $_move_action"
-			
-		end
-			
-	end
-
-	#@info _penalty_flip_sc
-
-	## NO-SCORING -> RANDOM move avoid scoring for the opponent OR random
-	if isempty(_move_action) # no worthy flip scenarios -> random move
-
-		pruned_tree = deepcopy(tree) # modifiable copy of the tree
-
-		# prune tree, remove penalty options
-		for bad_sc in _penalty_flip_sc 
-			pruned_tree = prune_tree_fn(pruned_tree, bad_sc)
-			#@info "LOG - pruned sc $bad_sc"
-		end
-
-		# use it, if we still have a tree once done pruning
-		f_use_pruned = !isempty(pruned_tree)
-		start_k = (f_use_pruned ? pruned_tree : tree) |> keys |> rand
-		end_k = (f_use_pruned ? pruned_tree : tree)[start_k] |> keys |> rand
-
-		# write move action
-		_move_action = Dict(:start => start_k, :end => end_k) 
-
-		#f_use_pruned && @info "LOG - random PRUNED pick $_move_action"
-		#!f_use_pruned && @info "LOG - random pick $_move_action"
-
-	end
-
-	=# 
-
-
 	# save move action in turn recap
 	setindex!(_turn_recap, _move_action, :move_action)
 
-	_runtime = (now() - _time_start).value
-	_expl_rate = round(max_i/len_cm*100, digits=2)
+	_runtime::Int = (now() - _time_start).value
+	_expl_rate::Float64 = round(max_i/len_cm*100, digits=2)
 
 	println("LOG - AI play, $__pick_txt pick - runtime: $(_runtime)ms, expl.rate: $(_expl_rate)%, # sc: $len_cm")
 	
 	return _turn_recap
 
 end
+
+# ╔═╡ 08c9e667-8da4-4c72-ac50-e6045ccc7133
+@code_warntype play_turn_server("4D7CBM", "W", 0)
+
+# ╔═╡ 3bb8e65d-3900-4948-9f7a-06b5d1c292dc
+@benchmark play_turn_server("4D7CBM", "W", 0)
 
 # ╔═╡ 9c9f38c9-d86d-4d50-b7c3-dd470038256d
 play_turn_server("4D7CBM", "W", 0)
@@ -5090,8 +4862,6 @@ version = "17.4.0+2"
 # ╠═1d811aa5-940b-4ddd-908d-e94fe3635a6a
 # ╟─003f670b-d3b1-4905-b105-67504f16ba19
 # ╠═2cee3e2b-5061-40f4-a205-94d80cfdc20b
-# ╠═51f73d54-9cfd-471b-b30e-8ffde44750ef
-# ╟─a5dd9646-98fd-446f-a509-fb3957f91379
 # ╟─a96a9a78-0aeb-4b00-8f3c-db61839deb5c
 # ╟─f0e9e077-f435-4f4b-bd69-f495dfccec27
 # ╟─bf2dce8c-f026-40e3-89db-d72edb0b041c
@@ -5117,31 +4887,29 @@ version = "17.4.0+2"
 # ╠═1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
 # ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
-# ╠═156c508f-2026-4619-9632-d679ca2cae50
+# ╟─156c508f-2026-4619-9632-d679ca2cae50
 # ╠═1df30830-1a44-49f5-bb9a-309a8e9f2274
 # ╠═40174fcb-3064-4f47-af01-9bb99944472f
 # ╠═be2a5e35-0040-49df-8fb7-64cb7df86fb8
 # ╠═12909b46-9f85-4c69-858a-7cd3ca8d9ee8
-# ╠═0d8f038f-e223-454d-89c6-13536cf35b02
 # ╠═210bf59a-06dc-4dd2-b4c4-c569658fcaff
+# ╠═30af9114-2646-4940-95f7-817e3decdab4
 # ╠═5bb1b9c5-1291-450d-820f-9b75c732f2ec
 # ╠═ce99c297-764a-4ead-972e-7bb48dc4887e
-# ╠═30af9114-2646-4940-95f7-817e3decdab4
 # ╠═69b9885f-96bd-4f8d-9bde-9ac09521f435
 # ╠═e82b0769-ad51-48fd-968c-98d3a7400126
 # ╠═9c5bf63e-8603-4a5d-8b8b-1f020c2586b1
-# ╠═94f8392c-db84-41ca-a097-a1e3f27ca809
-# ╠═274733a7-0502-450e-ad79-11824987b511
 # ╠═749a641e-9e76-4d21-ace9-2e435a694c7e
 # ╠═c90139ab-ef6b-400d-a68d-c143cb6b120f
 # ╠═6197487e-e47b-4d05-a8cd-4c2ffda05318
-# ╠═411eb962-73f9-42cd-a177-f32c8ffb41ec
+# ╟─411eb962-73f9-42cd-a177-f32c8ffb41ec
 # ╠═4c0f16c4-31f7-4f94-b6c5-e3e928ce440e
 # ╠═8cc063c2-fbb7-4804-a29f-4a3294f5073b
+# ╠═ad164494-5c2d-454b-a310-b381ad57450f
 # ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
 # ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
-# ╠═a27e0adf-aa09-42ee-97f5-ede084a9edc3
-# ╠═5da79176-7005-4afe-91b7-accaac0bd7b5
+# ╟─a27e0adf-aa09-42ee-97f5-ede084a9edc3
+# ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
@@ -5188,13 +4956,14 @@ version = "17.4.0+2"
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 # ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 # ╠═fdb40907-1047-41e5-9d39-3f94b06b91c0
+# ╠═08c9e667-8da4-4c72-ac50-e6045ccc7133
 # ╠═3bb8e65d-3900-4948-9f7a-06b5d1c292dc
 # ╠═9c9f38c9-d86d-4d50-b7c3-dd470038256d
 # ╠═96951a3b-562f-4790-9ea9-162c15953984
 # ╠═fd39104f-3fd3-43ff-8c19-67013fb46019
 # ╠═65513891-c2f7-4b9f-912a-215030ef56b8
 # ╟─8e1673fe-5286-43cd-8830-fba353f1cd89
-# ╟─ea7779ea-cd11-4f9e-8022-ff4f370ffddd
+# ╠═ea7779ea-cd11-4f9e-8022-ff4f370ffddd
 # ╟─3d09a15d-685b-4d9b-a47f-95067441928d
 # ╟─a801e1ad-1d10-4cf3-bf6e-4bf55b535b65
 # ╟─9fdbf307-1067-4f55-ac56-8335ecc84962
