@@ -442,6 +442,29 @@ search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_se
 # ╔═╡ a3ae2bfe-41ea-4fe1-870b-2ac35153da5d
 md"### Search spaces generation"
 
+# ╔═╡ 29a93299-f577-4114-b77f-dbc079392090
+begin
+# global parameters for identifying rings and markers
+const _W::String = "W"
+const _B::String = "B"
+const _R::String = "R"
+const _M::String = "M"
+
+const _MB::String = _M*_B
+const _RB::String = _R*_B
+const _MW::String = _M*_W
+const _RW::String = _R*_W	
+
+# reference player keys
+const _B_key::Symbol = Symbol(_W)
+const _W_key::Symbol = Symbol(_B)
+
+# reference scoring arrays 
+const _B_score::Vector{String} = fill(_MB, 5)
+const _W_score::Vector{String} = fill(_MW, 5)
+
+end
+
 # ╔═╡ 003f670b-d3b1-4905-b105-67504f16ba19
 # populate dictionary of locations search space 
 function new_searchSpace()::Dict{CartesianIndex, Vector{Vector{CartesianIndex}}}
@@ -542,10 +565,10 @@ end
 
 # ╔═╡ 1d811aa5-940b-4ddd-908d-e94fe3635a6a
 # pre-populate dictionary with search space for each starting location
-const locs_searchSpace = new_searchSpace()
+const _locs_searchSpace = new_searchSpace()
 
 # ╔═╡ 9be19399-c7e6-4089-b746-1d4d749f7774
-const valid_start_locs = keys(locs_searchSpace)
+const _board_locs = Set(keys(_locs_searchSpace))
 
 # ╔═╡ f0e9e077-f435-4f4b-bd69-f495dfccec27
 function sub_spaces_split(input_array, key)
@@ -708,29 +731,21 @@ end
 
 # ╔═╡ 2cee3e2b-5061-40f4-a205-94d80cfdc20b
 # pre-populate dictionary with search space (scoring)
-const locs_searchSpace_scoring = new_searchSpace_scoring()
-
-# ╔═╡ 9700ea30-a99c-4832-a181-7ef23c86030a
-function _pick_rand_locsRow()
-# used for generating starting points for replicating close-to-scoring scenarios
-	
-	return rand(rand(locs_searchSpace_scoring).second)
-
-end
+const _locs_searchSpace_scoring = new_searchSpace_scoring()
 
 # ╔═╡ 989f8ecc-724d-4f80-a359-fb55d2e356d6
 function search_legal_moves(gs::Matrix{String}, ring_loc::CartesianIndex)
 # returns sub-array of valid moves
 # using server types (matrix, cartesian indexes) both in input and output
 	
-	# checks that starting position/ring is valid -> early return if false
+	# checks that starting position/ring is a valid board loc -> early return if false
 	# referencing pre-computed global const 
-	if !(ring_loc in valid_start_locs)
+	if !(ring_loc in _board_locs)
 		return [] 
 	end
 
 	# retrieve search space for the starting point
-	@inbounds search_space = locs_searchSpace[ring_loc]
+	@inbounds search_space = _locs_searchSpace[ring_loc]
 
 	# array to be returned
 	legal_moves::Vector{CartesianIndex} = []
@@ -767,6 +782,14 @@ function search_legal_moves(gs::Matrix{String}, ring_loc::CartesianIndex)
 	push!(legal_moves, ring_loc) 
 
 	return legal_moves
+
+end
+
+# ╔═╡ 9700ea30-a99c-4832-a181-7ef23c86030a
+function _pick_rand_locsRow()
+# used for generating starting points for replicating close-to-scoring scenarios
+	
+	return rand(rand(_locs_searchSpace_scoring).second)
 
 end
 
@@ -907,44 +930,6 @@ function reshape_out(input_ci::CartesianIndex)
 	
 end
 
-# ╔═╡ 33707130-7703-4aa0-84e6-23ab387c0c4d
-# returns sub-array of valid moves
-# this function is used by the server to compute allowable moves in advance 
-# using server types (matrix, cartesian indexes) vs client types (array, int)
-# functions could be unified but likely the other will be killed
-function search_loc_srv(game_state_srv, start_index_srv::CartesianIndex)
-
-	# the client state must be reshaped
-	ref_state = game_state_srv
-
-	# copying startstart index needs no conversion
-	start_index = start_index_srv
-	
-	# checks that row/col are valid
-	if !(start_index in keys(locs_searchSpace))
-		return [] 
-	end
-
-	# retrieve search space for the starting point
-	search_space = locs_searchSpace[start_index]
-
-	# array to be returned
-	search_return = CartesianIndex[]
-
-	for range in search_space
-
-		# check valid moves in each range and append them to returning array
-		append!(search_return, keepValid(ref_state, range)) 
-
-	end
-
-	# append starting index (can drop the ring from where picked)
-	append!(search_return, [start_index]) 
-
-return reshape_out(search_return) # convert to linear indexes
-
-end
-
 # ╔═╡ 7fe89538-b2fe-47db-a961-fdbdd4278963
 function reshape_in(input_array::AbstractVector)
 # LinearIndex -> CartesianIndex reshaping for incoming calls from the client
@@ -988,41 +973,6 @@ for (ind,loc) in enumerate(locs)
 end
 
 return input_board
-end
-
-# ╔═╡ bf2dce8c-f026-40e3-89db-d72edb0b041c
-# returns sub-array of valid moves
-function search_loc(client_state, client_start_index::Int64)
-
-	# the client state must be reshaped
-	ref_state = reshape([s for s in client_state], 19, 11)
-
-	# the client start index needs to be converted to CI (row, col)
-	start_index = reshape_in(client_start_index)
-	
-	# checks that row/col are valid
-	if !(start_index in keys(locs_searchSpace))
-		return [] 
-	end
-
-	# retrieve search space for the starting point
-	search_space = locs_searchSpace[start_index]
-
-	# array to be returned
-	search_return = CartesianIndex[]
-
-	for range in search_space
-
-		# check valid moves in each range and append them to returning array
-		append!(search_return, keepValid(ref_state, range)) 
-
-	end
-
-	# append starting index (can drop the ring from where picked)
-	append!(search_return, [start_index]) 
-
-return reshape_out(search_return) # convert to linear indexes
-
 end
 
 # ╔═╡ c334b67e-594f-49fc-8c11-be4ea11c33b5
@@ -1089,17 +1039,6 @@ function gen_random_gameState(white_ring, black_ring, _near_score_mks = false, m
 	return server_game_state
 end
 
-# ╔═╡ 29a93299-f577-4114-b77f-dbc079392090
-begin
-# global parameters for identifying rings and markers
-
-	white_id = "W"
-	black_id = "B"
-	ring_id = "R"
-	marker_id = "M"
-
-end
-
 # ╔═╡ 61a0e2bf-2fed-4141-afc0-c8b5507679d1
 md"#### Server-side storage of game data"
 
@@ -1131,174 +1070,15 @@ end
 # ╔═╡ 98b25b77-4b00-4656-bbf9-59fb255f8833
 t_gs = gen_random_gameState("RW","RB",false, 73)
 
-# ╔═╡ d8815bc8-6b13-403b-b2ec-a12646f06771
-__rrr = findall(==("RW"), t_gs)
-
-# ╔═╡ 88873b52-00b0-4c48-b113-569a3b9540bc
-@benchmark collect(combinations(__rrr, 2))
-
-# ╔═╡ 411eb962-73f9-42cd-a177-f32c8ffb41ec
-function group_scoringRows(rows::Vector{Vector{CartesianIndex}})
-# takes in input rows of locations (CI) and returns them split in groups [[][]]
-
-	len_range::UnitRange{Int64} = 1:length(rows)
-	f_grouped::Vector{Bool} = [false for i in len_range] # keep track 
-	grouped_rows::Vector{Vector{Vector{CartesianIndex}}} = []
-
-	for r_i in len_range
-
-		# skip if grouped
-		f_grouped[r_i] == true && @goto skip_row 
-
-		# start w/ its own lonely group
-		temp_group::Vector{Vector{CartesianIndex}} = []; 
-		push!(temp_group, rows[r_i]) 
-	
-		# check against all non-grouped following rows
-		not_grouped_rows_ids = findall(==(false), f_grouped)
-		for ngr_i in not_grouped_rows_ids
-			# only check following rows
-			if ngr_i > r_i
-				# group if they intersect
-				if !isdisjoint(rows[r_i], rows[ngr_i])
-					push!(temp_group, rows[ngr_i]) # save row in same group
-					f_grouped[ngr_i] = true # flag it as found
-				end
-			end
-		end
-
-		push!(grouped_rows, temp_group)
-		
-		@label skip_row
-	end
-
-	return grouped_rows
-	
-end
-
-# ╔═╡ 69b9885f-96bd-4f8d-9bde-9ac09521f435
-function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Vector{Vector{Dict}}}
-# look at the game state as it is to check if there are scoring opportunities
-
-	# to be returned
-	_scores::Dict{Symbol, Vector{Vector{Dict}}} = Dict(:W=>[],:B=>[])
-	# :B/:W -> container[ group[ score{} {}] [{} {}] ]
-
-	# helper array to store found locations for scoring rows
-	found_rows::Dict{Symbol, Vector{Vector{CartesianIndex}}} = Dict(:B=>[], :W=>[])
-
-	# all markers locations
-	all_mks::Vector = findall(s -> contains(s, "M"), gs)
-	
-	for mk_index in all_mks
-
-		# for each marker retrieve search space for scoring ops
-		@inbounds mk_search_locs::Vector{Vector{CartesianIndex}} = locs_searchSpace_scoring[mk_index]
-
-		for locs_vec in mk_search_locs
-
-			# reading states for all locs in search array
-			states_vec::Vector{String} = []
-			for loc in locs_vec
-				@inbounds _s::String = gs[loc]
-				isempty(_s) ? (@goto skip_search_locs_vec) : push!(states_vec, _s)
-			end
-	
-			# search if a score was made within this search array
-			black_scoring::Bool = count(==("MB"), states_vec) == 5 ? true : false
-			white_scoring::Bool = count(==("MW"), states_vec) == 5 ? true : false
-
-			# if a score was made
-			if black_scoring || white_scoring
-				# log who's the scoring player
-				player::String = black_scoring ? "B" : "W"
-				player_key = Symbol(player) 
-
-				# save the row but check that scoring row wasn't saved already
-				# scoring locs are the same for each marker in it 
-				# -> if not found already, save it
-				if !(locs_vec in found_rows[player_key])
-					push!(found_rows[player_key], locs_vec)
-				end					
-				
-			end	
-
-			@label skip_search_locs_vec
-		end
-	end
-
-	
-	# identify mk_sel for row selection within same groups
-	mk_sel_taken::Vector{CartesianIndex}=[] # keep track of ones already taken
-	for player in keys(found_rows)
-
-		# group intersecting scoring rows
-		score_groups = group_scoringRows(found_rows[player])
-		
-		for group in score_groups
-			
-			group_info::Vector{Dict} = []
-			mk_group::Vector{CartesianIndex} = vcat(group...)
-			mk_freq::Dict{CartesianIndex,Int64} = countmap(mk_group)
-			
-			for row in group
-
-				# exclude from row mks already taken
-				mk_sel_avail::Vector{CartesianIndex} = setdiff(row, mk_sel_taken)
-
-				# find marker with min frequency and save it
-				_, id::Int64 = findmin(i -> mk_freq[i], mk_sel_avail)
-				@inbounds mk_sel::CartesianIndex = mk_sel_avail[id]
-				push!(mk_sel_taken, mk_sel)
-
-				# package score information
-				score_info::Dict{Symbol,Union{CartesianIndex, Vector{CartesianIndex}}} = Dict(:mk_sel => mk_sel, :mk_locs => row)
-
-				# save score
-				push!(group_info, score_info)
-
-			end
-			
-			# save group of scores x player
-			push!(_scores[player], group_info)
-		end
-	end
-
-
-	return _scores
-
-end
-
-# ╔═╡ 48847b75-4db4-42de-8bab-9a6d2e8d6b4c
-search_scores_gs(t_gs)
-
-# ╔═╡ 13a2e4a1-b818-4021-9281-68f1cd273d70
-__rows::Vector{Vector{CartesianIndex}} = []
-
-# ╔═╡ f2486aec-d572-4a83-87cf-94e6720c895a
-__rows
-
-# ╔═╡ cb759904-a3a2-4e8f-966f-6431946cfbc4
-@benchmark group_scoringRows(__rows)
-
-# ╔═╡ 879ccfa6-4226-49f4-9f7b-3c61582017fc
-__gsc = group_scoringRows(__rows)
-
-# ╔═╡ 8cbddcb7-ec64-46a9-9903-8b74a83bb8be
-@benchmark collect(Iterators.product(__gsc...))
-
-# ╔═╡ a5379f53-8bcd-4e8f-be0f-26a852fb1cd4
-for v in search_scores_gs(t_gs)[:W], d in v
-
-		push!(__rows, d[:mk_locs])
-end
+# ╔═╡ f79ee3fa-2d91-4c09-a1ac-755d3d52bc6f
+collect(combinations([1,2,3,4,5],1))
 
 # ╔═╡ fae1cebf-9355-4c4c-b0aa-0eab1f517785
 function identify_scoringSets(rows::Vector{Vector{CartesianIndex}})::Vector{Set{Int}}
 # takes in input rows of locations (CI) and returns the possible sets representing groups of scoring actions
 # with multiple scoring and rows overlap, some scores preclude others
 # having A/B/C, depending on their configuration, A/B/C, A/B, B/C, C/A might be available for scoring
-# using the 1-based index of row in input array as its ID
+# using the 1-based index of row in input array as the ID for the row
 
 	len_range::UnitRange{Int} = 1:length(rows)
 	c_grouped::Vector{Int} = [0 for i in len_range] # track times we group each
@@ -1312,6 +1092,8 @@ function identify_scoringSets(rows::Vector{Vector{CartesianIndex}})::Vector{Set{
 		# start w/ its own lonely group
 		v_locs::Vector{CartesianIndex} = []; append!(v_locs, rows[j])
 		set_ids::Set{Int} = Set(j)
+		
+		@inbounds c_grouped[j] += 1  # increase counter for row
 	
 		# check against all other rows
 		for k in len_range 
@@ -1321,9 +1103,10 @@ function identify_scoringSets(rows::Vector{Vector{CartesianIndex}})::Vector{Set{
 				
 				# add to set if disjoint from everything else in it 
 				if isdisjoint(v_locs, rows[k])
-					append!(v_locs, rows[k]) # save locs for further comparison
+					append!(v_locs, rows[k]) # save locs for next comparisons
 					push!(set_ids, k) # save id of row
-					@inbounds c_grouped[k] += 1 # increase counter for row
+					
+					@inbounds c_grouped[k] += 1 
 				end
 			end
 		end
@@ -1337,23 +1120,104 @@ function identify_scoringSets(rows::Vector{Vector{CartesianIndex}})::Vector{Set{
 	
 end
 
-# ╔═╡ eaa2a145-126e-4b12-8254-fca1014d278b
- identify_scoringSets(__rows)
+# ╔═╡ 69b9885f-96bd-4f8d-9bde-9ac09521f435
+function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
+# look at the game state as it is to check if there are scoring opportunities
 
-# ╔═╡ d349831b-d9d4-4785-9765-bdd127e6cb39
-unique( identify_scoringSets(__rows))
+	# to be returned -> returns empty vector if nothing found for player
+	# :B/:W -> {:scores => [], :s_sets => []}
+	scores_info::Dict{Symbol, Dict} = Dict()
 
-# ╔═╡ c63d0eba-d577-4f07-9ac3-42db3a842e35
-@benchmark identify_scoringSets(__rows)
+	# helper array to store found locations for scoring rows
+	found_rows::Dict{Symbol, Vector{Vector{CartesianIndex}}} = Dict(_B_key => [], _W_key => [])
 
-# ╔═╡ d8fe006a-4228-4e17-8c20-f93ef89a15b1
-@benchmark (1:10)[2:end]
+	# all markers locations
+	all_mks::Vector{CartesianIndex} = findall(s -> contains(s, _M), gs)
+	
+	for mk_index in all_mks
 
-# ╔═╡ 14177405-cd35-4e4b-a239-f94fb7ea363a
-v=[[CartesianIndex(10,0),CartesianIndex(10,20)],[CartesianIndex(10,40),CartesianIndex(10,90)]]
+		# for each marker retrieve search space for scoring ops
+		@inbounds mk_search_locs::Vector{Vector{CartesianIndex}} = _locs_searchSpace_scoring[mk_index]
 
-# ╔═╡ 2ea3edad-342e-4c4b-9a32-38f9e34f0ba6
-Set(vcat([v[i] for i in 1:length(v)]...))
+		for locs_vec in mk_search_locs
+
+			# reading states for all locs in search array
+			states_vec::Vector{String} = []
+			for loc in locs_vec
+				@inbounds s::String = gs[loc]
+				contains(s, _M) ? push!(states_vec, s) : @goto skip_vec
+			end
+	
+			# search if a score was made within this search array
+			black_scoring::Bool = states_vec == _B_score
+			white_scoring::Bool = states_vec == _W_score
+
+			# if a score was made
+			if black_scoring || white_scoring
+				# log who's the scoring player
+				player_key::Symbol = black_scoring ? _B_key : _W_key
+
+				# save the row but check that scoring row wasn't saved already
+				if !(locs_vec in found_rows[player_key])
+					@inbounds push!(found_rows[player_key], locs_vec)
+				end					
+			end	
+
+			@label skip_vec
+		end
+	end
+
+	
+	# identify mk_sel for row selection within same groups
+	mk_sel_taken::Vector{CartesianIndex} = [] # keep track of ones already taken
+	for player_k in keys(found_rows)
+
+		# extract rows
+		@inbounds rows::Vector{Vector{CartesianIndex}} = found_rows[player_k]
+
+		# identify scoring sets among rows and save them in container
+		scoring_sets::Vector{Set{Int}} = identify_scoringSets(rows)
+
+		# prep container
+		s_player = Dict(:scores => Dict[], :s_sets => scoring_sets)
+
+		# summary info for all markers across all rows
+		mk_group::Vector{CartesianIndex} = vcat(rows...)
+		mk_freq::Dict{CartesianIndex,Int64} = countmap(mk_group)
+
+		# transform rows into scores data
+		for r in rows
+
+			# exclude from row mks already taken
+			mk_sel_avail::Vector{CartesianIndex} = setdiff(r, mk_sel_taken)
+
+			# find marker with min frequency and save it
+			_, id::Int64 = findmin(i -> mk_freq[i], mk_sel_avail)
+			@inbounds mk_sel::CartesianIndex = mk_sel_avail[id]
+			push!(mk_sel_taken, mk_sel)
+
+			# package score information
+			score_info::Dict{Symbol,Union{CartesianIndex, Vector{CartesianIndex}}} = Dict(:mk_sel => mk_sel, :mk_locs => r)
+
+			# save score
+			@inbounds push!(s_player[:scores], score_info)
+
+		end
+
+		# save player's data
+		@inbounds setindex!(scores_info, s_player, player_k)
+	end
+
+
+	return scores_info
+
+end
+
+# ╔═╡ 48847b75-4db4-42de-8bab-9a6d2e8d6b4c
+@benchmark search_scores_gs(t_gs)
+
+# ╔═╡ 092288fe-fb2f-40c6-8e83-c745f5653e01
+search_scores_gs(t_gs)
 
 # ╔═╡ 18f8a5d6-c775-44a3-9490-cd11352c4a63
 function set_nested!(dict::Dict, val, first_key, second_key)
@@ -1532,125 +1396,6 @@ function gen_newGame(vs_ai=false)
 	println("LOG - New game initialized - Game ID $game_id")
 	return game_id
 	
-end
-
-# ╔═╡ 5da79176-7005-4afe-91b7-accaac0bd7b5
-function static_score_lookup(state)
-	# look at the game state to check if there are scoring opportunities
-	# ASSUMES MOVE IS DONE AND AFFECTED MARKERS HAVE BEEN FLIPPED
-
-	# all markers locations
-	gs_markers_locs = findall(i -> contains(i, "M"), state)
-
-	# values to be returned
-	num_scoring_rows = Dict(:tot => 0, :B => 0, :W => 0)
-	scoring_details = []
-
-	# helper array to store found locations for scoring markers
-	found_ss_locs = []
-
-	for mk_index in gs_markers_locs
-
-		# for each marker retrieve search space for scoring
-		ss_locs_arrays = locs_searchSpace_scoring[mk_index]
-
-		for ss_locs in ss_locs_arrays
-				
-			# reading states for all indexes in loc search array
-
-			states_array = []
-			for index in ss_locs
-				push!(states_array, state[index])
-			end
-					
-	
-			# search if a score was made in loc
-			MB_count = count(s -> isequal(s, "MB"), states_array)
-				black_scoring = MB_count == 5 ? true : false
-			
-			MW_count = count(s -> isequal(s, "MW"), states_array)
-				white_scoring = MW_count == 5 ? true : false
-
-			# if a score was made
-			if black_scoring || white_scoring
-				# log who's the player
-				scoring_player = black_scoring ? "B" : "W"
-
-				# save the row but check that scoring row wasn't saved already
-				# scoring locs are the same for each marker in it due to sorting
-				# if not found already, save it
-				if !(ss_locs in found_ss_locs)
-
-					# save score_row details
-					score_row = Dict(:mk_locs => ss_locs, :player => scoring_player)
-			
-					push!(scoring_details, score_row)
-					
-					# keep count of scoring rows (total and per player)
-					num_scoring_rows[:tot] += 1	
-					
-						if black_scoring
-							num_scoring_rows[:B] += 1
-						elseif white_scoring
-							num_scoring_rows[:W] += 1
-						end
-
-					# save array of locations to simplify future checks
-					push!(found_ss_locs, ss_locs)
-				
-				end		
-				
-			end	
-		end
-	end
-
-	## handling case of multiple scoring rows in the same move + row selection
-	if num_scoring_rows[:tot] >= 1
-
-		# scoring rows: find markers outside intersection and use them for selection
-		# guaranteed to find at least 1 for each series (found_locs helps)
-
-		all_scoring_mk_ids = []
-		for row in scoring_details
-			append!(all_scoring_mk_ids, row[:mk_locs])
-		end
-
-		# frequency count of each marker location ID
-		mk_ids_fCount = countmap(all_scoring_mk_ids)
-
-		# keep track of sel markers already taken (by CartIndex)
-		mk_sel_taken = []
-		
-		for (row_id, row) in enumerate(scoring_details)
-
-			# temp copy of locations, to avoid modifying the original array
-			temp_locs = copy(row[:mk_locs])
-
-			# build search array of locations in row by exluding taken locations
-			if !isempty(mk_sel_taken)
-
-				indexes_toRemove = findall(m -> m in mk_sel_taken, temp_locs)
-				if !isempty(indexes_toRemove)
-
-					deleteat!(temp_locs, indexes_toRemove)
-				end
-			end
-				
-
-			# find marker with min frequency that hasn't been already taken
-			min_fr, min_fr_index = findmin(i -> mk_ids_fCount[i], temp_locs)
-			mk_sel = temp_locs[min_fr_index]
-				
-			# save mk_sel in row collection to be returned
-			setindex!(scoring_details[row_id], mk_sel, :mk_sel)
-
-			# store mk_sel in array (useful for solving conflicts later)
-			push!(mk_sel_taken, mk_sel)
-		end
-	end
-
-	return num_scoring_rows, scoring_details
-
 end
 
 # ╔═╡ cf587261-6193-4e7a-a3e8-e24ba27929c7
@@ -2484,7 +2229,7 @@ function setindex_container!(d::Dict, val, key::Symbol, use_set=false)
 end
 
 # ╔═╡ a27e0adf-aa09-42ee-97f5-ede084a9edc3
-function sim_new_gameState(ex_game_state::Matrix, sc::Dict, fn_mode::Symbol)
+function sim_new_gameState(ex_game_state::Matrix, sc::Dict, fn_mode::Symbol)::Dict
 	
 #=
 This function has three modes of use:
@@ -2605,7 +2350,7 @@ Making sense of move/flip data depends on the mode the function was called in.
 		### flip markers in the moving direction
 
 		# retrieve search space for the starting point, ie. ring directions
-		@inbounds r_dirs::Vector{Vector{CartesianIndex}} = locs_searchSpace[start_loc]
+		@inbounds r_dirs::Vector{Vector{CartesianIndex}} = _locs_searchSpace[start_loc]
 
 		# spot direction/array that contains the ring 
 		n::Int = findfirst(rd -> (end_loc in rd), r_dirs)
@@ -2662,15 +2407,15 @@ Making sense of move/flip data depends on the mode the function was called in.
 	function score_check!() # post-move scoring
 
 		# search for possible scoring options
-		scores::Dict{Symbol, Vector{Vector{Dict}}} = search_scores_gs(new_gs)
+		scores::Dict{Symbol, Dict} = search_scores_gs(new_gs)
 
-		# save possible scores for each player
-		player_scores = scores[Symbol(_player_id)]
-		opp_scores = scores[Symbol(_opp_id)]
+		# save scores information for each player
+		sinfo_player = scores[Symbol(_player_id)]
+		sinfo_opp = scores[Symbol(_opp_id)]
 
 		# update global dict -> is there a score available for either player or opp?
-		!(isempty(player_scores)) && setindex!(_ret, player_scores, :scores_avail_player)
-		!(isempty(opp_scores)) && setindex!(_ret, opp_scores, :scores_avail_opp)
+		!(isempty(sinfo_player[:scores])) && setindex!(_ret, sinfo_player, :scores_avail_player)
+		!(isempty(sinfo_opp[:scores])) && setindex!(_ret, sinfo_opp, :scores_avail_opp)
 
 	end
 	
@@ -2715,17 +2460,19 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, nx_player_score:
 	# to be returned
 	scenario_trees::Dict{Symbol, Union{Dict, Array}} = Dict()
 
-		#= SCENARIO TREE structure
+		#= return structure
 		
-			() :score_preMove_avail => [ options ] 
+			() :score_preMove_avail => { :scores => Dict[], :s_set => [] }
 		
-			!/() :move_trees => [(:gs_id, :gs, :tree)] 
-					> gs_id = (mk_sel, ring_score) ID absent if only tree
-					:tree => ( :start => :end => flags/deltas)
+			!/() :treepots => [ ]
+					:tree_summary => { :sc_flip => [] , :sc_score => []}
+					:gs_id = { s_set, s_rings} # ID absent if only 1 tree
+					:tree => { :start => :end => flags/deltas }
+					:gs => Matrix{String} # starting gamestate for tree
 		=#
 
-	# ring id
-	_ring_id::String = "R"*nx_player_id
+	# ring id for this player
+	_ring_id::String = nx_player_id == _W ? _RW : _RB
 
 	# identify any pre-move score to be acted on - ie. left by previous player
 	pms_sc_id = Dict( :id => Dict( 	:player_id => nx_player_id, 
@@ -2734,56 +2481,55 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, nx_player_score:
 	pm_scores_inspect = sim_new_gameState(ex_gs, pms_sc_id, :inspect)
 	flag_pms::Bool = haskey(pm_scores_inspect, :scores_avail_player)
 
-	treepots::Vector{Dict} = [] # scenario tree x treepot in this array
+	# container for 
+	treepots::Vector{Dict{Symbol, Union{Dict, Matrix}}} = [] 
+	
 	# act on score opportunity if present
 	if flag_pms
 
 		# there could be multiple choices for opp_score -> array of new game states
-		pms_options::Vector{Vector{Dict}} = pm_scores_inspect[:scores_avail_player]
+		@inbounds pms_options::Dict = pm_scores_inspect[:scores_avail_player]
 
 		# save choices in tree to be returned 
-		setindex!(scenario_trees, pms_options, :scores_preMove_avail)
+		@inbounds setindex!(scenario_trees, pms_options, :scores_preMove_avail)
 
-		# scoring choices come in groups, with intersecting scores within each group
-		# here we simulate possible combination sequences of scoring choices
-
-		# build possible combinations of scoring scenarios
-		# {[A,B],[C,D][E]} => [(A,C,E),(A,D,E),(B,C,E),...]
-		pms_sequences = collect(Iterators.product(pms_options...))
-		n::Int = length(pms_options) # number of scoring actions in the sequence
-		
-		# after/during each sequence, N rings will be taken (N = sequence length)
+		# retrieve rings locations 
 		_rings::Vector{CartesianIndex} = findall(==(_ring_id), ex_gs)
-		
-		rings_comb::Vector{Vector{CartesianIndex}} = collect(combinations(_rings, n)) 
-		# [ [r1,r2], [r1,r3], [] ]
-		
-		# all possible outcomes are given by num_sequences X combo of rings removed
-		# generate post-preMove scores game states, seq x ring combos
-		for seq in pms_sequences
-			for rc in rings_comb
 
-				# container for pre-move score actions 
-				preMove_actions_array = Dict[]
-				gs_id = Dict(:mk_locs_set => Set(), :rings_score_set => Set())
+		# here we simulate possible combination sequences of scoring choices
+		# retrieved from info[:s_sets] -> [ (1,2,4), (2,3,1), (4,5), ... ]
+		@inbounds scoring_sets = pms_options[:s_sets]
 
-				# map rings to score actions within the sequence
+		for sset in scoring_sets
+
+			n::Int = length(sset) # number of scoring actions in the set sequence
+			rings_comb::Vector{Vector{CartesianIndex}} = collect(combinations(_rings, n)) # [ [r1,r2], [r1,r3], ... ]
+		
+			for rc in rings_comb # new game state for each rings combination
+
+				# container for pre-move score actions of this set, saved for replay
+				preMove_actions_array::Vector{Dict} = []
+
+				# identifier of future game state
+				gs_id = Dict(:s_set => sset, :s_rings => Set{CartesianIndex}())
+
+				# map rings to score actions within the set/sequence
 				# order doesn't matter, end result is the same
-				for (i, ring) in enumerate(rc) # num rings == length sequence
+				for (i, s_row_id) in enumerate(sset) 
 
 					# prep preMove action data
-					@inbounds pm_mk_locs::Vector{CartesianIndex} = seq[i][:mk_locs]
+					@inbounds pm_mk_locs = pms_options[:scores][s_row_id][:mk_locs]
+					@inbounds pm_ring_score = rc[i] # num rings == length set
 					
-					score_action_inSeq = Dict( 	:ring_score => ring,
-												:mk_locs => pm_mk_locs)
+					score_action_inSeq = Dict( 	:mk_locs => pm_mk_locs,
+												:ring_score => pm_ring_score)
 					
 					push!(preMove_actions_array, score_action_inSeq)
 
-					# prep sets of removed markers/rings, to identify gs later
-					setindex_container!(gs_id, pm_mk_locs, :mk_locs_set, true)
-					setindex_container!(gs_id, ring, :rings_score_set, true)
+					# log removed rings, to identify game state later
+					setindex_container!(gs_id, pm_ring_score, :s_rings, true)
 
-					# MEMO - we use sets because for id/brancing as:
+					# MEMO - we use sets for id/brancing as:
 					# order of removal for mks/rings doesn't change the resulting gs
 					# so we avoid duplicate branches
 
@@ -2796,7 +2542,7 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, nx_player_score:
 
 				# replay pre-move scores and get new game state
 				post_pms_sim = sim_new_gameState(ex_gs, pms_actions, :replay)
-				post_pms_gs = post_pms_sim[:new_game_state]
+				@inbounds post_pms_gs = post_pms_sim[:new_game_state]
 				
 				# save new gs with matching ID prepared before
 				push!(treepots, Dict(:gs_id => gs_id, :gs => post_pms_gs))
@@ -2804,8 +2550,9 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, nx_player_score:
 					# NOTE -> still need to FLAG GAME AS over by score by Nth choice 
 					# increase player score as pre-move score took place
 					# nx_player_score += 1
-				
+	
 			end
+				
 		end
 		
 	else # save the only available starting game state (no pre move score) 
@@ -2834,21 +2581,23 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, nx_player_score:
 						:score_opp_sc => [] ) # scoring ops opponent
 
 		# extract gs details
-		gs::Matrix{String} = pot[:gs]
-		
-		# find all rings for moving player in this game state
-		rings::Vector{CartesianIndex} = findall(==(_ring_id), gs)
+		@inbounds gs::Matrix{String} = pot[:gs]
 
+		
 		# find legal moves for each of the rings start loc and save them
+		rings::Vector{CartesianIndex} = findall(==(_ring_id), gs)
 		nx_legal_moves::Dict{CartesianIndex, Vector{CartesianIndex}} = Dict()
-		foreach(r -> setindex!(nx_legal_moves, search_legal_moves(gs, r), r), rings)
+			for r in rings
+			 	@inbounds setindex!(nx_legal_moves, search_legal_moves(gs, r), r)
+			end
+		
 
 		# for each start
-		for move_start in rings # rings = keys nx_legal_moves dict
+		for move_start in rings # rings = keys of nx_legal_moves dict
 			@inbounds for move_end in nx_legal_moves[move_start]
 				if move_start != move_end # -> if ring not dropped in-place
 
-					sc_id = Dict(:start => move_start, :end => move_end)
+					sc_id::Dict{Symbol, CartesianIndex} = Dict(:start => move_start, :end => move_end)
 
 					# simulate new game state for start/end combination
 					move = Dict(:id => Dict(:player_id => nx_player_id, 
@@ -2893,13 +2642,10 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, nx_player_score:
 end
 
 # ╔═╡ 20c7cac3-2de2-49a7-97d1-e94f82beec7f
-# ╠═╡ disabled = true
-#=╠═╡
-@benchmark sim_scenarioTrees(t_gs, "W", 0)
-  ╠═╡ =#
+@benchmark sim_scenarioTrees(t_gs, "B", 0)
 
-# ╔═╡ dd98af0e-3ee7-4fc8-acf4-9f46e3734b27
-sim_scenarioTrees(t_gs, "W", 0)
+# ╔═╡ 570b0371-51f5-436f-b5e2-cd0b488c8c65
+sim_scenarioTrees(t_gs, "B", 0)
 
 # ╔═╡ f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = false)
@@ -4537,15 +4283,14 @@ version = "17.4.0+2"
 # ╠═ccbf567a-8923-4343-a2ff-53d81f2b6361
 # ╟─a3ae2bfe-41ea-4fe1-870b-2ac35153da5d
 # ╠═1d811aa5-940b-4ddd-908d-e94fe3635a6a
-# ╠═9be19399-c7e6-4089-b746-1d4d749f7774
-# ╟─003f670b-d3b1-4905-b105-67504f16ba19
 # ╠═2cee3e2b-5061-40f4-a205-94d80cfdc20b
+# ╠═9be19399-c7e6-4089-b746-1d4d749f7774
+# ╠═29a93299-f577-4114-b77f-dbc079392090
+# ╟─003f670b-d3b1-4905-b105-67504f16ba19
 # ╟─a96a9a78-0aeb-4b00-8f3c-db61839deb5c
 # ╟─f0e9e077-f435-4f4b-bd69-f495dfccec27
-# ╟─bf2dce8c-f026-40e3-89db-d72edb0b041c
-# ╟─33707130-7703-4aa0-84e6-23ab387c0c4d
-# ╟─9700ea30-a99c-4832-a181-7ef23c86030a
 # ╟─989f8ecc-724d-4f80-a359-fb55d2e356d6
+# ╟─9700ea30-a99c-4832-a181-7ef23c86030a
 # ╟─bbabb049-9418-4a6b-9c1a-c5822d971aba
 # ╟─148d1418-76a3-462d-9049-d30e85a45f06
 # ╟─fc68fa36-e2ea-40fa-9d0e-722167a2506e
@@ -4555,7 +4300,6 @@ version = "17.4.0+2"
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
-# ╠═29a93299-f577-4114-b77f-dbc079392090
 # ╟─f1949d12-86eb-4236-b887-b750916d3493
 # ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╟─61a0e2bf-2fed-4141-afc0-c8b5507679d1
@@ -4564,34 +4308,20 @@ version = "17.4.0+2"
 # ╟─1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╠═156c508f-2026-4619-9632-d679ca2cae50
 # ╠═98b25b77-4b00-4656-bbf9-59fb255f8833
-# ╠═d8815bc8-6b13-403b-b2ec-a12646f06771
-# ╠═88873b52-00b0-4c48-b113-569a3b9540bc
 # ╠═6d36df9c-9b46-47e9-81c0-cb6a1b4d2ff2
 # ╠═20c7cac3-2de2-49a7-97d1-e94f82beec7f
+# ╠═570b0371-51f5-436f-b5e2-cd0b488c8c65
+# ╠═f79ee3fa-2d91-4c09-a1ac-755d3d52bc6f
 # ╠═48847b75-4db4-42de-8bab-9a6d2e8d6b4c
-# ╠═8cbddcb7-ec64-46a9-9903-8b74a83bb8be
-# ╠═dd98af0e-3ee7-4fc8-acf4-9f46e3734b27
+# ╠═092288fe-fb2f-40c6-8e83-c745f5653e01
 # ╠═e68b41fc-cbf5-477f-b211-2462d835def0
 # ╠═8e83063a-0f85-4767-b787-e423fa85b76b
 # ╠═1df30830-1a44-49f5-bb9a-309a8e9f2274
-# ╟─69b9885f-96bd-4f8d-9bde-9ac09521f435
-# ╟─411eb962-73f9-42cd-a177-f32c8ffb41ec
-# ╠═13a2e4a1-b818-4021-9281-68f1cd273d70
-# ╠═f2486aec-d572-4a83-87cf-94e6720c895a
-# ╠═cb759904-a3a2-4e8f-966f-6431946cfbc4
-# ╠═879ccfa6-4226-49f4-9f7b-3c61582017fc
-# ╠═a5379f53-8bcd-4e8f-be0f-26a852fb1cd4
-# ╠═eaa2a145-126e-4b12-8254-fca1014d278b
-# ╠═d349831b-d9d4-4785-9765-bdd127e6cb39
-# ╠═c63d0eba-d577-4f07-9ac3-42db3a842e35
+# ╠═69b9885f-96bd-4f8d-9bde-9ac09521f435
 # ╠═fae1cebf-9355-4c4c-b0aa-0eab1f517785
-# ╠═d8fe006a-4228-4e17-8c20-f93ef89a15b1
-# ╠═14177405-cd35-4e4b-a239-f94fb7ea363a
-# ╠═2ea3edad-342e-4c4b-9a32-38f9e34f0ba6
 # ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
 # ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
 # ╠═a27e0adf-aa09-42ee-97f5-ede084a9edc3
-# ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
