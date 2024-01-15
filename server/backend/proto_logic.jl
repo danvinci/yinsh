@@ -19,6 +19,12 @@ using HTTP, JSON3
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
 
+# ╔═╡ e68b41fc-cbf5-477f-b211-2462d835def0
+using Combinatorics
+
+# ╔═╡ 8e83063a-0f85-4767-b787-e423fa85b76b
+using PlutoUI
+
 # ╔═╡ 1df30830-1a44-49f5-bb9a-309a8e9f2274
 using JET
 
@@ -538,6 +544,9 @@ end
 # pre-populate dictionary with search space for each starting location
 const locs_searchSpace = new_searchSpace()
 
+# ╔═╡ 9be19399-c7e6-4089-b746-1d4d749f7774
+const valid_start_locs = keys(locs_searchSpace)
+
 # ╔═╡ f0e9e077-f435-4f4b-bd69-f495dfccec27
 function sub_spaces_split(input_array, key)
 
@@ -709,111 +718,72 @@ function _pick_rand_locsRow()
 
 end
 
-# ╔═╡ 52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
-function keepValid(state, input_array)
-
-	# create a copy to avoid modifying location arrays
-	loc_array = input_array
-
-	# recovering states for all indexes in temp array
-	states_array = [state[z] for z in loc_array]
-
-	# cutting at the first ring encountered
-	firstRing_index = findfirst(x -> contains(x,"R"), states_array)
-
-	if firstRing_index !== nothing
-		# slice locations array to be returned
-		loc_array = loc_array[1:firstRing_index-1]
-		
-		# keeping states array updated
-		states_array = [state[z] for z in loc_array]
-	end
-
-
-	# searching for the first empty spot after a marker
-	# if range is 1:0 or 1:-1 collection is empty and cycle is skipped
-	for i in 1:length(states_array)-1
-		if contains(states_array[i],"M") == true && states_array[i+1] == ""
-			# slice locations array to be returned
-			loc_array = loc_array[1:i+1]
-
-			# keeping states array fresh
-			states_array = [state[z] for z in loc_array]
-			break
-		end
-	end
-
-
-	# remove existing markers from set of valid locations	
-	loc_array = filter(z -> !contains(state[z], "M"), loc_array)
-			
-	
-	return loc_array
-
-end
-
-# ╔═╡ 9d153cf1-3e3b-49c0-abe7-ebd0f524557c
-function _search_legal_srv(ref_state::Matrix, start_index::CartesianIndex)
+# ╔═╡ 989f8ecc-724d-4f80-a359-fb55d2e356d6
+function search_legal_moves(gs::Matrix{String}, ring_loc::CartesianIndex)
 # returns sub-array of valid moves
-# this function is used by the server to compute allowable moves in advance 
 # using server types (matrix, cartesian indexes) both in input and output
 	
-	# checks that row/col are valid
-	if !(start_index in keys(locs_searchSpace))
+	# checks that starting position/ring is valid -> early return if false
+	# referencing pre-computed global const 
+	if !(ring_loc in valid_start_locs)
 		return [] 
 	end
 
 	# retrieve search space for the starting point
-	search_space = locs_searchSpace[start_index]
+	@inbounds search_space = locs_searchSpace[ring_loc]
 
 	# array to be returned
-	search_return = CartesianIndex[]
+	legal_moves::Vector{CartesianIndex} = []
 
-	for range in search_space
+	# check valid moves in each locations vector and append them to returning array
+	for locs_vec in search_space		
+		for i in 1:length(locs_vec)-1
 
-		# check valid moves in each range and append them to returning array
-		append!(search_return, keepValid(ref_state, range)) 
+			# read state at loc
+			@inbounds loc::CartesianIndex = locs_vec[i]
+			@inbounds s::String = gs[loc]
+			
+			# if there's a ring, stop w/ this range
+			(s == "RW" || s == "RB") && break
 
+			# keep empty locations
+			s == "" && push!(legal_moves, loc)
+
+			# read state at next loc
+			@inbounds next_loc::CartesianIndex = locs_vec[i+1]
+			@inbounds s_next::String = gs[next_loc]
+
+			# here a marker, and next is empty -> keep NEXT, but stop w/ this range
+			if ( (s == "MW" || s == "MB") && s_next == "" ) 
+				push!(legal_moves, next_loc)
+				break
+			end
+			
+		end
+		
 	end
 
-	# append starting index (can drop the ring from where picked)
-	append!(search_return, [start_index]) 
+	# append starting loc - allowed to drop the ring in-place
+	push!(legal_moves, ring_loc) 
 
-return search_return
+	return legal_moves
 
 end
 
-# ╔═╡ c67154cb-c8cc-406c-90a8-0ea8241d8571
-function markers_toFlip_search(state, input_array)
+# ╔═╡ bbabb049-9418-4a6b-9c1a-c5822d971aba
+function search_markers_toFlip(gs::Matrix{String}, s_locs::Vector{CartesianIndex})
 	
-	# create a copy to avoid modifying location arrays
-	loc_array = input_array
+	# create array to be returned
+	mk_flip_locs::Vector{CartesianIndex} = []
 
-	# recovering states for all indexes in temp array
-	states_array = [state[z] for z in loc_array]
-
-	# cutting at the first ring encountered
-	# the first ring is the one that was moved!
-	firstRing_index = findfirst(x -> contains(x,"R"), states_array)
-
-	if firstRing_index !== nothing
-		# slice locations array 
-		loc_array = loc_array[1:firstRing_index-1]
+	for loc in s_locs
+		@inbounds z::String = gs[loc] # read game state
+		(z == "RW" || z == "RB") && break # at the first ring (the one we moved)
+		(z == "MW" || z == "MB") && push!(mk_flip_locs, loc) # save markers locs
 	end
 
-	# pick markers from set of remaining locations	
-	loc_array = filter(z -> contains(state[z], "M"), loc_array)
-
-	
-	## return bits to inform client of which case is unfolding
-	# FLIP_FLAG
-	# true -> nothing to flip
-	# false -> something to flip
-
-	flip_flag = (length(loc_array) > 0) ? true : false
-
-	# returns true/false if markers flip and their locations 
-	return flip_flag, loc_array
+	# returns true/false if markers flip (array non empty) and their locations 
+	return !isempty(mk_flip_locs), mk_flip_locs
 
 end
 
@@ -1158,31 +1128,14 @@ function save_new_clientPkg!(games_log_ref, game_id, _client_pkg)
 	
 end
 
-# ╔═╡ be2a5e35-0040-49df-8fb7-64cb7df86fb8
-_sc_ = Dict(:id => Dict(:player_id => "W", :player_score => 0), :move_action => Dict(:start => CartesianIndex(15, 3), :end => CartesianIndex(9, 3)))
+# ╔═╡ 98b25b77-4b00-4656-bbf9-59fb255f8833
+t_gs = gen_random_gameState("RW","RB",false, 73)
 
-# ╔═╡ 12909b46-9f85-4c69-858a-7cd3ca8d9ee8
-_gs = gen_random_gameState("RW","RB",false, 60)
+# ╔═╡ d8815bc8-6b13-403b-b2ec-a12646f06771
+__rrr = findall(==("RW"), t_gs)
 
-# ╔═╡ 30af9114-2646-4940-95f7-817e3decdab4
-_score_lookup(_gs)
-
-# ╔═╡ e82b0769-ad51-48fd-968c-98d3a7400126
-vcat([[1,2,3],[4,45,6]]...)
-
-# ╔═╡ 9c5bf63e-8603-4a5d-8b8b-1f020c2586b1
-begin 
-	test_v1 = rand(locs_searchSpace_scoring).second[1]
-	test_v2 = rand(locs_searchSpace_scoring).second[1]
-	test_v3 = rand(locs_searchSpace_scoring).second[1]
-	test_v4 = rand(locs_searchSpace_scoring).second[1]
-	test_v5 = rand(locs_searchSpace_scoring).second[1]
-
-	t_rows_vec = [test_v1, test_v2, test_v3, test_v4, test_v5]
-end
-
-# ╔═╡ 749a641e-9e76-4d21-ace9-2e435a694c7e
-
+# ╔═╡ 88873b52-00b0-4c48-b113-569a3b9540bc
+@benchmark collect(combinations(__rrr, 2))
 
 # ╔═╡ 411eb962-73f9-42cd-a177-f32c8ffb41ec
 function group_scoringRows(rows::Vector{Vector{CartesianIndex}})
@@ -1265,11 +1218,9 @@ function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Vector{Vector{Dict}}
 				# scoring locs are the same for each marker in it 
 				# -> if not found already, save it
 				if !(locs_vec in found_rows[player_key])
-
-					# save it
 					push!(found_rows[player_key], locs_vec)
-
 				end					
+				
 			end	
 
 			@label skip_search_locs_vec
@@ -1280,7 +1231,8 @@ function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Vector{Vector{Dict}}
 	# identify mk_sel for row selection within same groups
 	mk_sel_taken::Vector{CartesianIndex}=[] # keep track of ones already taken
 	for player in keys(found_rows)
-		
+
+		# group intersecting scoring rows
 		score_groups = group_scoringRows(found_rows[player])
 		
 		for group in score_groups
@@ -1317,14 +1269,91 @@ function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Vector{Vector{Dict}}
 
 end
 
-# ╔═╡ ce99c297-764a-4ead-972e-7bb48dc4887e
-@benchmark search_scores_gs(_gs)
+# ╔═╡ 48847b75-4db4-42de-8bab-9a6d2e8d6b4c
+search_scores_gs(t_gs)
 
-# ╔═╡ c90139ab-ef6b-400d-a68d-c143cb6b120f
-group_scoringRows(t_rows_vec)
+# ╔═╡ 13a2e4a1-b818-4021-9281-68f1cd273d70
+__rows::Vector{Vector{CartesianIndex}} = []
 
-# ╔═╡ 6197487e-e47b-4d05-a8cd-4c2ffda05318
-@benchmark group_scoringRows(t_rows_vec)
+# ╔═╡ f2486aec-d572-4a83-87cf-94e6720c895a
+__rows
+
+# ╔═╡ cb759904-a3a2-4e8f-966f-6431946cfbc4
+@benchmark group_scoringRows(__rows)
+
+# ╔═╡ 879ccfa6-4226-49f4-9f7b-3c61582017fc
+__gsc = group_scoringRows(__rows)
+
+# ╔═╡ 8cbddcb7-ec64-46a9-9903-8b74a83bb8be
+@benchmark collect(Iterators.product(__gsc...))
+
+# ╔═╡ a5379f53-8bcd-4e8f-be0f-26a852fb1cd4
+for v in search_scores_gs(t_gs)[:W], d in v
+
+		push!(__rows, d[:mk_locs])
+end
+
+# ╔═╡ fae1cebf-9355-4c4c-b0aa-0eab1f517785
+function identify_scoringSets(rows::Vector{Vector{CartesianIndex}})::Vector{Set{Int}}
+# takes in input rows of locations (CI) and returns the possible sets representing groups of scoring actions
+# with multiple scoring and rows overlap, some scores preclude others
+# having A/B/C, depending on their configuration, A/B/C, A/B, B/C, C/A might be available for scoring
+# using the 1-based index of row in input array as its ID
+
+	len_range::UnitRange{Int} = 1:length(rows)
+	c_grouped::Vector{Int} = [0 for i in len_range] # track times we group each
+	scoring_sets::Vector{Set{Int}} = [] # set of row IDs that go together
+
+	for j in len_range
+
+		# stop when all have been grouped 1+
+		count(>=(1), c_grouped) == len_range && break
+
+		# start w/ its own lonely group
+		v_locs::Vector{CartesianIndex} = []; append!(v_locs, rows[j])
+		set_ids::Set{Int} = Set(j)
+	
+		# check against all other rows
+		for k in len_range 
+
+			# skip itself 
+			if k != j 
+				
+				# add to set if disjoint from everything else in it 
+				if isdisjoint(v_locs, rows[k])
+					append!(v_locs, rows[k]) # save locs for further comparison
+					push!(set_ids, k) # save id of row
+					@inbounds c_grouped[k] += 1 # increase counter for row
+				end
+			end
+		end
+
+		# save found set ids, if not redundant
+		!(set_ids in scoring_sets) && push!(scoring_sets, set_ids) 
+		
+	end
+
+	return scoring_sets
+	
+end
+
+# ╔═╡ eaa2a145-126e-4b12-8254-fca1014d278b
+ identify_scoringSets(__rows)
+
+# ╔═╡ d349831b-d9d4-4785-9765-bdd127e6cb39
+unique( identify_scoringSets(__rows))
+
+# ╔═╡ c63d0eba-d577-4f07-9ac3-42db3a842e35
+@benchmark identify_scoringSets(__rows)
+
+# ╔═╡ d8fe006a-4228-4e17-8c20-f93ef89a15b1
+@benchmark (1:10)[2:end]
+
+# ╔═╡ 14177405-cd35-4e4b-a239-f94fb7ea363a
+v=[[CartesianIndex(10,0),CartesianIndex(10,20)],[CartesianIndex(10,40),CartesianIndex(10,90)]]
+
+# ╔═╡ 2ea3edad-342e-4c4b-9a32-38f9e34f0ba6
+Set(vcat([v[i] for i in 1:length(v)]...))
 
 # ╔═╡ 18f8a5d6-c775-44a3-9490-cd11352c4a63
 function set_nested!(dict::Dict, val, first_key, second_key)
@@ -1394,6 +1423,114 @@ function reshape_out_fields(srv_dict::Dict)::Dict
 	end
 
 	return _ret
+	
+end
+
+# ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
+function gen_newGame(vs_ai=false)
+# initializes new game, saves data server-side and returns object for client
+
+	white_ring = ring_id * white_id
+	black_ring = ring_id * black_id
+
+	# generate random game identifier (only uppercase letters)
+	game_id = randstring(['A':'Z'; '0':'9'], 6)
+
+	# pick the id of the originating vs joining player -> should be a setting
+	ORIG_player_id = rand([white_id, black_id]) 
+	JOIN_player_id = (ORIG_player_id == white_id) ? black_id : white_id
+
+	# set next moving player -> should be a setting (for now always white)
+	next_movingPlayer = white_id 
+
+	# generate random initial game state (server format)
+	# true param => GENERATING STATES w/ 4MKS in a row for a randomly picked player
+	_game_state = gen_random_gameState(white_ring, black_ring)
+
+	# RINGS
+		# retrieves location ids in client format 
+		whiteRings_ids = reshape_out(findall(i -> i == white_ring, _game_state))
+		blackRings_ids = reshape_out(findall(i -> i == black_ring, _game_state))
+	
+		white_rings = [Dict(:id => id, :player => white_id) for id in whiteRings_ids]
+		black_rings = [Dict(:id => id, :player => black_id) for id in blackRings_ids]
+	
+		# prepare rings array to be sent to client
+		rings = union(white_rings, black_rings)
+
+	# MARKERS
+		# retrieves location ids in client format 
+		whiteMKS_ids = reshape_out(findall(i -> i == "MW", _game_state))
+		blackMKS_ids = reshape_out(findall(i -> i == "MB", _game_state))
+		
+		white_mks = [Dict(:id => id, :player => white_id) for id in whiteMKS_ids]
+		black_mks = [Dict(:id => id, :player => black_id) for id in blackMKS_ids]
+
+		# prepare markers array to be sent to client
+		__mks = union(white_mks, black_mks)
+		
+	# simulates possible moves and scoring/flipping outcomes for each -> in client's format
+	scenario_tree = sim_scenarioTree(_game_state, next_movingPlayer, 0) |> s -> reshape_out_fields(s)
+	
+	
+	### package data for server storage
+
+		game_status = :not_started
+
+		# game identity
+		_identity = Dict(:game_id => game_id,
+						:game_type => (vs_ai ? :h_vs_ai : :h_vs_h),
+						:orig_player_id => ORIG_player_id,
+						:join_player_id => JOIN_player_id,
+						:init_dateTime => now(),
+						:status => game_status,
+						:end_dateTime => now(),
+						:won_by => :undef,
+						:won_why => :undef)
+	
+		# logs of game messages (one per player)
+		_players = Dict(:orig_player_status => :not_available,
+						:join_player_status => (vs_ai ? :ready : :not_available),
+						:orig_player_score => 0, 
+						:join_player_score => 0)
+		
+		# first game state (server format)
+		_srv_states = [_game_state]
+
+	
+
+		
+		### package data for client
+		_cli_pkg = Dict(:game_id => game_id,
+						:orig_player_id => ORIG_player_id,
+						:join_player_id => JOIN_player_id,
+						:rings => rings,
+						:markers => __mks, # no markers yet
+						:scenarioTree => scenario_tree,
+						:turn_no => 1) # first game turn
+
+		_first_turn = Dict(:turn_no => 1,
+							:status => :open,
+							:moving_player => next_movingPlayer)
+
+	
+		## package new game data for storage
+		new_game_data = Dict(:identity => _identity,
+							:players => _players, 
+							:turns => Dict(:current => 1, :data => [_first_turn]),
+							:server_states => _srv_states,
+							:client_delta => [],
+							:client_pkgs => [_cli_pkg],
+							:ws_connections => Dict())
+
+	
+		
+		# saves game to general log (DB?)
+		save_newGame!(games_log_dict, new_game_data)
+
+
+	println("LOG - New game initialized - Game ID $game_id")
+	return game_id
 	
 end
 
@@ -1516,733 +1653,6 @@ function static_score_lookup(state)
 
 end
 
-# ╔═╡ aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
-function gen_New_gameState(ex_game_state, start_move, end_move, mk_sel = CartesianIndex(0,0), score_ring_index = CartesianIndex(0,0))
-# generates new game state, starting from an existing one + start/end moves
-# assumes start/end are valid moves AND in cartesian indexes
-# works with game state in server-side format (matrix)
-
-	# return game state delta (used later to replay moves)
-	_return = Dict()
-
-	# baseline game state that we'll modify and return later
-	new_gs = deepcopy(ex_game_state)
-
-	# check which case of game update we're dealing with
-		# score handled
-		_no_scoring_def_server = CartesianIndex(0,0)
-
-		_scoring_handled = (mk_sel != _no_scoring_def_server && 
-						score_ring_index != _no_scoring_def_server) ? true : false
-	
-	if start_move == end_move # ring dropped where picked, nothing happens
-		
-			return ex_game_state
-
-	else # ring moved elsewhere -> game state changed
-
-		# get ring details
-		picked_ring = ex_game_state[start_move]
-		picked_ring_color = picked_ring[end] # RW, RB -> should work with identifiers
-
-		added_marker = Dict(:cli_index => reshape_out(start_move), 
-							:player_id => picked_ring_color)
-
-		moved_ring = Dict(:cli_index_start => reshape_out(start_move),
-							:cli_index_end => reshape_out(end_move),
-							:player_id => picked_ring_color)
-
-		# marker placed in start_move (same color as picked ring)
-		new_gs[start_move] = "M"*picked_ring_color # should work with identifiers
-		
-		# ring placed in end_move # -> assumes valid move
-		new_gs[end_move] = picked_ring
-
-		# markers flipped (if any)
-
-			# retrieve search space for the starting point
-			search_space = locs_searchSpace[start_move]
-		
-			direction = 0
-		
-			# spot direction/array that contains the ring 
-			for (i, range) in enumerate(search_space)
-		
-				# check if search_temp contains end_index
-				if (end_move in range)
-					 direction = i
-					break
-				end
-			end
-		
-			# return flag + ids of markers to flip in direction of movement
-			flip_flag, markers_toFlip = markers_toFlip_search(new_gs, search_space[direction])
-
-			if flip_flag
-				# actually flip markers in game state
-				for m_id in markers_toFlip
-					if contains(new_gs[m_id], 'M')
-	
-						new_gs[m_id] = (new_gs[m_id] == "MW") ? "MB" : "MW" 
-					end
-				end
-			end
-
-			# checks scoring opportunities
-			scoring_rows, scores_toHandle = static_score_lookup(new_gs)
-			score_flag = (scoring_rows[:tot] >= 1) ? true : false	
-
-			_mk_to_remove = []
-			# if score -> replay mk selection, mk row removal, scoring ring removal
-			if score_flag && _scoring_handled
-
-				# markers to remove
-				_mk_to_remove = first(filter(s -> s[:mk_sel] == mk_sel, scores_toHandle))[:mk_locs]
-
-				# clean game state for markers ids
-				foreach(mk -> new_gs[mk] = "", _mk_to_remove)
-
-				# remove ring
-				new_gs[score_ring_index] = ""
-			
-			end
-	end
-
-
-
-		if _scoring_handled
-			_return = Dict( :new_game_state_srv => new_gs, 
-							:flip_flag => flip_flag,
-							:markers_toFlip_srv => markers_toFlip,
-							:markers_toFlip_cli => reshape_out(markers_toFlip),
-							:added_marker_cli => added_marker,
-							:moved_ring_cli => moved_ring,
-							:score_handled => true,
-							:markers_toRemove_srv => _mk_to_remove,
-							:markers_toRemove_cli => reshape_out(_mk_to_remove),
-							:scoring_ring_srv => score_ring_index,
-							:scoring_ring_cli => reshape_out(score_ring_index)
-							)
-
-		else 
-			_return = Dict( :new_game_state_srv => new_gs, 
-							:flip_flag => flip_flag,
-							:markers_toFlip_srv => markers_toFlip,
-							:markers_toFlip_cli => reshape_out(markers_toFlip),
-							:added_marker_cli => added_marker,
-							:moved_ring_cli => moved_ring,
-							:score_handled => false
-							)
-	
-		end
-
-	
-	return _return
-
-end
-
-# ╔═╡ 1f021cc5-edb0-4515-b8c9-6a2395bc9547
-function gen_scenarioTree(ex_game_state, next_movingPlayer)
-# takes as input game state (server format) and info of next moving player
-# computes results for all possible moves of next moving player
-# output is reshaped for client's consumption
-
-# scenario tree to be returned
-scenario_tree = Dict()
-
-# add summary to tree (only relevant for moving player)
-summary = Dict(:global_score_flag => false, 
-				:global_flip_flag => false,
-				:scoring_moves => [],
-				:flipping_moves => [])
-setindex!(scenario_tree, summary, :summary)
-
-# find all rings for next moving player on the board (should use IDs)
-rings_locs = findall(i -> isequal(i, "R"*next_movingPlayer), ex_game_state)
-
-# find legal moves for next moving player
-next_legalMoves = Dict()
-for loc in rings_locs
-	legal_moves = _search_legal_srv(ex_game_state, loc) # search for moves
-	setindex!(next_legalMoves, legal_moves, loc)
-end
-
-# for each move start
-for move_start in collect(keys(next_legalMoves))
-
-	# for each move end
-	for move_end in next_legalMoves[move_start]
-
-		if move_end == move_start # nothing happens
-			continue
-		else # something happens
-
-			# generate new game state for start/end combination
-			# new state will have ring in new location and markers flipped
-			# saves if markers need to flip and which IDs
-			new_gs_delta = gen_New_gameState(ex_game_state, move_start, move_end)
-
-				new_game_state = new_gs_delta[:new_game_state_srv]
-				flip_flag = new_gs_delta[:flip_flag]
-				markers_toFlip = new_gs_delta[:markers_toFlip_srv]
-
-			# checks scoring opportunities
-			scoring_rows, scores_toHandle = static_score_lookup(new_game_state)
-			score_flag = (scoring_rows[:tot] >= 1) ? true : false	
-			
-			# save all in a single scenario -> for client consumption
-			s_first_key = reshape_out(move_start) # linear indexes
-			s_second_key = reshape_out(move_end)
-			s_value = Dict()
-
-			## make scenario data lighter -> only write extra data if flags true
-			# scoring details
-			setindex!(s_value, score_flag, :score_flag)
-			if score_flag
-
-				# log in summary
-				scenario_tree[:summary][:global_score_flag] = true
-				push!(scenario_tree[:summary][:scoring_moves], Dict(:start => s_first_key, :end => s_second_key))
-
-				# reshape for client consumption
-				for (row_id, row) in enumerate(scores_toHandle)
-					scores_toHandle[row_id][:mk_locs] = reshape_out(row[:mk_locs])
-					scores_toHandle[row_id][:mk_sel] = reshape_out(row[:mk_sel])
-				end
-					
-					setindex!(s_value, scores_toHandle, :scores_toHandle)
-			end
-			
-			# markers details
-			setindex!(s_value, flip_flag, :flip_flag)
-			if flip_flag
-
-				# log in summary
-				scenario_tree[:summary][:global_flip_flag] = true
-				push!(scenario_tree[:summary][:flipping_moves], Dict(:start => s_first_key, :end => s_second_key))
-				
-				# saving reshaped indexes
-				setindex!(s_value, reshape_out(markers_toFlip), :markers_toFlip)
-			end
-			
-			## save scenario in tree (first_key -> second_key -> scenario)
-			# test if root branch already created
-			if haskey(scenario_tree, s_first_key)
-
-				setindex!(scenario_tree[s_first_key], s_value, s_second_key)
-			
-			else #create root branch first
-				setindex!(scenario_tree, Dict(s_second_key => s_value), s_first_key)
-			end
-			
-		end
-	end
-end
-
-return scenario_tree
-
-end
-
-# ╔═╡ 5bb1b9c5-1291-450d-820f-9b75c732f2ec
-@benchmark static_score_lookup(_gs)
-
-# ╔═╡ a27e0adf-aa09-42ee-97f5-ede084a9edc3
-function sim_new_gameState(ex_game_state::Matrix, sc::Dict, fn_mode::Symbol)
-	
-#=
-This function has three modes of use:
-- :replay - reflect a client's moves in the game state (opp scoring, move, scoring)
-- :inspect - surface flip/scoring/opp_scoring potential as-is
-- :move - surface flip/scoring/opp_scoring potential for a given move (start -> end)
-
-
-The function assumes all coordinate ids are in server-side format (cartIndexes).
-It will return its calling mode, the modified gameState, and relevant deltas.
-The presence of a key/dict acts as a true flag in its own right.
-
-All data is returned in srv-side format.
-Making sense of move/flip data depends on the mode the function was called in.
-
-=# 
-#= > INPUT format for SC (Scenario)
-
-	! id
-		! player_id -> B/W
-		! player_score -> 0...3
-		() opp_score -> 0...3 # it can't increase until after opponent scores
-		() game_mode -> classic (3) vs quick (1)
-		() game_id / turn_no / scenario_id -> have a single id for N choices and read changes from DB ?
-
-	-- all data in dicts below can be reshaped-in/out as a whole, only coordinates --
-
-	# scoring options can be multiple, we read mks_removed data
-	() score_action_preMove -> opponent scored for player at the end of their turn
-			mk_sel
-			mk_locs
-			ring_score
-	
-	() move_action  
-	  		start 
-			end
-
-	() score_action
-			mk_sel
-			mk_locs
-			ring_score
-
-=#
-
-	## extract relevant flags from input (given by presence of keys in dict)
-	f_score_act_preMove::Bool = haskey(sc, :score_action_preMove)
-	f_move_act::Bool = haskey(sc, :move_action)
-	f_score_act::Bool = haskey(sc, :score_action)
-
-	# extract player_id (B/W)
-	_player_id::String = sc[:id][:player_id]
-	_opp_id::String = _player_id == "W" ? "B" : "W"
-
-	# baseline game state that we'll modify and return later
-	new_gs::Matrix{String} = deepcopy(ex_game_state)
-	new_player_score::Int = sc[:id][:player_score]
-	#new_opp_score::Int = sc[:id][:opp_score] # returned as-is, we can't pick opp ring
-
-	# dict to return w/ game state delta - used for replay or add leaves to the tree
-	_return = Dict{Symbol, Union{Dict, Array, Matrix, Int, Symbol}}()
-
-	#= OUTPUT structure - fields are added only if valued
-	
-		:score_preMove_done => (:mk_locs => CI[], :ring_score => CI) 
-		:move_done => (:mk_add => (loc, player), :ring_move = (start, end, player))
-		:mk_flip => CI[]
-		:score_done => (:mk_locs => CI[], :ring_score => CI) 
-		:score_avail_opp => Dict[] # (mk_locs, mk_sel, player)
-		:score_avail_player => Dict[] # (mk_locs, mk_sel, player)
-
-		:new_game_state => Matrix
-		:mode => Symbol (sames as how this fn was called)
-		:new_player_score => Int
-		:new_opp_score => Int
-
-	=#
-	
-	################## EDITING unctions
-
-	function score_preMove_do!() # pre-move scoring - ie. opp scored for player
-	
-		# remove markers from game state
-		pms_mks_locs = sc[:score_action_preMove][:mk_locs]
-		foreach(mk_id -> new_gs[mk_id] = "", pms_mks_locs)
-
-		# remove ring
-		pms_ring_loc = sc[:score_action_preMove][:ring_score]
-		new_gs[pms_ring_loc] = ""
-
-		# update player score
-		new_player_score += 1
-
-		# update global dict
-			_pms = Dict(:mk_locs => pms_mks_locs, :ring_score => pms_ring_loc)
-			setindex!(_return, _pms, :score_preMove_done)
-		
-	end
-
-	function move_do!() # ring moved -> mk placement -> flipping
-
-		_start_move_id = sc[:move_action][:start]
-		_end_move_id = sc[:move_action][:end]
-
-		# get ring details
-		@inbounds moved_ring = ex_game_state[_start_move_id]
-		_ring_color = moved_ring[end] # B || W
-
-		# marker placed in start_move (same color as picked ring / player_id)
-		new_gs[_start_move_id] = "M"*_ring_color 
-		
-		# ring placed in end_move 
-		new_gs[_end_move_id] = moved_ring
-
-		# flip markers in the moving direction
-
-		# retrieve search space for the starting point, ie. ring directions
-		r_dirs::Vector{Vector{CartesianIndex}} = locs_searchSpace[_start_move_id]
-
-		# spot direction/array that contains the ring 
-		dir_no = findfirst(rd -> (_end_move_id in rd), r_dirs)
-	
-		# return flag + ids of markers to flip in direction of movement
-		_flip_flag::Bool, mks_toFlip = markers_toFlip_search(new_gs, r_dirs[dir_no])
-
-		if _flip_flag # flip markers in game state
-			for m_id in mks_toFlip
-				@inbounds s::String = new_gs[m_id]
-				if (s == "MB" || s == "MW")
-					new_gs[m_id] = (s == "MW") ? "MB" : "MW" 
-				end
-			end
-		end
-
-		# update global dict
-			mk_add = Dict(:loc => _start_move_id, :player_id => _ring_color)
-			ring_move = Dict(:start => _start_move_id, 
-							 :end => _end_move_id, 						
-							 :player_id => _ring_color)
-			
-			_md = Dict(:mk_add => mk_add, :ring_move => ring_move)
-			setindex!(_return, _md, :move_done)	
-		
-			_flip_flag && setindex!(_return, mks_toFlip, :mk_flip)	
-
-	end
-
-	function score_do!() # post-move scoring
-
-		# remove markers from game state
-		sd_mks_locs = sc[:score_action][:mk_locs]
-		foreach(mk_id -> new_gs[mk_id] = "", sd_mks_locs)
-
-		# remove ring
-		sd_ring_loc = sc[:score_action][:ring_score]
-		new_gs[sd_ring_loc] = ""
-
-		# update player score
-		new_player_score += 1
-
-		# update global dict
-			_sd = Dict(:mk_locs => sd_mks_locs, :ring_score => sd_ring_loc)
-			setindex!(_return, _sd, :score_done)
-
-	end
-
-	function score_check!() # post-move scoring
-
-		# check scoring options
-		score_rows, score_det = static_score_lookup(new_gs)
-
-		# check scoring ops
-		_f_score_player = (score_rows[Symbol(_player_id)] >= 1) ? true : false
-		_f_score_opp = (score_rows[Symbol(_opp_id)] >= 1) ? true : false
-
-		player_scores = Dict[] #[(mk_locs, mk_sel, player)]
-		opp_scores = Dict[]
-
-		append!(player_scores, filter(s -> s[:player] == _player_id, score_det))
-		append!(opp_scores, filter(s -> s[:player] == _opp_id, score_det))
-
-		# update global dict -> is there a score available for either player or opp?
-			_f_score_player && setindex!(_return, player_scores, :score_avail_player)
-			_f_score_opp && setindex!(_return, opp_scores, :score_avail_opp)
-
-	end
-	
-
-	################## ACTING on input mode
-	if fn_mode == :replay # whole turn
-		
-		f_score_act_preMove && score_preMove_do!() # -> win check
-		f_move_act && move_do!()
-		f_score_act && score_do!()
-
-	elseif fn_mode == :move # single move -> check score
-
-		f_move_act && move_do!()
-		score_check!()
-	
-	elseif fn_mode == :inspect # just check
-
-		score_check!()
-
-	end
-
-	# add updated player score
-	setindex!(_return, new_player_score, :new_player_score)
-	# add opp score as-is -> needs to be given as input first -> useful to check for win
-	#setindex!(_return, new_opp_score, :new_opp_score)
-
-	# add last game state and calling mode to _return
-	setindex!(_return, new_gs, :new_game_state)
-	setindex!(_return, fn_mode, :mode)
-	
-
-	return _return
-
-end
-
-# ╔═╡ 156c508f-2026-4619-9632-d679ca2cae50
-function sim_scenarioTree(ex_gs::Matrix, nx_player_id::String, nx_player_score::Int)
-# takes as input an ex game state (server format) and info of next moving player
-# computes results for all possible moves of next moving player
-
-	scenario_tree = Dict{Symbol, Union{Dict, Array}}() # to be returned
-
-	#= SCENARIO TREE structure
-	
-		() :score_preMove_avail => [ options ] 
-	
-		!/() :move_trees => [(:gs_id, :gs, :tree)] 
-				> gs_id = (mk_sel, ring_score) from pre-move or absent if no branches
-				:tree => ( :start => :end => flags/deltas)
-	=#
-	
-
-	# identify any pre-move score to be acted on - ie. left by previous player
-	_pms_id::Dict{Symbol, Union{Dict, Int}} = Dict(
-								:id => Dict( :player_id => nx_player_id, 
-								:player_score => nx_player_score))
-	
-	_inspect_res = sim_new_gameState(ex_gs, _pms_id, :inspect)
-	flag_pms::Bool = haskey(_inspect_res, :score_avail_player)
-
-	# act on score opportunity if present
-	_g_trees_array::Array{Dict} = []
-	if flag_pms
-
-		# there could be multiple choices for opp_score -> array of new game states
-		_pms_choices::Array{Dict} = _inspect_res[:score_avail_player]
-
-		# save choices in tree to be returned
-		setindex!(scenario_tree, _pms_choices, :score_preMove_avail)
-		
-		for s_choice in _pms_choices
-			
-			# gen new game state for the opp scoring opportunity
-			# branch further on the picked ring
-
-			_player_rings = findall(i -> isequal(i, "R"*nx_player_id), ex_gs)
-
-			for r in _player_rings
-
-				# describe pre-move score action
-				_pms_action = Dict( :mk_sel => s_choice[:mk_sel],
-									:mk_locs => s_choice[:mk_locs], 
-									:ring_score => r) 
-
-				_sc = Dict( :id => Dict(:player_id => nx_player_id, 
-										:player_score => nx_player_score),
-							:score_action_preMove => _pms_action)
-			
-				# replay move and get new game state
-				_pms_replay_gs = sim_new_gameState(ex_gs, _sc, :replay)[:new_game_state]
-				
-				# save each of the possible game states
-				# identifying each by means of the action taken
-				# client knows which tree to pick depending on pre-move score action
-				_gs_id = Dict( :mk_sel => s_choice[:mk_sel], :ring_score => r) 
-				_pms_gs_start = Dict(:gs_id => _gs_id, :gs_start => _pms_replay_gs)
-
-				push!(_g_trees_array, _pms_gs_start)
-			
-			end
-		end
-
-		# increase player score as pre-move score took place
-		nx_player_score += 1
-
-	else # save only available starting game state (no pre move) 
-
-		push!(_g_trees_array, Dict{Symbol, Any}(:gs_start => ex_gs))
-		
-	end
-
-
-	# ex_gs -> [score_preMove_avail] -> [_g_trees_array] -> [moves] -> [scenarios]
-
-	#= 	_g_trees_array = [Dict( 	:gs_id => score_action_preMove
-									:gs => game_state
-									:tree => () 						)] =#
-
-	# NOTE: if the game ends at the pre-move score, we should indicate it, so we skip tree generation
-	
-	# iterate over all the possible starting game states -> generate N trees
-	for g_branch in _g_trees_array
-
-		# prep empty tree for each game state, along with its summary
-		g_tree = Dict{CartesianIndex, Dict}()
-		
-		# turn summary for server/AI, saving scenario_ids of each case
-		g_tree_sum = Dict( 	:flip_sc => [], # something flips
-							:score_player_sc => [], # we score
-							:score_opp_sc => [] # create score for the opponent 
-							) 
-
-		# extract gs details
-		gs = g_branch[:gs_start]
-		
-		# find all rings for next moving player in this game state
-		rings = findall(i -> isequal(i, "R"*nx_player_id), gs)
-
-		# find legal moves for each of the rings start loc and save them
-		nx_legal_moves = Dict()
-		foreach(r -> setindex!(nx_legal_moves, _search_legal_srv(gs, r), r), rings)
-
-		# for each start
-		for move_start in rings # keys of the nx_legal_moves dict anyway
-			# for each move end
-			for move_end in nx_legal_moves[move_start]
-				if move_start != move_end # -> ring not dropped in-place
-
-					_sc_id = Dict(:start => move_start, :end => move_end)
-
-					# simulate new game state for start/end combination
-					_move = Dict(:id => Dict( 	:player_id => nx_player_id, 
-												:player_score => nx_player_score),
-								 :move_action => _sc_id)
-
-					# simulate move
-					sim_res = sim_new_gameState(gs, _move, :move)
-
-					# save scenario in tree (start -> end -> scenario)
-					set_nested!(g_tree, sim_res, move_start, move_end)
-
-
-					# Tree summary -> scenarios for flip and score opportunities
-					
-					f_mk_flip = haskey(sim_res, :mk_flip)
-					f_score_player = haskey(sim_res, :score_avail_player)
-					f_score_opp = haskey(sim_res, :score_avail_opp)
-	
-						# save the id of each scenario accordingly
-						f_mk_flip && push!(g_tree_sum[:flip_sc], _sc_id)
-						f_score_player && push!(g_tree_sum[:score_player_sc], _sc_id)
-						f_score_opp && push!(g_tree_sum[:score_opp_sc], _sc_id)
-					
-				end
-			end
-		end
-
-		# save tree in 
-		setindex!(g_branch, g_tree, :tree)
-
-		# save summary of tree in the branch
-		setindex!(g_branch, g_tree_sum, :tree_summary)
-
-	end
-	
-
-	# save tree of possible game moves for each starting game state
-	setindex!(scenario_tree, _g_trees_array, :move_trees)
-	
-
-	return scenario_tree
-
-end
-
-# ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
-function gen_newGame(vs_ai=false)
-# initializes new game, saves data server-side and returns object for client
-
-	white_ring = ring_id * white_id
-	black_ring = ring_id * black_id
-
-	# generate random game identifier (only uppercase letters)
-	game_id = randstring(['A':'Z'; '0':'9'], 6)
-
-	# pick the id of the originating vs joining player -> should be a setting
-	ORIG_player_id = rand([white_id, black_id]) 
-	JOIN_player_id = (ORIG_player_id == white_id) ? black_id : white_id
-
-	# set next moving player -> should be a setting (for now always white)
-	next_movingPlayer = white_id 
-
-	# generate random initial game state (server format)
-	# true param => GENERATING STATES w/ 4MKS in a row for a randomly picked player
-	_game_state = gen_random_gameState(white_ring, black_ring)
-
-	# RINGS
-		# retrieves location ids in client format 
-		whiteRings_ids = reshape_out(findall(i -> i == white_ring, _game_state))
-		blackRings_ids = reshape_out(findall(i -> i == black_ring, _game_state))
-	
-		white_rings = [Dict(:id => id, :player => white_id) for id in whiteRings_ids]
-		black_rings = [Dict(:id => id, :player => black_id) for id in blackRings_ids]
-	
-		# prepare rings array to be sent to client
-		rings = union(white_rings, black_rings)
-
-	# MARKERS
-		# retrieves location ids in client format 
-		whiteMKS_ids = reshape_out(findall(i -> i == "MW", _game_state))
-		blackMKS_ids = reshape_out(findall(i -> i == "MB", _game_state))
-		
-		white_mks = [Dict(:id => id, :player => white_id) for id in whiteMKS_ids]
-		black_mks = [Dict(:id => id, :player => black_id) for id in blackMKS_ids]
-
-		# prepare markers array to be sent to client
-		__mks = union(white_mks, black_mks)
-		
-	# simulates possible moves and scoring/flipping outcomes for each -> in client's format
-	scenario_tree = sim_scenarioTree(_game_state, next_movingPlayer, 0) |> s -> reshape_out_fields(s)
-	
-	
-	### package data for server storage
-
-		game_status = :not_started
-
-		# game identity
-		_identity = Dict(:game_id => game_id,
-						:game_type => (vs_ai ? :h_vs_ai : :h_vs_h),
-						:orig_player_id => ORIG_player_id,
-						:join_player_id => JOIN_player_id,
-						:init_dateTime => now(),
-						:status => game_status,
-						:end_dateTime => now(),
-						:won_by => :undef,
-						:won_why => :undef)
-	
-		# logs of game messages (one per player)
-		_players = Dict(:orig_player_status => :not_available,
-						:join_player_status => (vs_ai ? :ready : :not_available),
-						:orig_player_score => 0, 
-						:join_player_score => 0)
-		
-		# first game state (server format)
-		_srv_states = [_game_state]
-
-	
-
-		
-		### package data for client
-		_cli_pkg = Dict(:game_id => game_id,
-						:orig_player_id => ORIG_player_id,
-						:join_player_id => JOIN_player_id,
-						:rings => rings,
-						:markers => __mks, # no markers yet
-						:scenarioTree => scenario_tree,
-						:turn_no => 1) # first game turn
-
-		_first_turn = Dict(:turn_no => 1,
-							:status => :open,
-							:moving_player => next_movingPlayer)
-
-	
-		## package new game data for storage
-		new_game_data = Dict(:identity => _identity,
-							:players => _players, 
-							:turns => Dict(:current => 1, :data => [_first_turn]),
-							:server_states => _srv_states,
-							:client_delta => [],
-							:client_pkgs => [_cli_pkg],
-							:ws_connections => Dict())
-
-	
-		
-		# saves game to general log (DB?)
-		save_newGame!(games_log_dict, new_game_data)
-
-
-	println("LOG - New game initialized - Game ID $game_id")
-	return game_id
-	
-end
-
-# ╔═╡ 40174fcb-3064-4f47-af01-9bb99944472f
-@report_opt sim_scenarioTree(games_log_dict["4D7CBM"][:server_states][end], "W",0)
-
-# ╔═╡ 8cc063c2-fbb7-4804-a29f-4a3294f5073b
-@benchmark sim_scenarioTree(games_log_dict["4D7CBM"][:server_states][end], "W",0)
-
-# ╔═╡ ad164494-5c2d-454b-a310-b381ad57450f
-sim_scenarioTree(games_log_dict["4D7CBM"][:server_states][end], "W",0)
-
 # ╔═╡ cf587261-6193-4e7a-a3e8-e24ba27929c7
 function getLast_clientPkg(game_id)
 # looks in the games log and retrieves last client package
@@ -2323,8 +1733,8 @@ print(mm_to_print)
 
 end
 
-# ╔═╡ 210bf59a-06dc-4dd2-b4c4-c569658fcaff
-print_gameState(_gs, true)
+# ╔═╡ 6d36df9c-9b46-47e9-81c0-cb6a1b4d2ff2
+print_gameState(t_gs, true)
 
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
@@ -2913,71 +2323,6 @@ function gen_new_clientPkg(game_id, moving_client_id)
 	
 end
 
-# ╔═╡ 4c0f16c4-31f7-4f94-b6c5-e3e928ce440e
-static_score_lookup(get_last_srv_gameState("4D7CBM",1))
-
-# ╔═╡ f55bb88f-ecce-4c14-b9ac-4fc975c3592e
-function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = false)
-# updates server state for game given a scenario by a player 
-# replays move server-side and logs score
-# generates delta payload info 
-
-	#= SCENARIO PICK data format OLD (turn_recap)
-
-		{ 	start: start_move_index, 
-            end: drop_loc_index,
-            mk_sel_pick: scoring_mk_sel_picked, // default to -1
-            ring_removed: scoring_ring_picked, // defaults to -1
-            completed_turn_no: _played_turn_no
-                                }; 
-
-		SCENARIO PICK data format NEW (same used internally by sim_game_state)
-
-		score_action_preMove : { mk_sel: -1, mk_locs: [], ring_score: -1 },
-		move_action: { start: start_move_index, end: drop_loc_index },
-		score_action: { mk_sel: -1, mk_locs: [], ring_score: -1 }, 
-		completed_turn_no: _played_turn_no       
-
-	=#
-	
-	#@info turn_recap
-
-	## clean up and convert keys/coords when input comes from client
-	# drops non actionable fields and dicts w/ default values (-1)
-	# server/ai_play is instead used as-is
-	
-	srv_turn_recap = ai_play ? turn_recap : strip_reshape_in_recap(turn_recap)	
-	
-	#@info srv_turn_recap
-
-	# retrieve old game state and last moving
-	ex_gs = get_last_srv_gameState(_game_code)
-
-	# sim new game state with turn recap sent from client (as-is)
-	_sc_id = Dict( :player_id => _player_id, 
-					:player_score => get_player_score(_game_code, _player_id))
-
-	# add pre-move/move/score info from client
-	_sc_info = setindex!(srv_turn_recap, _sc_id, :id)
-	
-	#@info _sc_info
-	new_gs_sim = sim_new_gameState(ex_gs, _sc_info, :replay)
-	#@info new_gs_sim
-	
-	# update player score
-	edit_player_score!(_game_code, _player_id, new_gs_sim[:new_player_score])
-
-	# save new game state to log
-	push!(games_log_dict[_game_code][:server_states], new_gs_sim[:new_game_state])
-
-	# save delta for client (w/ client loc coordinates)
-	push!(games_log_dict[_game_code][:client_delta], reshape_out_fields(new_gs_sim))
-	
-	println("LOG - Server game state and delta updated")
-
-
-end
-
 # ╔═╡ c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
 function get_last_moving_player(game_code)
 
@@ -3118,6 +2463,524 @@ function get_last_turn_details(game_code::String)
 
 end
 
+# ╔═╡ c6e915be-2853-48ff-a8da-49755b9b1a44
+function setindex_container!(d::Dict, val, key::Symbol, use_set=false)
+# saves value within array or set container within a dictionary at :key index
+# if container array/set exists, push to it - otherwise create container first
+# if value is an array, splat it	
+
+	_splat::Bool = isa(val, Array)
+
+	if haskey(d, key)
+		_splat ? push!(d[key], val...) : push!(d[key], val)
+	else
+		if use_set
+			_splat ? setindex!(d, Set([val...]), key) : setindex!(d, Set([val]), key)
+		else # use array
+			_splat ? setindex!(d, [val...], key) : setindex!(d, [val], key)
+		end
+	end
+
+end
+
+# ╔═╡ a27e0adf-aa09-42ee-97f5-ede084a9edc3
+function sim_new_gameState(ex_game_state::Matrix, sc::Dict, fn_mode::Symbol)
+	
+#=
+This function has three modes of use:
+- :replay - reflect a client's moves in the game state (opp scoring, move, scoring)
+- :inspect - surface flip/scoring/opp_scoring potential as-is
+- :move - surface flip/scoring/opp_scoring potential for a given move (start -> end)
+
+
+The function assumes all coordinate ids are in server-side format (cartIndexes).
+It will return its calling mode, the modified gameState, and relevant deltas.
+The presence of a key/dict acts as a true flag in its own right.
+
+All data is returned in srv-side format.
+Making sense of move/flip data depends on the mode the function was called in.
+
+=# 
+#= > INPUT format for SC (Scenario)
+
+	! id
+		! player_id -> B/W
+		! player_score -> 0...3
+		() opp_score -> 0...3 # it can't increase until after opponent scores
+		() game_mode -> classic (3) vs quick (1)
+		() game_id / turn_no / scenario_id -> have a single id for N choices and read changes from DB ?
+
+	-- all data in dicts below can be reshaped-in/out as a whole, only coordinates --
+
+	() score_actions_preMove [] -> opponent scored for player at the end of their turn
+			mk_sel
+			mk_locs
+			ring_score
+	
+	() move_action  
+	  		start 
+			end
+
+	() score_actions []
+			mk_sel
+			mk_locs
+			ring_score
+
+=#
+
+	## extract relevant flags from input (given by presence of keys in dict)
+	f_scores_act_preMove::Bool = haskey(sc, :score_actions_preMove)
+	f_move_act::Bool = haskey(sc, :move_action)
+	f_scores_act::Bool = haskey(sc, :score_actions)
+
+	# extract player_id (B/W)
+	_player_id::String = sc[:id][:player_id]
+	_opp_id::String = _player_id == "W" ? "B" : "W"
+
+	# baseline game state that we'll modify and return later
+	new_gs::Matrix{String} = deepcopy(ex_game_state)
+	new_player_score::Int = sc[:id][:player_score]
+	#new_opp_score::Int = sc[:id][:opp_score] # returned as-is, we can't pick opp ring
+
+	# dict to return w/ game state delta - used for replay or add leaves to the tree
+	_ret::Dict{Symbol, Union{Dict, Array, Matrix, Int, Symbol}} = Dict()
+
+	#= OUTPUT structure - fields are added only if valued
+	
+		:scores_preMove_done => [ (:mk_locs => CI[], :ring_score => CI) ]
+		:move_done => (:mk_add => (loc, player), :ring_move = (start, end, player))
+		:mk_flip => CI[]
+		:scores_done => [ (:mk_locs => CI[], :ring_score => CI) ]
+		:scores_avail_opp => [Dict[] Dict[]] # vector of scoring groups 
+		:scores_avail_player => [Dict[] Dict[]] # score: Dict(mk_locs, mk_sel, player)
+
+		:new_game_state => Matrix
+		:mode => Symbol (sames as how this fn was called)
+		:new_player_score => Int
+		:new_opp_score => Int (needed to check if game is over)
+
+	=#
+	
+	################## EDITING unctions
+
+	function scores_preMove_do!() # pre-move scoring - ie. opp scored for player
+
+		for score in sc[:score_actions_preMove]
+			
+			# remove markers from game state
+			pms_mks_locs::Vector{CartesianIndex} = score[:mk_locs]
+			foreach(mk_id -> new_gs[mk_id] = "", pms_mks_locs)
+	
+			# remove ring
+			pms_ring_loc = score[:ring_score]
+			new_gs[pms_ring_loc] = ""
+	
+			# update player score
+			new_player_score += 1 # NOTE -> HANDLE END GAME
+	
+			# update global dict
+			pms = Dict(:mk_locs => pms_mks_locs, :ring_score => pms_ring_loc)
+			setindex_container!(_ret, pms, :scores_preMove_done)
+		end
+	end
+	
+
+	function move_do!() # ring moved -> mk placement -> flipping
+
+		### move ring & place marker
+		
+		start_loc::CartesianIndex = sc[:move_action][:start]
+		end_loc::CartesianIndex = sc[:move_action][:end]
+
+		# get ring details
+		@inbounds moved_ring = ex_game_state[start_loc]
+		_ring_color = moved_ring[end] # B || W
+
+		# marker placed in start_move (same color as picked ring / player_id)
+		new_gs[start_loc] = "M"*_ring_color  
+		
+		# ring placed in end_move 
+		new_gs[end_loc] = moved_ring
+
+		### flip markers in the moving direction
+
+		# retrieve search space for the starting point, ie. ring directions
+		@inbounds r_dirs::Vector{Vector{CartesianIndex}} = locs_searchSpace[start_loc]
+
+		# spot direction/array that contains the ring 
+		n::Int = findfirst(rd -> (end_loc in rd), r_dirs)
+	
+		# return flag + ids of markers to flip in direction of movement
+		f_flip::Bool, mks_toFlip = search_markers_toFlip(new_gs, r_dirs[n])
+
+		# flip markers in game state
+		f_flip && for m_id in mks_toFlip
+			@inbounds s::String = new_gs[m_id]
+			if (s == "MB" || s == "MW")
+				@inbounds new_gs[m_id] = (s == "MW") ? "MB" : "MW" 
+			end
+		end
+
+		### update global dict
+		
+		mk_add = Dict(:loc => start_loc, :player_id => _ring_color)
+		ring_move = Dict(:start => start_loc, 
+						 :end => end_loc, 						
+						 :player_id => _ring_color)
+		
+		_md = Dict(:mk_add => mk_add, :ring_move => ring_move)
+		setindex!(_ret, _md, :move_done)	
+	
+		f_flip && setindex!(_ret, mks_toFlip, :mk_flip)	
+
+	end
+	
+
+	function scores_do!() # post-move scoring
+
+		for score in sc[:score_actions]
+
+			# remove markers from game state
+			sd_mks_locs::Vector{CartesianIndex} = score[:mk_locs]
+			foreach(mk_id -> new_gs[mk_id] = "", sd_mks_locs)
+	
+			# remove ring
+			sd_ring_loc::CartesianIndex = score[:ring_score]
+			new_gs[sd_ring_loc] = ""
+	
+			# update player score
+			new_player_score += 1 # NOTE -> HANDLE END GAME
+	
+			# update global dict
+			sd = Dict(:mk_locs => sd_mks_locs, :ring_score => sd_ring_loc)
+			setindex_container!(_ret, sd, :score_done)
+		
+		end
+	end
+
+	
+	function score_check!() # post-move scoring
+
+		# search for possible scoring options
+		scores::Dict{Symbol, Vector{Vector{Dict}}} = search_scores_gs(new_gs)
+
+		# save possible scores for each player
+		player_scores = scores[Symbol(_player_id)]
+		opp_scores = scores[Symbol(_opp_id)]
+
+		# update global dict -> is there a score available for either player or opp?
+		!(isempty(player_scores)) && setindex!(_ret, player_scores, :scores_avail_player)
+		!(isempty(opp_scores)) && setindex!(_ret, opp_scores, :scores_avail_opp)
+
+	end
+	
+
+	################## ACTING on input mode
+	if fn_mode == :replay # whole turn
+		
+		f_scores_act_preMove && scores_preMove_do!() # -> win check
+		f_move_act && move_do!()
+		f_scores_act && scores_do!()
+
+	elseif fn_mode == :move # single move -> check score
+
+		f_move_act && move_do!()
+		score_check!()
+	
+	elseif fn_mode == :inspect # just check
+
+		score_check!()
+
+	end
+
+	# add updated player score
+	setindex!(_ret, new_player_score, :new_player_score)
+	# add opp score as-is -> needs to be given as input first to check for win
+	#setindex!(_ret, new_opp_score, :new_opp_score)
+
+	# add last game state and calling mode to _return
+	setindex!(_ret, new_gs, :new_game_state)
+	setindex!(_ret, fn_mode, :mode)
+	
+
+	return _ret
+
+end
+
+# ╔═╡ 156c508f-2026-4619-9632-d679ca2cae50
+function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, nx_player_score::Int)
+# takes as input an ex game state (server format) and info of next moving player
+# computes results for all possible moves of next moving player
+
+	# to be returned
+	scenario_trees::Dict{Symbol, Union{Dict, Array}} = Dict()
+
+		#= SCENARIO TREE structure
+		
+			() :score_preMove_avail => [ options ] 
+		
+			!/() :move_trees => [(:gs_id, :gs, :tree)] 
+					> gs_id = (mk_sel, ring_score) ID absent if only tree
+					:tree => ( :start => :end => flags/deltas)
+		=#
+
+	# ring id
+	_ring_id::String = "R"*nx_player_id
+
+	# identify any pre-move score to be acted on - ie. left by previous player
+	pms_sc_id = Dict( :id => Dict( 	:player_id => nx_player_id, 
+									:player_score => nx_player_score))
+	
+	pm_scores_inspect = sim_new_gameState(ex_gs, pms_sc_id, :inspect)
+	flag_pms::Bool = haskey(pm_scores_inspect, :scores_avail_player)
+
+	treepots::Vector{Dict} = [] # scenario tree x treepot in this array
+	# act on score opportunity if present
+	if flag_pms
+
+		# there could be multiple choices for opp_score -> array of new game states
+		pms_options::Vector{Vector{Dict}} = pm_scores_inspect[:scores_avail_player]
+
+		# save choices in tree to be returned 
+		setindex!(scenario_trees, pms_options, :scores_preMove_avail)
+
+		# scoring choices come in groups, with intersecting scores within each group
+		# here we simulate possible combination sequences of scoring choices
+
+		# build possible combinations of scoring scenarios
+		# {[A,B],[C,D][E]} => [(A,C,E),(A,D,E),(B,C,E),...]
+		pms_sequences = collect(Iterators.product(pms_options...))
+		n::Int = length(pms_options) # number of scoring actions in the sequence
+		
+		# after/during each sequence, N rings will be taken (N = sequence length)
+		_rings::Vector{CartesianIndex} = findall(==(_ring_id), ex_gs)
+		
+		rings_comb::Vector{Vector{CartesianIndex}} = collect(combinations(_rings, n)) 
+		# [ [r1,r2], [r1,r3], [] ]
+		
+		# all possible outcomes are given by num_sequences X combo of rings removed
+		# generate post-preMove scores game states, seq x ring combos
+		for seq in pms_sequences
+			for rc in rings_comb
+
+				# container for pre-move score actions 
+				preMove_actions_array = Dict[]
+				gs_id = Dict(:mk_locs_set => Set(), :rings_score_set => Set())
+
+				# map rings to score actions within the sequence
+				# order doesn't matter, end result is the same
+				for (i, ring) in enumerate(rc) # num rings == length sequence
+
+					# prep preMove action data
+					@inbounds pm_mk_locs::Vector{CartesianIndex} = seq[i][:mk_locs]
+					
+					score_action_inSeq = Dict( 	:ring_score => ring,
+												:mk_locs => pm_mk_locs)
+					
+					push!(preMove_actions_array, score_action_inSeq)
+
+					# prep sets of removed markers/rings, to identify gs later
+					setindex_container!(gs_id, pm_mk_locs, :mk_locs_set, true)
+					setindex_container!(gs_id, ring, :rings_score_set, true)
+
+					# MEMO - we use sets because for id/brancing as:
+					# order of removal for mks/rings doesn't change the resulting gs
+					# so we avoid duplicate branches
+
+				end
+
+				# prep scenario data
+				pms_actions = Dict( :id => Dict(:player_id => nx_player_id, 
+									:player_score => nx_player_score),
+									:score_actions_preMove => preMove_actions_array)
+
+				# replay pre-move scores and get new game state
+				post_pms_sim = sim_new_gameState(ex_gs, pms_actions, :replay)
+				post_pms_gs = post_pms_sim[:new_game_state]
+				
+				# save new gs with matching ID prepared before
+				push!(treepots, Dict(:gs_id => gs_id, :gs => post_pms_gs))
+				
+					# NOTE -> still need to FLAG GAME AS over by score by Nth choice 
+					# increase player score as pre-move score took place
+					# nx_player_score += 1
+				
+			end
+		end
+		
+	else # save the only available starting game state (no pre move score) 
+		push!(treepots, Dict(:gs => ex_gs))
+	end
+
+
+		# ex_gs -> [score_preMove_avail] -> [treepots] -> [tree] -> [scenarios]
+	
+		#= 	treepots = [ Dict( 	:gs_id => score_action_preMove
+								:gs => game_state
+								:tree => () 						)] =#
+	
+		# NOTE: if the game ends at the pre-move score, we flag it -> skip tree gen
+	
+
+	# we prepared the pots (starting game states), now we generate the scenario trees
+	for pot in treepots
+
+		# prep empty tree for each pots + its summary
+		tree::Dict{CartesianIndex, Dict} = Dict()
+		
+		# summary for server/AI, saving scenario_ids for each flip/score case
+		tree_sum = Dict(:flip_sc => [], # something flips
+						:score_player_sc => [], # scoring ops player
+						:score_opp_sc => [] ) # scoring ops opponent
+
+		# extract gs details
+		gs::Matrix{String} = pot[:gs]
+		
+		# find all rings for moving player in this game state
+		rings::Vector{CartesianIndex} = findall(==(_ring_id), gs)
+
+		# find legal moves for each of the rings start loc and save them
+		nx_legal_moves::Dict{CartesianIndex, Vector{CartesianIndex}} = Dict()
+		foreach(r -> setindex!(nx_legal_moves, search_legal_moves(gs, r), r), rings)
+
+		# for each start
+		for move_start in rings # rings = keys nx_legal_moves dict
+			@inbounds for move_end in nx_legal_moves[move_start]
+				if move_start != move_end # -> if ring not dropped in-place
+
+					sc_id = Dict(:start => move_start, :end => move_end)
+
+					# simulate new game state for start/end combination
+					move = Dict(:id => Dict(:player_id => nx_player_id, 
+											:player_score => nx_player_score),
+											:move_action => sc_id)
+
+					### NOTE: PLAYER SCORE NEEDS HANDLING
+
+					# simulate move and check for scoring opportunities
+					sim_res = sim_new_gameState(gs, move, :move)
+
+					# save scenario sim results in tree (start -> end -> scenario)
+					set_nested!(tree, sim_res, move_start, move_end)
+
+					# Tree summary -> scenarios for flip and score opportunities
+					f_mk_flip::Bool = haskey(sim_res, :mk_flip)
+					f_score_player::Bool = haskey(sim_res, :scores_avail_player)
+					f_score_opp::Bool = haskey(sim_res, :scores_avail_opp)
+	
+					# save the id of each scenario accordingly
+					f_mk_flip && push!(tree_sum[:flip_sc], sc_id)
+					f_score_player && push!(tree_sum[:score_player_sc], sc_id)
+					f_score_opp && push!(tree_sum[:score_opp_sc], sc_id)
+					
+				end
+			end
+		end
+
+		# save tree in its pot
+		setindex!(pot, tree, :tree)
+
+		# save summary of tree in the branch
+		setindex!(pot, tree_sum, :tree_summary)
+
+	end
+	
+	# save tree of possible game moves for each starting game state
+	setindex!(scenario_trees, treepots, :treepots)
+
+	return scenario_trees
+
+end
+
+# ╔═╡ 20c7cac3-2de2-49a7-97d1-e94f82beec7f
+# ╠═╡ disabled = true
+#=╠═╡
+@benchmark sim_scenarioTrees(t_gs, "W", 0)
+  ╠═╡ =#
+
+# ╔═╡ dd98af0e-3ee7-4fc8-acf4-9f46e3734b27
+sim_scenarioTrees(t_gs, "W", 0)
+
+# ╔═╡ f55bb88f-ecce-4c14-b9ac-4fc975c3592e
+function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = false)
+# updates server state for game given a scenario by a player 
+# replays move server-side and logs score
+# generates delta payload info 
+
+	#= SCENARIO PICK data format OLD (turn_recap)
+
+		{ 	start: start_move_index, 
+            end: drop_loc_index,
+            mk_sel_pick: scoring_mk_sel_picked, // default to -1
+            ring_removed: scoring_ring_picked, // defaults to -1
+            completed_turn_no: _played_turn_no
+                                }; 
+
+		SCENARIO PICK data format NEW (same used internally by sim_game_state)
+
+		score_action_preMove : { mk_sel: -1, mk_locs: [], ring_score: -1 },
+		move_action: { start: start_move_index, end: drop_loc_index },
+		score_action: { mk_sel: -1, mk_locs: [], ring_score: -1 }, 
+		completed_turn_no: _played_turn_no       
+
+	=#
+	
+	#@info turn_recap
+
+	## clean up and convert keys/coords when input comes from client
+	# drops non actionable fields and dicts w/ default values (-1)
+	# server/ai_play is instead used as-is
+	
+	srv_turn_recap = ai_play ? turn_recap : strip_reshape_in_recap(turn_recap)	
+	
+	#@info srv_turn_recap
+
+	# retrieve old game state and last moving
+	ex_gs = get_last_srv_gameState(_game_code)
+
+	# sim new game state with turn recap sent from client (as-is)
+	_sc_id = Dict( :player_id => _player_id, 
+					:player_score => get_player_score(_game_code, _player_id))
+
+	# add pre-move/move/score info from client
+	_sc_info = setindex!(srv_turn_recap, _sc_id, :id)
+	
+	#@info _sc_info
+	new_gs_sim = sim_new_gameState(ex_gs, _sc_info, :replay)
+	#@info new_gs_sim
+	
+	# update player score
+	edit_player_score!(_game_code, _player_id, new_gs_sim[:new_player_score])
+
+	# save new game state to log
+	push!(games_log_dict[_game_code][:server_states], new_gs_sim[:new_game_state])
+
+	# save delta for client (w/ client loc coordinates)
+	push!(games_log_dict[_game_code][:client_delta], reshape_out_fields(new_gs_sim))
+	
+	println("LOG - Server game state and delta updated")
+
+
+end
+
+# ╔═╡ 73d9c85f-e5d1-4a1a-aeda-c6dce98a364f
+t_d =Dict()
+
+# ╔═╡ 003323a3-72d1-47b9-8d67-3a1f9b1fda2c
+t_d
+
+# ╔═╡ 98ace26d-5bf4-4c92-a067-b59cefbf9270
+t_d_s = Dict()
+
+# ╔═╡ 88e16b47-de37-48f1-9fc3-bf2368899925
+setindex_container!(t_d, 10, :test2)
+
+# ╔═╡ 600e555f-47ad-4f27-acc3-ea0a89349304
+t_d_s
+
+# ╔═╡ 968d4ccf-322d-4996-b463-7544d00de182
+setindex_container!(t_d_s, [5,10,14,40,90], :test, true)
+
 # ╔═╡ 96951a3b-562f-4790-9ea9-162c15953984
 # ╠═╡ disabled = true
 #=╠═╡
@@ -3188,19 +3051,39 @@ function get_new_gs(tree::Dict, move_sc::Dict)::Matrix
 
 end
 
+# ╔═╡ fb5b641a-d7a5-402a-9966-421fb2ae3535
+push!(Set([111,2,3]), 2)
+
 # ╔═╡ a801e1ad-1d10-4cf3-bf6e-4bf55b535b65
-function find_treepot_index(preMove_action::Dict{Symbol, Any}, treepots_arr::Array)
+function find_treepot_index(preMove_actions::Array, treepots_arr::Array)
+# one or more scoring actions might have taken place at the premove stage
+# pick relevant starting game state for 'move' phase of the turn
+	
+# since arrays are order-sensitive, we use sets for gs identification => order of scoring actions doesn't change final gamestate
+# moreover, we put anything that was removed in a single set -> avoid unnecessary branching 
 
-_gs_id = Dict{Symbol, CartesianIndex}( 	:mk_sel => preMove_action[:mk_sel], 
-										:ring_score => preMove_action[:ring_score])
+	# build id set 
+	mk_locs_set = Set()
+	rings_score_set = Set()
+	for pm_action in preMove_actions
 
-_tp_id = findfirst(tp -> tp[:gs_id] == _gs_id, treepots_arr)
+		push!(mk_locs_set, pm_action[:mk_locs])
+		push!(score_rings, pm_action[:ring_score])
 
-if isnothing(_tp_id) # it should never happen
-	throw(error("ERROR - Treepot index for $_gs_id can't be found"))
-else
-	return _tp_id
-end
+	end
+
+	# gs id
+	gs_id_sets = Dict(:mk_locs_set => mk_locs_set,:rings_score_set => rings_score_set)
+	
+	# locate treepot in array
+	treepot_index::Int = findfirst(tp -> tp[:gs_id_sets] == gs_id_sets, treepots_arr)
+
+	# throw error if not found - it shouldn't happen
+	if isnothing(treepot_index) 
+		throw(error("ERROR - Treepot index for $gs_id_sets can't be found"))
+	else
+		return treepot_index
+	end
 	
 end
 
@@ -3479,241 +3362,10 @@ end
 @code_warntype play_turn_server("4D7CBM", "W", 0)
 
 # ╔═╡ 3bb8e65d-3900-4948-9f7a-06b5d1c292dc
-@benchmark play_turn_server("4D7CBM", "W", 0)
+@benchmark play_turn_server("SMZTSS", "W", 13)
 
 # ╔═╡ 9c9f38c9-d86d-4d50-b7c3-dd470038256d
 play_turn_server("4D7CBM", "W", 0)
-
-# ╔═╡ 9fdbf307-1067-4f55-ac56-8335ecc84962
-function temp_ai_pick_translation(pick::Dict)::Dict
-
-	#= need to translate IN the AI pick in this format:
-	
-		score_action_preMove : { mk_sel: -1, mk_locs: [], ring_score: -1 },
-		move_action: { start: start_move_index, end: drop_loc_index },
-		score_action: { mk_sel: -1, mk_locs: [], ring_score: -1 }, 
-		completed_turn_no: _played_turn_no  
-
-
-	from this format:
-
-	flip || random move :start => _start_k, 
-						:end => _end_k
-
-	scoring pick 	:start => _picked_start,
-					:end => _picked_end,
-					:mk_locs => _mk_locs,
-					:mk_sel_pick => _mk_sel, 
-					:ring_removed => _scoring_ring
-
-	=#
-
-	_ret = Dict{Symbol, Any}()
-
-	# we assume it always has a move
-	_move = Dict(:start => pick[:start], :end => pick[:end])
-		setindex!(_ret, _move, :move_action)
-
-	# need to check if we scored
-	if haskey(pick, :mk_sel_pick)
-
-		# prep score object
-		_score = Dict( 	:mk_sel => pick[:mk_sel_pick],
-						:mk_locs => pick[:mk_locs],
-						:ring_score => pick[:ring_removed])
-
-			setindex!(_ret, _score, :score_action)
-		
-	end
-
-	return _ret
-
-end
-
-# ╔═╡ 4976c9c5-d60d-4b19-aa72-0e135ad37361
-function pick_flipping_move(_ex_game_state, _tree::Dict, _player_id::String)
-## filter flipping options for specific player
-## pick first flipping opportunity that results in something flipping to the player's color
-
-	_pick_found = false
-	_picked_start = 0
-	_picked_end = 0
-	
-	# possible flipping moves
-	_f_moves = _tree[:summary][:flipping_moves]
-
-	for move in _f_moves
-
-		start_m = move[:start] 
-		end_m = move[:end] 	
-		
-		# which leads to a marker flipping to black?
-		_possible_flips = _tree[start_m][end_m][:markers_toFlip]
-		for _mk_flip_id in _possible_flips
-
-			_mk_state::String = _ex_game_state[reshape_in(_mk_flip_id)] # need to reshape
-			if !contains(_mk_state, _player_id) # -> ! as it's yet to flip
-
-				# we need at least one marker flipping to the player's color
-				_pick_found = true
-
-				_picked_start = start_m
-				_picked_end = end_m
-
-				break
-				
-			end
-		end
-	end
-
-	return Dict(:pick_found => _pick_found, 
-				:start => _picked_start,
-				:end => _picked_end)
-
-
-end
-
-# ╔═╡ 1c970cc9-de1f-48cf-aa81-684d209689e0
-function pick_scoring_move(_tree::Dict, _player_id::String)
-## filter scoring options for specific player
-## pick first scoring opportunity
-
-	_pick_found = false
-	_picked_start = 0
-	_picked_end = 0
-	_mk_sel = []
-	_mk_locs = []
-	_scoring_ring = 0
-
-	# the tree only has keys for the player's rings 
-	_rings = filter(k -> typeof(k) == Int, collect(keys(_tree)))
-	
-	# possible scoring moves
-	_s_moves = _tree[:summary][:scoring_moves]
-
-	for move in _s_moves
-
-		start_m = move[:start] 
-		end_m = move[:end] 	
-		
-		# which leads to a score for the player?
-
-		_possible_scores = _tree[start_m][end_m][:scores_toHandle]
-		for _score in  _possible_scores
-			if _score[:player] == _player_id
-				
-				_pick_found = true
-
-				_picked_start = start_m
-				_picked_end = end_m
-				_mk_sel = _score[:mk_sel]
-				_mk_locs = _score[:mk_locs]
-
-				# pick scoring ring at random
-				# BUT rings have changed due to the move -> swap p_start w/ p_end
-				_post_rings = replace(_rings, _picked_start => _picked_end)
-				_scoring_ring = rand(_post_rings)
-
-				break
-				
-			end
-		end
-	end
-
-	return Dict(:pick_found => _pick_found, 
-				:start => _picked_start,
-				:end => _picked_end,
-				:mk_sel_pick => _mk_sel, 
-				:mk_locs => _mk_locs,
-				:ring_removed => _scoring_ring)
-
-
-end
-
-# ╔═╡ 14aa5b7c-9065-4ca3-b0e9-19c104b1854d
-function scenario_choice(_ex_game_state, _tree::Dict, ai_moving_player_id::String)
-	# value function for picking moves
-	# works with depth-1 game scenario trees
-	# important to pass id of player so that it picks with context
-	# returned values/ids are in client-format
-	# it should return a move as long as at least one is listed in the tree
-
-	# track if choice made
-	_choice_made = false
-	_return_pick = Dict() # to be returned
-
-	# retrieve summary function
-	global_score_flag = _tree[:summary][:global_score_flag]
-	global_flip_flag = _tree[:summary][:global_flip_flag]
-
-	# pick scoring option for current player if available
-	if global_score_flag
-
-		# check which ones result in a score for current player
-		_score_pick = pick_scoring_move(_tree, ai_moving_player_id)
-
-		if get(_score_pick, :pick_found, false)
-			_choice_made = true
-			_return_pick = _score_pick
-			println("LOG - Scoring move picked")
-
-			return _score_pick
-		end
-	end
-
-
-	# if none, pick something that leads to markers being flipped to black
-	if global_flip_flag && !_choice_made
-
-		# check which ones result in a score for current player
-		_flip_pick = pick_flipping_move(_ex_game_state, _tree, ai_moving_player_id)
-		
-		if get(_flip_pick, :pick_found, false)
-			_choice_made = true
-			_return_pick = _flip_pick
-			println("LOG - Flip move picked")
-
-			return _flip_pick
-		end
-	end
-			
-	
-	# otherwise, make a random move
-	if !_choice_made
-		
-		_start_k = filter(k -> typeof(k) == Int, collect(keys(_tree))) |> rand
-		_end_k = collect(keys(_tree[_start_k])) |> rand
-
-		_random_pick = Dict(:start => _start_k, 
-							:end => _end_k)
-
-		println("LOG - Random move picked")
-
-		return _random_pick
-
-	end
-
-end
-
-# ╔═╡ 6a174abd-c9bc-4c3c-93f0-05a7d70db4af
-function play_turn_AI(game_code::String, ai_moving_player_id::String)
-
-	# get last game state and id of moving player
-	# assumes turns are updated and moving player is AI
-	_ex_game_state = get_last_srv_gameState(game_code)
-
-	# generate scenarios
-	_scenarios = gen_scenarioTree(_ex_game_state, ai_moving_player_id)
-
-	# make choice
-	_pick = scenario_choice(_ex_game_state, _scenarios, ai_moving_player_id)
-
-	# TEMP TRANSLATION LAYER
-	_tr_pick = temp_ai_pick_translation(_pick)
-	
-	return _tr_pick
-
-end
 
 # ╔═╡ e6cc0cf6-617a-4231-826d-63f36d6136a5
 function mark_player_ready!(game_code::String, who::Symbol)
@@ -3868,9 +3520,6 @@ function game_runner(msg)
 					_ai_player_id = get_last_moving_player(_game_code)
 
 					# move by SERVER/AI > sync server data
-					#_pick = play_turn_AI(_game_code, _ai_player_id)
-					#update_serverStates!(_game_code, _ai_player_id, _pick)
-						
 					_pick = play_turn_server(_game_code, _ai_player_id)
 					update_serverStates!(_game_code, _ai_player_id, _pick, true)
 					
@@ -4309,11 +3958,13 @@ wait(Condition())
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 OwnTime = "18732c20-e27e-497f-aa49-3bf01a8fc721"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 ProfileSVG = "132c30aa-f267-4189-9183-c8a63c7e05e6"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
@@ -4321,12 +3972,14 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 BenchmarkTools = "~1.4.0"
-HTTP = "~1.9.15"
+Combinatorics = "~1.0.2"
+HTTP = "~1.10.1"
 JET = "~0.8.24"
-JSON3 = "~1.13.2"
+JSON3 = "~1.14.0"
 OwnTime = "~0.1.0"
+PlutoUI = "~0.7.1"
 ProfileSVG = "~0.2.1"
-StatsBase = "~0.34.0"
+StatsBase = "~0.33.21"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -4335,7 +3988,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "cf43037be977d6af7c0f8ed09ac6080bcf20975d"
+project_hash = "63f7cec83f69178cd8ce38500931ed585c03b452"
 
 [[deps.AbstractTrees]]
 git-tree-sha1 = "03e0550477d86222521d254b741d470ba17ea0b5"
@@ -4386,6 +4039,11 @@ deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
 git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.10"
+
+[[deps.Combinatorics]]
+git-tree-sha1 = "08c8b6831dc00bfea825826be0bc8336fc369860"
+uuid = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
+version = "1.0.2"
 
 [[deps.Compat]]
 deps = ["UUIDs"]
@@ -4467,9 +4125,9 @@ version = "0.2.10"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "19e974eced1768fb46fd6020171f2cec06b1edb5"
+git-tree-sha1 = "abbbb9ec3afd783a7cbd82ef01dcd088ea051398"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.9.15"
+version = "1.10.1"
 
 [[deps.IndirectArrays]]
 git-tree-sha1 = "012e604e1c7458645cb8b436f8fba789a51b257f"
@@ -4505,9 +4163,15 @@ version = "0.21.4"
 
 [[deps.JSON3]]
 deps = ["Dates", "Mmap", "Parsers", "PrecompileTools", "StructTypes", "UUIDs"]
-git-tree-sha1 = "95220473901735a0f4df9d1ca5b171b568b2daa3"
+git-tree-sha1 = "eb3edce0ed4fa32f75a0a11217433c31d56bd48b"
 uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-version = "1.13.2"
+version = "1.14.0"
+
+    [deps.JSON3.extensions]
+    JSON3ArrowExt = ["ArrowTypes"]
+
+    [deps.JSON3.weakdeps]
+    ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
 
 [[deps.JuliaInterpreter]]
 deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
@@ -4660,6 +4324,12 @@ deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.10.0"
 
+[[deps.PlutoUI]]
+deps = ["Base64", "Dates", "InteractiveUtils", "Logging", "Markdown", "Random", "Suppressor"]
+git-tree-sha1 = "45ce174d36d3931cd4e37a47f93e07d1455f038d"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.1"
+
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
 git-tree-sha1 = "03b4c25b43cb84cee5c90aa9b5ea0a78fd848d2f"
@@ -4695,9 +4365,10 @@ deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[deps.Reexport]]
-git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
+deps = ["Pkg"]
+git-tree-sha1 = "7b1d07f411bc8ddb7977ec7f377b97b158514fe0"
 uuid = "189a3867-3050-52da-a836-e630ba90ab69"
-version = "1.2.2"
+version = "0.2.0"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
@@ -4750,9 +4421,9 @@ version = "1.7.0"
 
 [[deps.StatsBase]]
 deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "75ebe04c5bed70b91614d684259b661c9e6274a4"
+git-tree-sha1 = "d1bf48bfcc554a3761a133fe3a9bb01488e06916"
 uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-version = "0.34.0"
+version = "0.33.21"
 
 [[deps.StructTypes]]
 deps = ["Dates", "UUIDs"]
@@ -4764,6 +4435,12 @@ version = "1.10.0"
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.2.1+1"
+
+[[deps.Suppressor]]
+deps = ["Logging"]
+git-tree-sha1 = "6cd9e4a207964c07bf6395beff7a1e8f21d0f3b2"
+uuid = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
+version = "0.2.6"
 
 [[deps.TOML]]
 deps = ["Dates"]
@@ -4860,6 +4537,7 @@ version = "17.4.0+2"
 # ╠═ccbf567a-8923-4343-a2ff-53d81f2b6361
 # ╟─a3ae2bfe-41ea-4fe1-870b-2ac35153da5d
 # ╠═1d811aa5-940b-4ddd-908d-e94fe3635a6a
+# ╠═9be19399-c7e6-4089-b746-1d4d749f7774
 # ╟─003f670b-d3b1-4905-b105-67504f16ba19
 # ╠═2cee3e2b-5061-40f4-a205-94d80cfdc20b
 # ╟─a96a9a78-0aeb-4b00-8f3c-db61839deb5c
@@ -4867,9 +4545,8 @@ version = "17.4.0+2"
 # ╟─bf2dce8c-f026-40e3-89db-d72edb0b041c
 # ╟─33707130-7703-4aa0-84e6-23ab387c0c4d
 # ╟─9700ea30-a99c-4832-a181-7ef23c86030a
-# ╟─9d153cf1-3e3b-49c0-abe7-ebd0f524557c
-# ╟─52bf45df-d3cd-45bb-bc94-ec9f4cf850ad
-# ╟─c67154cb-c8cc-406c-90a8-0ea8241d8571
+# ╟─989f8ecc-724d-4f80-a359-fb55d2e356d6
+# ╟─bbabb049-9418-4a6b-9c1a-c5822d971aba
 # ╟─148d1418-76a3-462d-9049-d30e85a45f06
 # ╟─fc68fa36-e2ea-40fa-9d0e-722167a2506e
 # ╟─7fe89538-b2fe-47db-a961-fdbdd4278963
@@ -4877,38 +4554,43 @@ version = "17.4.0+2"
 # ╟─b56084e8-7286-404b-9088-094070331afe
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
-# ╠═c334b67e-594f-49fc-8c11-be4ea11c33b5
+# ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
 # ╠═29a93299-f577-4114-b77f-dbc079392090
 # ╟─f1949d12-86eb-4236-b887-b750916d3493
-# ╠═e0368e81-fb5a-4dc4-aebb-130c7fd0a123
+# ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╟─61a0e2bf-2fed-4141-afc0-c8b5507679d1
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
-# ╠═57153574-e5ca-4167-814e-2d176baa0de9
-# ╠═1fe8a98e-6dc6-466e-9bc9-406c416d8076
-# ╟─1f021cc5-edb0-4515-b8c9-6a2395bc9547
-# ╟─aaa8c614-16aa-4ca8-9ec5-f4f4c6574240
-# ╟─156c508f-2026-4619-9632-d679ca2cae50
+# ╟─57153574-e5ca-4167-814e-2d176baa0de9
+# ╟─1fe8a98e-6dc6-466e-9bc9-406c416d8076
+# ╠═156c508f-2026-4619-9632-d679ca2cae50
+# ╠═98b25b77-4b00-4656-bbf9-59fb255f8833
+# ╠═d8815bc8-6b13-403b-b2ec-a12646f06771
+# ╠═88873b52-00b0-4c48-b113-569a3b9540bc
+# ╠═6d36df9c-9b46-47e9-81c0-cb6a1b4d2ff2
+# ╠═20c7cac3-2de2-49a7-97d1-e94f82beec7f
+# ╠═48847b75-4db4-42de-8bab-9a6d2e8d6b4c
+# ╠═8cbddcb7-ec64-46a9-9903-8b74a83bb8be
+# ╠═dd98af0e-3ee7-4fc8-acf4-9f46e3734b27
+# ╠═e68b41fc-cbf5-477f-b211-2462d835def0
+# ╠═8e83063a-0f85-4767-b787-e423fa85b76b
 # ╠═1df30830-1a44-49f5-bb9a-309a8e9f2274
-# ╠═40174fcb-3064-4f47-af01-9bb99944472f
-# ╠═be2a5e35-0040-49df-8fb7-64cb7df86fb8
-# ╠═12909b46-9f85-4c69-858a-7cd3ca8d9ee8
-# ╠═210bf59a-06dc-4dd2-b4c4-c569658fcaff
-# ╠═30af9114-2646-4940-95f7-817e3decdab4
-# ╠═5bb1b9c5-1291-450d-820f-9b75c732f2ec
-# ╠═ce99c297-764a-4ead-972e-7bb48dc4887e
-# ╠═69b9885f-96bd-4f8d-9bde-9ac09521f435
-# ╠═e82b0769-ad51-48fd-968c-98d3a7400126
-# ╠═9c5bf63e-8603-4a5d-8b8b-1f020c2586b1
-# ╠═749a641e-9e76-4d21-ace9-2e435a694c7e
-# ╠═c90139ab-ef6b-400d-a68d-c143cb6b120f
-# ╠═6197487e-e47b-4d05-a8cd-4c2ffda05318
+# ╟─69b9885f-96bd-4f8d-9bde-9ac09521f435
 # ╟─411eb962-73f9-42cd-a177-f32c8ffb41ec
-# ╠═4c0f16c4-31f7-4f94-b6c5-e3e928ce440e
-# ╠═8cc063c2-fbb7-4804-a29f-4a3294f5073b
-# ╠═ad164494-5c2d-454b-a310-b381ad57450f
+# ╠═13a2e4a1-b818-4021-9281-68f1cd273d70
+# ╠═f2486aec-d572-4a83-87cf-94e6720c895a
+# ╠═cb759904-a3a2-4e8f-966f-6431946cfbc4
+# ╠═879ccfa6-4226-49f4-9f7b-3c61582017fc
+# ╠═a5379f53-8bcd-4e8f-be0f-26a852fb1cd4
+# ╠═eaa2a145-126e-4b12-8254-fca1014d278b
+# ╠═d349831b-d9d4-4785-9765-bdd127e6cb39
+# ╠═c63d0eba-d577-4f07-9ac3-42db3a842e35
+# ╠═fae1cebf-9355-4c4c-b0aa-0eab1f517785
+# ╠═d8fe006a-4228-4e17-8c20-f93ef89a15b1
+# ╠═14177405-cd35-4e4b-a239-f94fb7ea363a
+# ╠═2ea3edad-342e-4c4b-9a32-38f9e34f0ba6
 # ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
 # ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
-# ╟─a27e0adf-aa09-42ee-97f5-ede084a9edc3
+# ╠═a27e0adf-aa09-42ee-97f5-ede084a9edc3
 # ╟─5da79176-7005-4afe-91b7-accaac0bd7b5
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
@@ -4924,8 +4606,8 @@ version = "17.4.0+2"
 # ╠═5e5366a9-3086-4210-a037-c56e1374a686
 # ╟─ca522939-422f-482a-8658-452790c463f6
 # ╠═7316a125-3bfe-4bac-babf-4e3db953078b
-# ╠═064496dc-4e23-4242-9e25-a41ddbaf59d1
-# ╠═28ee9310-9b7d-4169-bae4-615e4b2c386e
+# ╟─064496dc-4e23-4242-9e25-a41ddbaf59d1
+# ╟─28ee9310-9b7d-4169-bae4-615e4b2c386e
 # ╟─612a1121-b672-4bc7-9eee-f7989ac27346
 # ╟─a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
@@ -4954,8 +4636,14 @@ version = "17.4.0+2"
 # ╟─7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
 # ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
-# ╠═6a174abd-c9bc-4c3c-93f0-05a7d70db4af
 # ╠═fdb40907-1047-41e5-9d39-3f94b06b91c0
+# ╠═c6e915be-2853-48ff-a8da-49755b9b1a44
+# ╠═73d9c85f-e5d1-4a1a-aeda-c6dce98a364f
+# ╠═003323a3-72d1-47b9-8d67-3a1f9b1fda2c
+# ╠═98ace26d-5bf4-4c92-a067-b59cefbf9270
+# ╠═88e16b47-de37-48f1-9fc3-bf2368899925
+# ╠═600e555f-47ad-4f27-acc3-ea0a89349304
+# ╠═968d4ccf-322d-4996-b463-7544d00de182
 # ╠═08c9e667-8da4-4c72-ac50-e6045ccc7133
 # ╠═3bb8e65d-3900-4948-9f7a-06b5d1c292dc
 # ╠═9c9f38c9-d86d-4d50-b7c3-dd470038256d
@@ -4965,11 +4653,8 @@ version = "17.4.0+2"
 # ╟─8e1673fe-5286-43cd-8830-fba353f1cd89
 # ╠═ea7779ea-cd11-4f9e-8022-ff4f370ffddd
 # ╟─3d09a15d-685b-4d9b-a47f-95067441928d
-# ╟─a801e1ad-1d10-4cf3-bf6e-4bf55b535b65
-# ╟─9fdbf307-1067-4f55-ac56-8335ecc84962
-# ╟─14aa5b7c-9065-4ca3-b0e9-19c104b1854d
-# ╟─4976c9c5-d60d-4b19-aa72-0e135ad37361
-# ╟─1c970cc9-de1f-48cf-aa81-684d209689e0
+# ╠═fb5b641a-d7a5-402a-9966-421fb2ae3535
+# ╠═a801e1ad-1d10-4cf3-bf6e-4bf55b535b65
 # ╟─e6cc0cf6-617a-4231-826d-63f36d6136a5
 # ╟─cd06cad4-4b47-48dd-913f-61028ebe8cb3
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
