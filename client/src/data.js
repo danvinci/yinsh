@@ -164,13 +164,15 @@ export function init_empty_game_objects(){
         // turns, moves, score handling
         _game_objects.current_turn = {in_progress: false}; // to track if this is the client's turn 
 
-        _game_objects.pre_move_scoring = {mk_sel: -1, ring_score: -1, mk_locs : []}; // save details in case pre-move scoring took place
+        _game_objects.preMove_scoring_actions = []; // save details in case pre-move scoring took place
+        _game_objects.scoring_actions = []; // save details in case scoring took place
        
         _game_objects.current_move = {in_progress: false, start_index: 0, legal_drops: []}; // -> details for move currently in progress 
         _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal drops ids)
         
         _game_objects.current_mk_scoring = {in_progress: false, task_ref: {}}; // referencing task of general score handling
         _game_objects.current_ring_scoring = {in_progress: false, task_ref: {}}; // referencing task of ring picking within score handling
+        _game_objects.current_animation = {in_progress: false, task_ref: {}}; // task for tracking animations and prevent game resets from UI (only supports 1 task/time)
         _game_objects.mk_halos = []; // -> halos objects
         _game_objects.ring_highlights = []; // -> highlights for rings
 
@@ -202,7 +204,7 @@ export function save_server_response(srv_input){
 
             _srv_response.rings = srv_input.rings; // rings
             _srv_response.markers = srv_input.markers; // markers
-            _srv_response.scenarioTree = srv_input.scenarioTree; // scenario tree
+            _srv_response.scenario_trees = srv_input.scenario_trees; // scenario tree
             _srv_response.turn_no = srv_input.turn_no; // turn number
             _srv_response.delta = srv_input.delta; // delta data for replaying opponent's move
 
@@ -221,7 +223,7 @@ export function save_server_response(srv_input){
             _srv_response.game_id = srv_input.game_id; // game ID
             _srv_response.rings = srv_input.rings; // rings
             _srv_response.markers = srv_input.markers; // markers (empty array on setup, unless testing otherwise)
-            _srv_response.scenarioTree = srv_input.scenarioTree; // pre-computed scenario tree for each possible move
+            _srv_response.scenario_trees = srv_input.scenario_trees; // pre-computed scenario trees, for each possible move
             _srv_response.turn_no = srv_input.turn_no; // turn number
 
             // determine if we're originator or joiner -> assign color to client (player_black_id / player_white_id)
@@ -285,7 +287,7 @@ export function swap_data_next_turn() {
 
         yinsh.server_data.rings = structuredClone(yinsh.next_server_data.rings);  // rings
         yinsh.server_data.markers = structuredClone(yinsh.next_server_data.markers); // markers
-        yinsh.server_data.scenarioTree = structuredClone(yinsh.next_server_data.scenarioTree); // tree
+        yinsh.server_data.scenario_trees = structuredClone(yinsh.next_server_data.scenario_trees); // trees
         yinsh.server_data.turn_no = yinsh.next_server_data.turn_no; // turn number
 
     // make local working copy
@@ -299,47 +301,50 @@ export function swap_data_next_turn() {
 // this function is called even when we might not have scenario data
 export function preMove_score_op_check(){
 
-    return 'score_preMove_avail' in yinsh.server_data.scenarioTree; // ref object should exist to avoid 'in' checks against undefined objects
+    return 'scores_preMove_avail' in yinsh.server_data.scenario_trees; // ref object should exist to avoid 'in' checks against undefined objects
 
 };
 
 // get pre-move scoring opportunities
 export function get_preMove_score_op_data(){
 
-    return structuredClone(yinsh.server_data.scenarioTree.score_preMove_avail); // [{}]
+    return structuredClone(yinsh.server_data.scenario_trees.scores_preMove_avail); // [{}]
 
 };
 
-// return tree among trees given input, otherwise return the only one
-export function select_apply_scenarioTree(mk_s = -1, ring_s = -1){
 
-    const f_ret_default = ( mk_s == -1 && ring_s == -1 );
-    let _tree = {};
+// return tree among trees given input, otherwise return the only one
+export function select_apply_scenarioTree(input_s_set, input_s_rings){
+    
+    // NOTE: JS sets don't seem to work well for equality comparison ->  we're using sorted arrays here for equality comparison
+    // also serializing/de-serializing turns sets into arrays anyway
+
+    const f_ret_default = (input_s_set.length == 0 && input_s_rings.length == 0); // passing empty arrays
+    let _tree = undefined;
 
     try{
         // pick default/only tree
         if (f_ret_default) {
 
-            _tree = structuredClone(yinsh.server_data.scenarioTree.move_trees[0].tree); // first/only tree in array
+            _tree = structuredClone(yinsh.server_data.scenario_trees.treepots[0].tree); // first/only tree in array
         
         } else { // pick specific tree
 
-            const _trees_array = yinsh.server_data.scenarioTree.move_trees;
-            _tree = _trees_array.find( t => (t.gs_id.mk_sel == mk_s && t.gs_id.ring_score == ring_s) ).tree;
+            const _treepots = yinsh.server_data.scenario_trees.treepots;
+            _tree = _treepots.find( (tp) => (tp.gs_id.s_set.sort == input_s_set.sort && tp.gs_id.s_rings.sort == input_s_rings.sort) ).tree;
 
         };
 
         // check if we're returning something
         if (typeof _tree != 'undefined'){
             
-            yinsh.objs.tree = _tree // write tree in place
-            const tree_id = f_ret_default ? 'default' : `{mk_sel:${mk_s}, ring_score:${ring_s}}`
+            yinsh.objs.tree = structuredClone(_tree); // write tree in place
+            const tree_id = f_ret_default ? '[ default ]' : `[ s_set: ${input_s_set}, s_rings: ${input_s_rings} ]`;
 
-            console.log(`LOG - Tree ${tree_id} set`);
+            console.log(`LOG - Tree ${tree_id} applied`);
 
-            return _tree; 
         } else {
-            throw(`Tree not found for mk_sel: ${mk_s} ring_score: ${ring_s}`);
+            throw(`Tree not found for s_set: ${input_s_set}, s_rings: ${input_s_rings}`);
         };
 
     } catch(err) {
@@ -348,70 +353,68 @@ export function select_apply_scenarioTree(mk_s = -1, ring_s = -1){
     };
 };
 
-export function get_moves_tree(){
+export function get_tree(){
     return structuredClone(yinsh.objs.tree);
 };
 
 
+// Used by interaction
 export function get_move_status(){
     return yinsh.objs.current_move.in_progress;
 };
 
-export function activate_task(task){
 
-    if (task.name == 'mk_scoring_task') {
+export function reset_preMove_scoring_actions(){
 
-        yinsh.objs.current_mk_scoring.in_progress = true;
-        yinsh.objs.current_mk_scoring.task_ref = task;
+    yinsh.objs.preMove_scoring_actions = [];
 
-    } else if (task.name == 'ring_scoring_task') {
+};
 
-        yinsh.objs.current_ring_scoring.in_progress = true;
-        yinsh.objs.current_ring_scoring.task_ref = task;
 
+export function pushTo_preMove_scoring_actions(mk_removed, score_ring_id){
+
+    const pm_score_action = {mk_locs: mk_removed, ring_score: score_ring_id}
+    yinsh.objs.preMove_scoring_actions.push(pm_score_action);
+};
+
+export function get_preMove_scoring_actions_done(){
+
+    // return defaults if the array is empty
+    if (yinsh.objs.preMove_scoring_actions.length != 0) {
+       
+        console.log(`TEST - returning preMove: `, yinsh.objs.preMove_scoring_actions);
+        return yinsh.objs.preMove_scoring_actions; 
+
+    } else {
+
+        console.log(`TEST - returning preMove: `, { mk_locs: [], ring_score: -1 });
+        return [{ mk_locs: [], ring_score: -1 }];
     };
 };
 
 
-export function get_task_status(task_name){
+export function reset_scoring_actions(){
 
-    if (task_name == 'mk_scoring_task') {
+    yinsh.objs.scoring_actions = [];
+};
 
-        return yinsh.objs.current_mk_scoring.in_progress;
+export function pushTo_scoring_actions(mk_removed, score_ring_id){
 
-    } else if (task_name == 'ring_scoring_task') {
+    const score_action = {mk_locs: mk_removed, ring_score: score_ring_id}
+    yinsh.objs.scoring_actions.push(score_action);
+};
 
-        return yinsh.objs.current_ring_scoring.in_progress;
+export function get_scoring_actions_done(){
 
+    // return defaults if the array is empty
+    if (yinsh.objs.scoring_actions.length != 0) {
+        console.log(`TEST - returning move: `, yinsh.objs.scoring_actions);
+        return yinsh.objs.scoring_actions; 
+
+    } else {
+        console.log(`TEST - returning move: `, { mk_locs: [], ring_score: -1 });
+        return [{ mk_locs: [], ring_score: -1 }];
     };
-};
-
-
-export function reset_scoring_tasks(){
-    
-    // overall scoring
-    yinsh.objs.current_mk_scoring.in_progress = false;
-    yinsh.objs.current_mk_scoring.task_ref = {};
-
-    // ring scoring
-    yinsh.objs.current_ring_scoring.in_progress = false;
-    yinsh.objs.current_ring_scoring.task_ref = {};
-
-};
-
-export function set_preMove_scoring_pick(mk_sel_id = -1, mk_removed = [], score_ring_id = -1){
-
-    // if called without arguments it will reset the var to its default (-1 def)
-
-    yinsh.objs.pre_move_scoring.mk_sel = mk_sel_id;
-    yinsh.objs.pre_move_scoring.mk_locs = mk_removed;
-    yinsh.objs.pre_move_scoring.ring_score = score_ring_id;
-
-};
-
-export function get_preMove_scoring_pick(){
-
-    return yinsh.objs.pre_move_scoring; 
 
 };
 
@@ -420,7 +423,7 @@ export function get_current_turn_no(){
 }
 
 // returns scoring options in the task (should be for current player only)
-export function get_scoring_options(){
+export function get_scoring_options_fromTask(){
 
     return structuredClone(yinsh.objs.current_mk_scoring.task_ref.data);
 };
@@ -470,19 +473,83 @@ function fill_scoring_slot(s) {
 };
 
 
+// log task in registry and mark it as in-progress
+export function activate_task(task){
+
+    if (task.name == 'mk_scoring_task') {
+
+        yinsh.objs.current_mk_scoring.in_progress = true;
+        yinsh.objs.current_mk_scoring.task_ref = task;
+
+    } else if (task.name == 'ring_scoring_task') {
+
+        yinsh.objs.current_ring_scoring.in_progress = true;
+        yinsh.objs.current_ring_scoring.task_ref = task;
+
+    } else if (task.name == 'canvas_animation_task') {
+
+        yinsh.objs.current_animation.in_progress = true;
+        yinsh.objs.current_animation.task_ref = task;
+    };
+};
+
+// function that allows caller to await for task completion
+export async function task_completion(task_name){
+
+    if (task_name == 'canvas_animation_task') {
+        await yinsh.objs.current_animation.task_ref.promise;
+    };
+};
+
+
+// return current state of task -> used mostly by interaction
+export function get_task_status(task_name){
+
+    if (task_name == 'mk_scoring_task') {
+
+        return yinsh.objs.current_mk_scoring.in_progress;
+
+    } else if (task_name == 'ring_scoring_task') {
+
+        return yinsh.objs.current_ring_scoring.in_progress;
+
+    } else if (task_name == 'canvas_animation_task') {
+
+        return yinsh.objs.current_animation.in_progress;
+    };
+};
+
+
+export function reset_scoring_tasks(){
+    
+    // overall scoring
+    yinsh.objs.current_mk_scoring.in_progress = false;
+    yinsh.objs.current_mk_scoring.task_ref = {};
+
+    // ring scoring
+    yinsh.objs.current_ring_scoring.in_progress = false;
+    yinsh.objs.current_ring_scoring.task_ref = {};
+
+};
+
 
 // resolves task-promises so that they can return a value to the task initiator
-export function complete_task(task_name, success_msg){
+export function complete_task(task_name, success_msg_payload){
 
     if (task_name == 'mk_scoring_task') {
 
         yinsh.objs.current_mk_scoring.in_progress = false;
-        yinsh.objs.current_mk_scoring.task_ref.task_success(success_msg);
+        yinsh.objs.current_mk_scoring.task_ref.task_success(success_msg_payload);
 
     } else if (task_name == 'ring_scoring_task') {
 
         yinsh.objs.current_ring_scoring.in_progress = false;
-        yinsh.objs.current_ring_scoring.task_ref.task_success(success_msg);
+        yinsh.objs.current_ring_scoring.task_ref.task_success(success_msg_payload);
+
+    } else if (task_name == 'canvas_animation_task') {
+
+        yinsh.objs.current_animation.in_progress = false;
+        yinsh.objs.current_animation.task_ref.task_success(success_msg_payload);
 
     };
 
@@ -1026,8 +1093,12 @@ export function update_current_move(in_progress = false, start_index = 0){
 // retrieve indexes of legal moves/drops from saved server data
 function getIndexes_legal_drops(start_index){
 
+    console.log(`TEST - searching for legal drops starting at ${start_index}`);
+
     // keys (possible moves) are the first level of the branch for a ring loc
-    const tree_branch = get_moves_tree()[start_index];
+    const tree_branch = get_tree()[start_index];
+
+    console.log(`TEST - tree ${typeof tree_branch} found for ${start_index}`, tree_branch);
 
     // only keep keys that can be interpreted as numbers
     // javascript forces object keys to be strings, we need to parse them ¯\_(ツ)_/¯

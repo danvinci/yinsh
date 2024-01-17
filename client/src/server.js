@@ -158,7 +158,8 @@ export async function init_ws () {
             } catch (err) { // if connection doesn't work -> event catched by onError_handler first
 
                 console.log(`LOG - WebSocket - something went wrong during connection`);
-                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Sorry! The server seems unreachable at the moment` }));
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: ` < Sorry, the server seems unreachable at the moment >` }));
+                ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
                 reject(err); 
 
             };
@@ -203,7 +204,8 @@ function onError_handler (event) {
 
     console.log(`LOG - Websocket - ERROR`);
     console.log(event);
-    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< server connection error >` })); // inform user
+    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Server connection error >` })); // inform user
+    ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
 };
 
@@ -227,10 +229,14 @@ function push_messages_handler(event){
         
         } else {
             console.log("ERROR - msg_code ERROR / NOT RECOGNIZED in msg from server");
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
+            ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
         };
 
     } else {
         console.log("ERROR - msg_code NOT FOUND in msg from server");
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
+        ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
     };
 };
 
@@ -270,9 +276,13 @@ export async function server_ws_send(msg_code, msg_payload = {}){
                 save_server_response(messagePromises_log[msg_id].server_response);
     
             } else if (resp_code == msg_code.concat(sfx_CODE_ERR)) {
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
+                ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
                 throw new Error(`ERROR - ${resp_code} - msg ID : ${msg_id}`);
 
             } else {
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
+                ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
                 throw new Error(`ERROR - Unrecognized response code ${resp_code} - msg ID : ${msg_id}`);
             };
 
@@ -282,6 +292,8 @@ export async function server_ws_send(msg_code, msg_payload = {}){
 
     } else {
 
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
+        ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
         throw new Error(`ERROR - ${msg_code} is not a valid code`);
     };  
 };

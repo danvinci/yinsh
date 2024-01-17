@@ -2,7 +2,7 @@
 // handle mouse events and relays events to core logic
 // https://bencentra.com/code/2014/12/05/html5-canvas-touch-events.html
 
-import { get_player_id, get_move_status, get_task_status, get_scoring_options } from './data.js'
+import { get_player_id, get_move_status, get_task_status, get_scoring_options_fromTask } from './data.js'
 
 
 //////////////////////////////////////// ADD EVENT LISTENERS TO CANVAS
@@ -72,7 +72,7 @@ function mouseDown_handler (event) {
         if (mk_scoring_in_progress == true){
 
             // retrieve markers/halos eligible for selection
-            const _scoring_options = get_scoring_options();
+            const _scoring_options = get_scoring_options_fromTask();
             const _mk_sel = _scoring_options.map(option => option.mk_sel);
 
             // retrieve markers
@@ -133,7 +133,7 @@ function mouseMove_handler (event) {
         if (mk_scoring_in_progress == true){
 
             // retrieve markers/halos eligible for selection
-            const _scoring_options = get_scoring_options();
+            const _scoring_options = get_scoring_options_fromTask();
             const _mk_sel = _scoring_options.map(option => option.mk_sel);
 
             // retrieve markers

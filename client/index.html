@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv = "Content-Security-Policy" content="default-src 'self'; script-src 'self' *.cloudflareinsights.com; connect-src 'self' ws://localhost:6091 wss://yinsh.net/api ; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com">
+    <meta http-equiv = "Content-Security-Policy" content="default-src 'self'; script-src 'self' *.cloudflareinsights.com 'unsafe-inline'; connect-src 'self' ws://localhost:6091 wss://yinsh.net/api ; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com">
     
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
@@ -38,6 +38,7 @@
   <body>
 
     <noscript>Please enable JavaScript to run this app.</noscript>
+    <script>let FF_FOUC_FIX;</script> <!-- workaround for Firefox FOUC issue - https://stackoverflow.com/questions/21147149/flash-of-unstyled-content-fouc-in-firefox-only-is-ff-slow-renderer -->
     <header>
       <div>
         <p class="header_title">YINSH</p>

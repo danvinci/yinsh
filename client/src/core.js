@@ -9,9 +9,11 @@ import { CODE_new_game_human, CODE_new_game_server, CODE_join_game, CODE_advance
 import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_game_id, get_player_id } from './data.js'
 import { bind_adapt_canvas, reorder_rings, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
-import { activate_task, get_scoring_options, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
-import { preMove_score_op_check, get_preMove_score_op_data, select_apply_scenarioTree } from './data.js'
-import { delta_replay_check, get_delta, wipe_delta, get_preMove_scoring_pick, set_preMove_scoring_pick, get_moves_tree } from './data.js'
+import { activate_task, get_scoring_options_fromTask, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
+import { preMove_score_op_check, get_preMove_score_op_data, select_apply_scenarioTree  } from './data.js'
+import { delta_replay_check, get_delta, wipe_delta, get_preMove_scoring_actions_done, reset_preMove_scoring_actions, pushTo_preMove_scoring_actions, get_tree } from './data.js'
+import { reset_scoring_actions, pushTo_scoring_actions, get_scoring_actions_done, get_task_status, task_completion } from './data.js'
+
 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
@@ -105,6 +107,12 @@ export async function init_game_fromServer(originator = false, joiner = false, g
     //_setup = {originator: false, joiner: false, game_code: undefined, ai_game: false}
 
     console.log(' -- Requesting new game --');
+
+    // wait for any animation in progress to be done
+    if (get_task_status('canvas_animation_task')) {
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< New game will start as soon as the animation is over >` }));
+        await task_completion('canvas_animation_task');
+    };
     
     // wipe clean dialog box anytime a new game is requested
     ui_et.dispatchEvent(new CustomEvent('reset_dialog'));
@@ -158,7 +166,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         };
 
         // ask server what to do -> it will emit event on response
-        await server_ws_send(CODE_advance_game, { game_id: get_game_id(), player_id: get_player_id(), scenario_pick: false });
+        await server_ws_send(CODE_advance_game, { game_id: get_game_id(), player_id: get_player_id(), turn_recap: false });
 
     } catch (err){
 
@@ -207,9 +215,8 @@ async function server_actions_handler (event) {
 
         // check if pre-move scoring opportunity is available -> handle it
         // once scoring is done, resume normal turn playing -> handle edge cases of game ending at pre-move stage -> how ?
-        let _mk_sel_picked = -1;
-        let _mk_locs_removed = []; 
-        let _ring_picked = -1;
+        let pm_s_set = []; 
+        let pm_s_rings = [];
         
         if (preMove_score_op_check()) {
 
@@ -221,19 +228,16 @@ async function server_actions_handler (event) {
             ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored for you!` }));
 
             const _player_scores_options = get_preMove_score_op_data();
-
-            // handle scoring for current player
-            [ _mk_sel_picked, _mk_locs_removed, _ring_picked ] = await scoring_handler(_player_scores_options);
-
-            // save results of pre-move score action
-            set_preMove_scoring_pick(_mk_sel_picked, _mk_locs_removed, _ring_picked);
+            
+            // handle (multiple) scoring for current player
+            [ pm_s_set, pm_s_rings ] = await scoring_handler(_player_scores_options, true);
 
             // check if game is over or not -> act accordingly
 
         };
 
         // pick correct scenario tree to move on
-        select_apply_scenarioTree(_mk_sel_picked, _ring_picked);
+        select_apply_scenarioTree(pm_s_set, pm_s_rings);
 
         // inform user that they should still move
         ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Make your move` }));
@@ -309,8 +313,8 @@ class Task {
         this.name = name;
         this.data = data;
         this.promise = new Promise((resolve, reject) => {
-            this.task_success = (success_msg) => resolve(success_msg) // this msg is passed externally and returned as value by the promise
-            this.task_failure = () => reject(new Error(`${name} - Task failure`))
+            this.task_success = (success_msg_payload) => resolve(success_msg_payload) // this msg is passed externally and returned as value by the promise
+            this.task_failure = () => reject(new Error(`ERROR - ${name} - Task failure`))
         })
     }
 };
@@ -322,15 +326,18 @@ async function replay_opponent_turn(){
     
     note: fields included only if valued, order of execution as listed
 
-        :score_preMove_done => (:mk_locs => [locs], :ring_score => loc) 
+        :scores_preMove_done => [ { :mk_locs => [locs], :ring_score => loc) } ]
 		:move_done => (:mk_add => (loc, player), :ring_move = (start, end, player))
 		:mk_flip => [locs]
-		:score_done => (:mk_locs => [locs], :ring_score => loc) 
+		:scores_done => [ { :mk_locs => [locs], :ring_score => loc } ]
     
     */
 
     // only executes if we have delta data
     if (delta_replay_check()) {
+
+        // activate single task for all the animations
+        activate_task(new Task('canvas_animation_task'));
 
         const delta = get_delta(); // get a copy of the data
 
@@ -343,13 +350,10 @@ async function replay_opponent_turn(){
         // any part of the turn is replayed only if we have data about it (server includes data only if actionable)
 
         // replay pre-move scoring 
-        if('score_preMove_done' in delta) {
+        if('scores_preMove_done' in delta) {
 
             // replay move and increase score (handle scoring slot too)
-            await replay_opponent_scoring(delta.score_preMove_done.mk_locs, delta.score_preMove_done.ring_score);
-
-            // txt for user
-            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
+            await replay_opponent_scoring(delta.scores_preMove_done);
 
         };
 
@@ -381,11 +385,9 @@ async function replay_opponent_turn(){
         };
 
         // replay score
-        if ('score_done' in delta) {
+        if ('scores_done' in delta) {
 
-            await replay_opponent_scoring(delta.score_done.mk_locs, delta.score_done.ring_score);
-
-            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
+            await replay_opponent_scoring(delta.scores_done);
 
         };
 
@@ -397,6 +399,10 @@ async function replay_opponent_turn(){
 
         wipe_delta(); // clean up delta data to avoid weird replays at next turn, in case of last move - NOTE: should be prevented server-side
 
+        // complete task
+        complete_task('canvas_animation_task');
+
+
     } else {
         console.log(`LOG - No delta to replay`);
     };
@@ -406,52 +412,63 @@ async function replay_opponent_turn(){
 
 // called by replay_opponent_turn, used for both pre-move and post-move scoring replay
 // also takes care of increasing opponent's score and fill scoring slot
-async function replay_opponent_scoring(mk_removed_locs, ring_score_loc){
+async function replay_opponent_scoring(score_actions_array){
 
-    const _score_mk_wait = 600;
-    const _score_ring_wait = 650;
-                
-    // MARKERS ROW 
-        await sleep(_score_mk_wait);
-        
-        update_mk_halos(mk_removed_locs, true); // highlight markers
-        refresh_canvas_state();
-        
-        await sleep(_score_mk_wait); // wait to let user see visual changes
+    for (const sc_action of score_actions_array){
 
-        remove_markers(mk_removed_locs); // remove markers
-        update_mk_halos(); // turn off markers highlight
-        refresh_canvas_state(); // materialize changes on canvas
+        const mk_removed_locs = sc_action.mk_locs;
+        const ring_score_loc = sc_action.ring_score;
 
-        markersRemoved_oppon_playS(); // play sound
+        const _score_mk_wait = 600;
+        const _score_ring_wait = 650;
+                    
+        // MARKERS ROW 
+            await sleep(_score_mk_wait);
+            
+            update_mk_halos(mk_removed_locs, true); // highlight markers
+            refresh_canvas_state();
+            
+            await sleep(_score_mk_wait); // wait to let user see visual changes
+    
+            remove_markers(mk_removed_locs); // remove markers
+            update_mk_halos(); // turn off markers highlight
+            refresh_canvas_state(); // materialize changes on canvas
+    
+            markersRemoved_oppon_playS(); // play sound
+    
+        //// RING SCORING
+            await sleep(_score_ring_wait);
+    
+            // move scoring ring on top (need for animation)
+            const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == ring_score_loc);
+            reorder_rings(_ring_index_in_array); // put ring last
+    
+            // grab start (x,y) coordinates   
+            const _start = yinsh.objs.drop_zones.find(d => d.loc.index == ring_score_loc); // from matching drop zone
+            const _start_xy = {x:_start.loc.x, y:_start.loc.y};
+    
+            // grab end coordinates -> these will be of the scoring slots for the opponent (hence input is false)
+            const _slot_coord = get_coord_free_slot(false);
+            const _end_xy = {x:_slot_coord.x, y:_slot_coord.y};    
+    
+            // animate ring move via synthetic mouse event
+            await syn_object_move(_start_xy, _end_xy, 45, 15);
+            
+            // increases player's score by one and mark scoring slot as filled
+            const new_opponent_score = increase_opponent_score();
+            console.log(`LOG - New opponent score: ${new_opponent_score}`);
+    
+            // remove ring from rings array 
+            remove_ring_scoring(ring_score_loc); // remove ring 
+    
+            // refresh canvas (ring is drawn as part of the scoring slot now)
+            refresh_canvas_state();
 
-    //// RING SCORING
-        await sleep(_score_ring_wait);
+            // txt for user
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
 
-        // move scoring ring on top (need for animation)
-        const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == ring_score_loc);
-        reorder_rings(_ring_index_in_array); // put ring last
 
-        // grab start (x,y) coordinates   
-        const _start = yinsh.objs.drop_zones.find(d => d.loc.index == ring_score_loc); // from matching drop zone
-        const _start_xy = {x:_start.loc.x, y:_start.loc.y};
-
-        // grab end coordinates -> these will be of the scoring slots for the opponent (hence input is false)
-        const _slot_coord = get_coord_free_slot(false);
-        const _end_xy = {x:_slot_coord.x, y:_slot_coord.y};    
-
-        // animate ring move via synthetic mouse event
-        await syn_object_move(_start_xy, _end_xy, 45, 15);
-        
-        // increases player's score by one and mark scoring slot as filled
-        const new_opponent_score = increase_opponent_score();
-        console.log(`LOG - New opponent score: ${new_opponent_score}`);
-
-        // remove ring from rings array 
-        remove_ring_scoring(ring_score_loc); // remove ring 
-
-        // refresh canvas (ring is drawn as part of the scoring slot now)
-        refresh_canvas_state();
+    };
 
 };
 
@@ -463,7 +480,11 @@ function prep_next_turn(_turn_no){
 
         swap_data_next_turn(); // -> takes data from next
         update_objects_next_turn(); // -> update objcts
-        set_preMove_scoring_pick(); // -> set variable clean to avoid sending bad data to the server -> ghost replays on the other side
+        
+        // -> set variables clean to avoid sending bad data to the server -> ghost replays on the other side, as they're sent in each move-end payload
+        reset_preMove_scoring_actions(); 
+        reset_scoring_actions();
+        
         refresh_canvas_state(); 
 
     };
@@ -472,16 +493,6 @@ function prep_next_turn(_turn_no){
 
 // useful for pauses during move replay
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-// used for summing ms paused
-function array_sum(input_array) {
-
-    let _running_sum = 0
-
-        input_array.map(v => _running_sum += v);
-
-    return _running_sum
-};
 
 // move ring between start and end location and drop it
 async function replay_ring_move_drop(moved_ring_details) {
@@ -663,7 +674,7 @@ async function ringDrop_handler (event) {
             // CASE: ring moved to a legal destination -> look at scenarioTree to see what happens
             // retrieve scenario as tree.index_start_move.index_end_move
             // THE tree was written in place by server_actions fn, among several possible if a preMove score was available
-            const move_scenario = get_moves_tree()[start_move_index][drop_loc_index];
+            const move_scenario = get_tree()[start_move_index][drop_loc_index];
             console.log(`LOG - Move scenario: `, move_scenario);
 
             // CASE: some markers must be flipped
@@ -675,13 +686,9 @@ async function ringDrop_handler (event) {
             };
 
             // CASE: scoring was made -> score handling is triggered
-                // values to send back to server
-                let scoring_mk_sel_picked = -1;
-                let scoring_ring_picked = -1;
-                let scoring_mk_locs_removed = [];
 
-                const f_score_av_player = 'score_avail_player' in move_scenario;
-                const f_score_av_opp = 'score_avail_opp' in move_scenario;
+                const f_score_av_player = 'scores_avail_player' in move_scenario;
+                const f_score_av_opp = 'scores_avail_opp' in move_scenario;
 
                 // communications towards the user
                 // own score vs combined score vs scored for the opponent
@@ -690,7 +697,7 @@ async function ringDrop_handler (event) {
                     ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You scored!` }));
 
                 } else if (f_score_av_player && f_score_av_opp) {
-                    console.log("USER - You scored for both you and your opponent!");
+                    console.log("USER - You scored for both!");
                     ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You scored for both you and your opponent!` }));
                 
                 } else if (f_score_av_opp) {
@@ -698,13 +705,13 @@ async function ringDrop_handler (event) {
                     ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Oh no, you scored for your opponent!` }));
                 };
 
-            // HANDLE SCORING
+            // HANDLE MULTIPLE SCORING
             if (f_score_av_player){
 
-                // check if the scoring is for the current player or not
-                const _player_scores = structuredClone(move_scenario.score_avail_player);
+                // retrieve scoring information for player
+                const _player_scores = structuredClone(move_scenario.scores_avail_player);
 
-                [scoring_mk_sel_picked, scoring_mk_locs_removed, scoring_ring_picked] = await scoring_handler(_player_scores);
+                await scoring_handler(_player_scores);
 
             };
 
@@ -712,9 +719,9 @@ async function ringDrop_handler (event) {
             console.log(`LOG - Completed player turn no: ${_played_turn_no}`);
 
             // turn completed -> wrap up info to send back on actions taken by player
-            const turn_recap = {    score_action_preMove : get_preMove_scoring_pick(), // this happened at the beginning of the turn, in case, without ring_drop involved
+            const turn_recap = {    score_actions_preMove : get_preMove_scoring_actions_done(), // this happened at the beginning of the turn, in case, without ring_drop involved
                                     move_action: { start: start_move_index, end: drop_loc_index },
-                                    score_action: { mk_sel: scoring_mk_sel_picked, mk_locs: scoring_mk_locs_removed, ring_score: scoring_ring_picked }, // defaults to -1
+                                    score_actions: get_scoring_actions_done(), // defaults to -1
                                     completed_turn_no: _played_turn_no
                                 }; 
 
@@ -746,7 +753,7 @@ async function end_turn_wait_opponent(turn_recap) {
     let msg_payload = {}
 
         // add fields to the msg payload
-        msg_payload.scenario_pick = turn_recap;
+        msg_payload.turn_recap = turn_recap;
         msg_payload.game_id = get_game_id();
         msg_payload.player_id = get_player_id();
 
@@ -755,49 +762,150 @@ async function end_turn_wait_opponent(turn_recap) {
 
 };
 
+// function for retrieving active scoring rows, given raw scoring info + id of row taken
+function active_scoring_rows(s_rows, w_s_sets, row_id) {
+
+    // given the if of the row taken, we're looking for matching sets 
+    // they should contain the id of the row we took, and have other rows available for picking -> otherwise we return empty
+    // w_s_sets is updated every time we call this function, in progressive refinements
+
+    const dummy_copy = structuredClone(w_s_sets);
+
+    console.log(`TEST - input w_s_sets: `, dummy_copy);
+    console.log(`TEST - picked row_id: `, row_id);
+    
+    // remove sets for which row_id was not a possibility, keep the ones that allow it
+    w_s_sets = w_s_sets.filter(s => s.includes(row_id))
+
+    if (w_s_sets.length > 0) { 
+
+        console.log(`TEST - filtered w_s_sets: `, w_s_sets);
+
+        // remove from surviving sets the row that was picked/removed -> valid sets (without picked row) remain
+        w_s_sets.map(s => s.splice(s.indexOf(row_id), 1));
+
+        console.log(`TEST - new w_s_sets: `, w_s_sets);
+
+        // take unique rows ids across all valid sets, and shift row ids by one
+        const rows_ids = [ ...new Set(w_s_sets.flat()) ].map(k => k - 1); 
+
+        // retrieve scoring rows data by id
+        const active_rows = s_rows.filter( (row, k) => rows_ids.includes(k) );
+
+        console.log(`TEST - new active_rows: `, active_rows);
+
+        return active_rows;
+
+    } else { // return directly empty array if we got nothing to work with
+       
+        return [];
+    };
+};
+
+// function for retrieving 1-based index of removed scoring row, taking mk_sel in input
+function index_removed_sRow(s_rows, mk_sel) {
+
+    // remove taken rows ids from all ids, and shift all by one
+    // mk_sel is assumed unique among all scoring rows 
+    let taken_row_id = s_rows.findIndex(r => r.mk_sel == mk_sel); 
+
+    if (taken_row_id != -1){
+        taken_row_id += 1 // shifted by 1
+    } else {
+        throw new Error(`LOG - Error finding scoring row for mk_sel : ${mk_sel}`);
+    };
+
+    return taken_row_id;
+
+};
+
 
 // general function for handling scoring -> creates tasks & events
-async function scoring_handler(player_scoring_ops){
+async function scoring_handler(player_scoring_ops, pre_move = false){
 
-    // vars to be returned, initialized to default values
-    let _mk_sel_pick = -1;
-    let _mk_locs_removed = [];
-    let _ring_score_pick = -1;
+    // extract relevant info from scoring_ops
+    const s_rows = player_scoring_ops.s_rows; // -> [ {mk_locs, mk_sel} ]
+    const s_sets = player_scoring_ops.s_sets; // -> [ [1,2,4], [2,3,5], [3,4] ] (1-based indexes of items in scores)
 
-        // create task for markers scoring (options only for current player)
-        const mk_scoring = new Task('mk_scoring_task', player_scoring_ops);
+    // for multiple scoring, the player first sees all rows lit up
+    // after first pick, one or more sets are picked to repeat the logic
+    // using an utility function to filter over the 
+
+    // save results of actions taken in dedicated variables (preMove_score_actions, score_actions) through setters
+    let w_s_sets = structuredClone(s_sets);
+    let done_flag = false; // we'll set this to true once we run out of set options
+    let active_rows = structuredClone(s_rows);
+    let taken_rows_ids = [];
+    let taken_rings_ids = [];
+    while (!done_flag) {
+        
+        // vars to be returned, initialized to default values
+        let _mk_sel_pick = -1;
+        let _mk_locs_removed = [];
+        let _ring_score_pick = -1;
+
+        // MK SCORING
+        // create task for markers scoring, with data on scoring options (=rows)
+        const mk_scoring = new Task('mk_scoring_task', active_rows);
         activate_task(mk_scoring); // save scoring options and activate task
 
-        // event to light up mk scoring options
-        core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
+            // event to light up mk scoring options first
+            core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
 
             // user communications
             console.log("USER - Pick a marker to indicate the row!");
             ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Pick a row of markers` }));
 
-        [ _mk_sel_pick, _mk_locs_removed ]= await mk_scoring.promise // wait for mk to be picked -> return value of loc_id
+            [ _mk_sel_pick, _mk_locs_removed ]= await mk_scoring.promise // wait for mk to be picked -> return value of loc_id
 
+            // identify picked row index and save it
+            const row_id = index_removed_sRow(s_rows, _mk_sel_pick);
+            taken_rows_ids.push(row_id);
+
+
+        // RING SCORING
         // create task for ring scoring
         const ring_scoring = new Task('ring_scoring_task');
         activate_task(ring_scoring); 
 
-        // highlight rings - need to pass player own rings ids to the function
-        await sleep(350);
-        const _player_rings_ids = yinsh.objs.rings.filter((ring) => (ring.player == get_player_id())).map(ring => ring.loc.index);
-        core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', {detail: {player_rings: _player_rings_ids}}));
+            // highlight rings - need to pass player own rings ids to the function
+            await sleep(350);
+            const _player_rings_ids = yinsh.objs.rings.filter((ring) => (ring.player == get_player_id())).map(ring => ring.loc.index);
+            core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', {detail: {player_rings: _player_rings_ids}}));
 
             // user communications
             console.log("USER - Pick a ring to be removed from the board!");
             ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Pick a ring` }));
-        
-        // wait for ring to be picked -> return value of loc_id 
-        _ring_score_pick = await ring_scoring.promise 
-        
-        // wipe tasks data from global refs
+            
+            // wait for ring to be picked -> return value of loc_id 
+            _ring_score_pick = await ring_scoring.promise 
+            taken_rings_ids.push(_ring_score_pick);
+
+
+        // reset scoring tasks
         reset_scoring_tasks();
 
-    // return relevant values
-    return [ _mk_sel_pick, _mk_locs_removed, _ring_score_pick ];
+        // save scoring action 
+        if (pre_move) {
+            pushTo_preMove_scoring_actions(_mk_locs_removed, _ring_score_pick);
+        } else {
+            pushTo_scoring_actions(_mk_locs_removed, _ring_score_pick);
+        };
+
+            
+        // update available scoring sets -> change flag if needed OR repeat
+        active_rows = active_scoring_rows(s_rows, w_s_sets, row_id)
+
+        if (active_rows.length == 0){
+            done_flag = true; // -> exit loop
+        } else {
+            await sleep(350); // -> wait before turning on new rows
+        };
+
+    };
+
+    // return relevant values -> picked set and rings (sorted)
+    return [ taken_rows_ids, taken_rings_ids ];
 
 };    
 
@@ -808,7 +916,7 @@ function mk_scoring_options_handler(event){
     if (event.type === 'mk_score_handling_on') {
 
         // retrieve scoring options
-        const scoring_options = get_scoring_options();
+        const scoring_options = get_scoring_options_fromTask();
 
         // retrieve ids of selectable markers
         const mk_sel = scoring_options.map(option => option.mk_sel);
@@ -828,7 +936,7 @@ function mk_scoring_options_handler(event){
             const mk_sel_picked_id = event.detail;
 
             // get markers for selected row
-            const scoring_options = get_scoring_options();
+            const scoring_options = get_scoring_options_fromTask();
             const _mk_row_to_remove = (scoring_options.find(option => option.mk_sel == mk_sel_picked_id)).mk_locs;
 
             // remove markers for selected row
@@ -860,7 +968,7 @@ function mk_sel_hover_handler (event) {
         const hovered_marker_id = event.detail;
 
         // retrieve markers to highlight for row
-        const scoring_options = get_scoring_options();
+        const scoring_options = get_scoring_options_fromTask();
         const _mk_row_to_highlight = (scoring_options.find(option => option.mk_sel == hovered_marker_id)).mk_locs;
 
         // prepare halo objects and refresh canvas
@@ -872,7 +980,7 @@ function mk_sel_hover_handler (event) {
     } else if (event.type === 'mk_sel_hover_OFF') {
 
         // retrieve scoring options
-        const scoring_options = get_scoring_options();
+        const scoring_options = get_scoring_options_fromTask();
 
         // retrieve ids of selectable markers
         const mk_sel = scoring_options.map(option => option.mk_sel);
@@ -921,6 +1029,7 @@ async function ring_scoring_handler (event) {
 
         // remove ring from rings array 
         remove_ring_scoring(picked_ring_id);
+
         // empty array of rings highlights
         update_ring_highlights(); 
         refresh_canvas_state();
@@ -928,6 +1037,7 @@ async function ring_scoring_handler (event) {
         // completes ring scoring task
         const success_msg = picked_ring_id; // value to be returned by completed task
         complete_task('ring_scoring_task', success_msg);
+
 
     enableInteraction(); // restore interaction
 
@@ -1121,6 +1231,9 @@ async function win_animation() {
 
     console.log('LOG - Win game animation started');
 
+    // activate task to inform rest of application an animation is underway
+    activate_task(new Task('canvas_animation_task'));
+
         const win_anim_start_time = Date.now();
 
         // init new game (just to have elements on the board)
@@ -1247,8 +1360,11 @@ async function win_animation() {
         };
         refresh_canvas_state(); // calling refresh for last alpha step 0.96 -> 1
 
-        // win animation complete
-        console.log(`LOG - Win animation done in: ${Date.now() - win_anim_start_time}ms`);
+    // end task 
+    complete_task('canvas_animation_task');
+
+    // win animation complete
+    console.log(`LOG - Win animation done in: ${Date.now() - win_anim_start_time}ms`);
 
 };
 
@@ -1256,12 +1372,18 @@ async function win_animation() {
 /////////// EXITING GAME - prompted by user via resign action, mediated by server
 export async function game_exit_handler(event){
 
+    // wait for any animation in progress to be done
+    if (get_task_status('canvas_animation_task')) {
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Game will be over as the animation ends >` }));
+        await task_completion('canvas_animation_task');
+    };
+
     // disable any canvas interaction
     disableInteraction();
 
     // notify server (game is lost automatically) --> other user is informed by server
-    // note: we're keeping scenario_pick here to avoid handling exceptions inside the server game_runner -> to be fixed
-    const _resign_msg_payload = { game_id: get_game_id(), player_id: get_player_id(), scenario_pick: false }; 
+    // note: we're keeping turn_recap here to avoid handling exceptions inside the server game_runner -> to be fixed
+    const _resign_msg_payload = { game_id: get_game_id(), player_id: get_player_id(), turn_recap: false }; 
     await server_ws_send(CODE_resign_game, _resign_msg_payload); // server will acknowledge
 
     // we receive formal 'you lost' response from server, handled by next_action_handler
