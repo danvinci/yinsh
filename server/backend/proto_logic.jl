@@ -1183,11 +1183,8 @@ function remove_subsets!(set::Set)
 
 end
 
-# ╔═╡ dbbb8182-f9db-47f2-ae71-7c50c8cc94bd
-setdiff([2,3],[4,5,2,3])
-
 # ╔═╡ 39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
-function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})
+function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})::Vector{Set{Int}}
 # takes in input rows of locations (CI) and returns the possible sets representing groups of scoring actions
 # with multiple scoring and rows overlap, some scores preclude others
 # having A/B/C, depending on their configuration, A/B/C, A/B, B/C, C/A might be available for scoring
@@ -1195,113 +1192,89 @@ function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})
 
 	len::Int = length(rows)
 	
-	base_sets::Set{Set{Int}} = Set([]) # using sets guarantees uniqueness
-	scoring_sets::Vector{Set{Int}} = [] # returning value
-	
-	match_matrix::Matrix{Bool} = fill(false, len, len)
+	# base sets to be expanded, every row can be with itself
+	# sets guarantee uniqueness btw
+	base_sets::Set{Set{Int}} = Set([ Set(r) for r in 1:len ]) 
 
-	#= 	the general idea is to grow the sets in a bottom up way
-		- iterate through all ids/rows pair-wise, log clash or no_clash
-		- update log for both rows involved in comparison
+	# final sets to be returned
+	scoring_sets::Vector{Set{Int}} = [] 
+
+	# log who can be with who - each row can be in a set with itself
+	matches_vec::Vector{Vector{Int}} = [[r] for r in 1:len] 
+	
+
+	#= 	
+		The general idea is to extend the sets in a bottom up way
+		- iterate through all ids/rows pair-wise, log matches
 		- on each pair, check what the rows don't clash with that might be added
-		- check those potential additions among themselves -> add what's left
-		- strip the final array of dublicates and subsets 
+		- update log for both rows involved in comparison
+		- check how each set can be further expanded, 1-by-1, add what's new
+		- prune the base sets, and avoid adding duplicates to the final vector
+		- strip the final array of subsets 
 	=#
 
 	
-	# iterate over row indexes and build a reference dictionary
+	# iterate over row indexes and build a matching reference 
 	for j in 1:len, k in j:len
 
-		if j == k
-			match_matrix[j,j] = true # each row can be in a set with itself
-			push!(base_sets, Set([j]))
-		else
-
+		if j != k
+			
 			# check for clashes/no_clashes 
 			@inbounds if isdisjoint(rows[j], rows[k])
-				
-				@inbounds match_matrix[j,k] = true 
-				@inbounds match_matrix[k,j] = true
-				
-				#= upper triangular only -> prevent duplicates later
-				 
-				 we grow each set by reading ONLY left to right
-				
-				 duplicates are avoided as [4,1] can become [4,1,5]
-				 but [5,4] stays the same, 4,5 don't "see" the match with 1 
 
-				=#
-				
+				# save matches for both rows
+				@inbounds push!(matches_vec[j], k)
+				@inbounds push!(matches_vec[k], j)
+
+				# save set
 				push!(base_sets, Set([j, k]))
 				
 			end
 		end
 	end
 
-	@info "pre remove subsets : $base_sets"
-	@info match_matrix
-
-	# grow each set -> use ref to find other rows that can be added 
+	# extend each set -> use ref to find other rows that can be added 
 	while length(base_sets) > 0
 
-		remove_subsets!(base_sets) # prune set, avoid unnecessary checks
-
-		@info "start set: $base_sets"
+		# prune set -> avoid already found extensions
+		remove_subsets!(base_sets) 
 	
 		for s in base_sets
 
 			# ids of rows that match with all the others in set
-			@inbounds ids = intersect([findall(view(match_matrix,r,:)) for r in s ]...)
+			@inbounds ids = intersect( [ matches_vec[r] for r in s ]...)
 
+			# keep only potential new additions
 			new_ids = setdiff(ids, s)
-			txt=""
 
-			# this set can't be grown further, transfer it 
-			if isempty(new_ids) && !(s in scoring_sets) 
+			# this set can't be grown further
+			if isempty(new_ids)
 				
-				push!(scoring_sets, s)
-
-				@info "eval $s -> int ids: $ids -> new: $new_ids -> transfer"
-				
-			else # create N new sets for each new row at the intersection
-				
-				for i in new_ids
-					new_set::Set{Int} = union(s, i)
-					if !(new_set in base_sets)
-						push!(base_sets, new_set) 
-						txt= "save $new_set"
-					else
-						delete!(base_sets, new_set)
-						txt= "$new_set already found"
-					end
-					@info "eval $s -> int ids: $ids -> new: $new_ids -> $txt"
-					
+				if !(s in scoring_sets) # save it if new
+					push!(scoring_sets, s)
 				end
+				
+			else # create N new sets for each new id
+				for i in new_ids
 					
+					new_set::Set{Int} = union(s, i)
+					
+					if !(new_set in base_sets) # put it back for later
+						push!(base_sets, new_set) 
+						#txt= "save $new_set"
+					end					
+				end
 			end
 
-		delete!(base_sets, s) # delete start branch always
-	
-			#=
-			# cleaning up ids to ensure they don't clash among themselves
-			# especially important when growing single index/row sets 
-			@inbounds ids = intersect([findall(view(match_matrix,r,:)) for r in px_ids ]...)
-			=#
-	
-			#@info "checking $s - px_ids: $px_ids -> $ids"
+			# always delete starting branch to avoid re-expanding the same set 
+			delete!(base_sets, s) 
 		
 		end
-
 	end
-		
 	
-
-	#@info scoring_sets
-
+		
 	# clean up results
 	remove_subsets!(scoring_sets)
-
-	#@info scoring_sets
 
 	return scoring_sets
 	
@@ -1313,17 +1286,125 @@ end
 @benchmark identify_scoring_sets(tt)
   ╠═╡ =#
 
-# ╔═╡ 69511b0a-afc3-417b-9bb3-7f27c1ea4037
+# ╔═╡ 69b9885f-96bd-4f8d-9bde-9ac09521f435
+function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
+# look at the game state as it is to check if there are scoring opportunities
+
+	# to be returned -> returns empty vector if nothing found for player
+	# :B/:W -> {:s_rows => [], :s_sets => []}
+	scores_info::Dict{Symbol, Dict} = Dict()
+
+	# helper array to store found locations for scoring rows
+	found_rows::Dict{Symbol, Vector{Vector{CartesianIndex}}} = Dict(_B_key => [], _W_key => [])
+
+	# all markers locations
+	all_mks::Vector{CartesianIndex} = findall(s -> contains(s, _M), gs)
+	
+	for mk_index in all_mks
+
+		# for each marker retrieve search space for scoring ops
+		@inbounds mk_search_locs::Vector{Vector{CartesianIndex}} = _locs_searchSpace_scoring[mk_index]
+
+		for locs_vec in mk_search_locs
+
+			# reading states for all locs in search array
+			states_vec::Vector{String} = []
+			for loc in locs_vec
+				@inbounds s::String = gs[loc]
+				contains(s, _M) ? push!(states_vec, s) : @goto skip_vec
+			end
+	
+			# search if a score was made within this search array
+			black_scoring::Bool = states_vec == _B_score
+			white_scoring::Bool = states_vec == _W_score
+
+			# if a score was made
+			if black_scoring || white_scoring
+				# log who's the scoring player
+				player_key::Symbol = black_scoring ? _B_key : _W_key
+
+				# save the row but check that scoring row wasn't saved already
+				if !(locs_vec in found_rows[player_key])
+					@inbounds push!(found_rows[player_key], locs_vec)
+				end					
+			end	
+
+			@label skip_vec
+		end
+	end
+
+	
+	# identify mk_sel for row selection within same groups
+	mk_sel_taken::Vector{CartesianIndex} = [] # keep track of ones already taken
+	for player_k in keys(found_rows)
+
+		# extract rows
+		@inbounds rows::Vector{Vector{CartesianIndex}} = found_rows[player_k]
+
+		# identify scoring sets among rows and save them in container
+		scoring_sets::Vector{Set{Int}} = identify_scoring_sets(rows)
+
+		# prep container
+		s_player = Dict(:s_rows => Dict[], :s_sets => scoring_sets)
+
+		# summary info for all markers across all rows
+		mk_group::Vector{CartesianIndex} = vcat(rows...)
+		mk_freq::Dict{CartesianIndex,Int64} = countmap(mk_group)
+
+		# transform rows into scores data
+		for r in rows
+
+			# exclude from row mks already taken
+			mk_sel_avail::Vector{CartesianIndex} = setdiff(r, mk_sel_taken)
+
+			# find marker with min frequency and save it
+			_, id::Int64 = findmin(i -> mk_freq[i], mk_sel_avail)
+			@inbounds mk_sel::CartesianIndex = mk_sel_avail[id]
+			push!(mk_sel_taken, mk_sel)
+
+			# package score information
+			score_row_info::Dict{Symbol,Union{CartesianIndex, Vector{CartesianIndex}}} = Dict(:mk_sel => mk_sel, :mk_locs => r)
+
+			# save prepared scoring row
+			@inbounds push!(s_player[:s_rows], score_row_info)
+
+		end
+
+		# save player's data
+		@inbounds setindex!(scores_info, s_player, player_k)
+	end
+
+
+	return scores_info
+
+end
+
+# ╔═╡ 182a1472-84df-486e-bb17-58948bbb36b6
+ss = search_scores_gs(_gst)
+
+# ╔═╡ e6d5acba-60e9-431f-8aaf-c77ee841f5f9
+ss[:W][:s_sets]
+
+# ╔═╡ ba1310d4-4abb-411d-a6a8-3dcd75d541af
+__locs = deepcopy([d[:mk_locs] for d in ss[:W][:s_rows]] )
+
+# ╔═╡ fff12b2b-a603-48a9-a126-f00615d20582
+@bind j Slider(1:length(__locs), show_value=true)
+
+# ╔═╡ 2824b152-389f-4a51-8817-5f5ecfed433e
+f_gs = new_gs_only_rows(__locs, "W", __locs[j]);
+
+# ╔═╡ a6cd7b32-92b8-4424-bffe-cef0fec49278
+tt = deepcopy([d[:mk_locs] for d in search_scores_gs(_gst)[:W][:s_rows] ])
+
+# ╔═╡ eea45a50-b3d8-43b4-a178-d4734484b978
 # ╠═╡ disabled = true
 #=╠═╡
-@benchmark search_scores_gs(_gst)
+@benchmark identify_scoring_sets(tt)
   ╠═╡ =#
 
-# ╔═╡ c002c2fa-53d4-450f-b1e7-b890a7bd117f
-# ╠═╡ disabled = true
-#=╠═╡
+# ╔═╡ 69511b0a-afc3-417b-9bb3-7f27c1ea4037
 @benchmark search_scores_gs(_gst)
-  ╠═╡ =#
 
 # ╔═╡ 9f1d770b-7c67-4b25-bf2b-0fbf6a29fb6a
 function identify_scoring_sets_old(rows::Vector{Vector{CartesianIndex}})
@@ -1451,122 +1532,11 @@ function identify_scoringSets_old(rows::Vector{Vector{CartesianIndex}})::Vector{
 	
 end
 
-# ╔═╡ 69b9885f-96bd-4f8d-9bde-9ac09521f435
-function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
-# look at the game state as it is to check if there are scoring opportunities
-
-	# to be returned -> returns empty vector if nothing found for player
-	# :B/:W -> {:s_rows => [], :s_sets => []}
-	scores_info::Dict{Symbol, Dict} = Dict()
-
-	# helper array to store found locations for scoring rows
-	found_rows::Dict{Symbol, Vector{Vector{CartesianIndex}}} = Dict(_B_key => [], _W_key => [])
-
-	# all markers locations
-	all_mks::Vector{CartesianIndex} = findall(s -> contains(s, _M), gs)
-	
-	for mk_index in all_mks
-
-		# for each marker retrieve search space for scoring ops
-		@inbounds mk_search_locs::Vector{Vector{CartesianIndex}} = _locs_searchSpace_scoring[mk_index]
-
-		for locs_vec in mk_search_locs
-
-			# reading states for all locs in search array
-			states_vec::Vector{String} = []
-			for loc in locs_vec
-				@inbounds s::String = gs[loc]
-				contains(s, _M) ? push!(states_vec, s) : @goto skip_vec
-			end
-	
-			# search if a score was made within this search array
-			black_scoring::Bool = states_vec == _B_score
-			white_scoring::Bool = states_vec == _W_score
-
-			# if a score was made
-			if black_scoring || white_scoring
-				# log who's the scoring player
-				player_key::Symbol = black_scoring ? _B_key : _W_key
-
-				# save the row but check that scoring row wasn't saved already
-				if !(locs_vec in found_rows[player_key])
-					@inbounds push!(found_rows[player_key], locs_vec)
-				end					
-			end	
-
-			@label skip_vec
-		end
-	end
-
-	
-	# identify mk_sel for row selection within same groups
-	mk_sel_taken::Vector{CartesianIndex} = [] # keep track of ones already taken
-	for player_k in keys(found_rows)
-
-		# extract rows
-		@inbounds rows::Vector{Vector{CartesianIndex}} = found_rows[player_k]
-
-		# identify scoring sets among rows and save them in container
-		scoring_sets::Vector{Set{Int}} = identify_scoringSets_old(rows)
-
-		# prep container
-		s_player = Dict(:s_rows => Dict[], :s_sets => scoring_sets)
-
-		# summary info for all markers across all rows
-		mk_group::Vector{CartesianIndex} = vcat(rows...)
-		mk_freq::Dict{CartesianIndex,Int64} = countmap(mk_group)
-
-		# transform rows into scores data
-		for r in rows
-
-			# exclude from row mks already taken
-			mk_sel_avail::Vector{CartesianIndex} = setdiff(r, mk_sel_taken)
-
-			# find marker with min frequency and save it
-			_, id::Int64 = findmin(i -> mk_freq[i], mk_sel_avail)
-			@inbounds mk_sel::CartesianIndex = mk_sel_avail[id]
-			push!(mk_sel_taken, mk_sel)
-
-			# package score information
-			score_row_info::Dict{Symbol,Union{CartesianIndex, Vector{CartesianIndex}}} = Dict(:mk_sel => mk_sel, :mk_locs => r)
-
-			# save prepared scoring row
-			@inbounds push!(s_player[:s_rows], score_row_info)
-
-		end
-
-		# save player's data
-		@inbounds setindex!(scores_info, s_player, player_k)
-	end
-
-
-	return scores_info
-
-end
-
-# ╔═╡ 182a1472-84df-486e-bb17-58948bbb36b6
-ss = search_scores_gs(_gst)
-
-# ╔═╡ e6d5acba-60e9-431f-8aaf-c77ee841f5f9
-ss[:W][:s_sets]
-
-# ╔═╡ ba1310d4-4abb-411d-a6a8-3dcd75d541af
-__locs = deepcopy([d[:mk_locs] for d in ss[:W][:s_rows]] )
-
-# ╔═╡ fff12b2b-a603-48a9-a126-f00615d20582
-@bind j Slider(1:length(__locs), show_value=true)
-
-# ╔═╡ 2824b152-389f-4a51-8817-5f5ecfed433e
-f_gs = new_gs_only_rows(__locs, "W", __locs[j]);
-
-# ╔═╡ a6cd7b32-92b8-4424-bffe-cef0fec49278
-tt = deepcopy([d[:mk_locs] for d in search_scores_gs(_gst)[:W][:s_rows] ])
-
-# ╔═╡ 59d9c657-9fd6-4e0e-a853-b58e1f2fca2f
-identify_scoring_sets(tt)
-
-# ╔═╡ 0e9488cd-8cf4-4118-8ae2-87c9548cbcd0
-search_scores_gs(_gst)
+# ╔═╡ a3d77187-e70a-433a-8b17-4c040580d0a5
+# ╠═╡ disabled = true
+#=╠═╡
+@benchmark identify_scoringSets_old(tt)
+  ╠═╡ =#
 
 # ╔═╡ 18f8a5d6-c775-44a3-9490-cd11352c4a63
 function set_nested!(dict::Dict, val, first_key, second_key)
@@ -4417,7 +4387,8 @@ version = "17.4.0+2"
 # ╠═18913f59-f3d2-40c8-8f2c-530dc1deeec5
 # ╠═fff12b2b-a603-48a9-a126-f00615d20582
 # ╠═e6d5acba-60e9-431f-8aaf-c77ee841f5f9
-# ╠═59d9c657-9fd6-4e0e-a853-b58e1f2fca2f
+# ╠═eea45a50-b3d8-43b4-a178-d4734484b978
+# ╠═a3d77187-e70a-433a-8b17-4c040580d0a5
 # ╠═182a1472-84df-486e-bb17-58948bbb36b6
 # ╠═ba1310d4-4abb-411d-a6a8-3dcd75d541af
 # ╠═2824b152-389f-4a51-8817-5f5ecfed433e
@@ -4425,15 +4396,12 @@ version = "17.4.0+2"
 # ╟─571c2bdc-2452-4e19-a8c9-3d18bf579a16
 # ╟─c0c45548-9792-4969-9147-93f09411a71f
 # ╟─dd941045-3b5f-4393-a6ae-b3d1f029a585
-# ╠═dbbb8182-f9db-47f2-ae71-7c50c8cc94bd
 # ╠═39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
 # ╠═eb641dc2-2b7b-4c0b-8260-49041877dba5
 # ╠═a6cd7b32-92b8-4424-bffe-cef0fec49278
-# ╠═0e9488cd-8cf4-4118-8ae2-87c9548cbcd0
 # ╠═69511b0a-afc3-417b-9bb3-7f27c1ea4037
-# ╠═c002c2fa-53d4-450f-b1e7-b890a7bd117f
+# ╠═69b9885f-96bd-4f8d-9bde-9ac09521f435
 # ╟─9f1d770b-7c67-4b25-bf2b-0fbf6a29fb6a
-# ╟─69b9885f-96bd-4f8d-9bde-9ac09521f435
 # ╟─fae1cebf-9355-4c4c-b0aa-0eab1f517785
 # ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
 # ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
