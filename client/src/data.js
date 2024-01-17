@@ -3,8 +3,14 @@
 
 import { setup_ok_codes, next_ok_codes, joiner_ok_code} from './server.js'
 
-// utility function: from col-major julia matrix to linear index in js
+// UTILITY FUNCTIONS
+
+// from row/col julia matrix indexes to linear index in js
 const reshape_index = (row, col) => ( (col-1)*19 + row - 1); // js arrays start at 0, hence the -1 offset
+
+// elegant way of comparing sets for equality
+// https://stackoverflow.com/questions/31128855/comparing-ecma6-sets-for-equality
+const areSetsEqual = (a, b) => a.size === b.size && [...a].every(value => b.has(value));
 
 
 // init global object / wipe all data
@@ -315,9 +321,6 @@ export function get_preMove_score_op_data(){
 
 // return tree among trees given input, otherwise return the only one
 export function select_apply_scenarioTree(input_s_set, input_s_rings){
-    
-    // NOTE: JS sets don't seem to work well for equality comparison ->  we're using sorted arrays here for equality comparison
-    // also serializing/de-serializing turns sets into arrays anyway
 
     const f_ret_default = (input_s_set.length == 0 && input_s_rings.length == 0); // passing empty arrays
     let _tree = undefined;
@@ -330,15 +333,40 @@ export function select_apply_scenarioTree(input_s_set, input_s_rings){
         
         } else { // pick specific tree
 
+            // NOTE: JS sets need an ad-hoc fn (defined above) for equality comparison
+            // here we're building two arrays of sets (for s_set and s_rings) and finding all matches with sets built from inputs
+            // at the intersection of the two vector of indexes we have the 0-based index of the correct treepot in the tp array
+            // note: serializing/de-serializing turns sets into arrays 
+
+            // array to search in
             const _treepots = yinsh.server_data.scenario_trees.treepots;
-            _tree = _treepots.find( (tp) => (tp.gs_id.s_set.sort == input_s_set.sort && tp.gs_id.s_rings.sort == input_s_rings.sort) ).tree;
+
+            // preparing sets to use as comparison
+            const in_sset = new Set(input_s_set);
+            const in_srings = new Set(input_s_rings);
+
+            // extracting/re-building arrays of sets from _treepots
+            const gsid_v_sset = _treepots.map(tp => new Set(tp.gs_id.s_set));
+            const gsid_v_srings = _treepots.map(tp => new Set(tp.gs_id.s_rings));
+
+            // check at which indexes the sets match within each array (keep only numbers)
+            const indexes_sset = gsid_v_sset.map(s => areSetsEqual(s, in_sset)).map( (s,index) => s == true && index).filter(Number);
+            const indexes_srings = gsid_v_srings.map(s => areSetsEqual(s, in_srings)).map( (s,index) => s == true && index).filter(Number);
+
+            // find first intersection (element in both arrays) -> there should be only one
+            const tree_index = indexes_srings.find(s => indexes_sset.includes(s));
+
+            // prevent error and leave tree undefined -> error is handled downstream
+            if (typeof tree_index == 'number' && 0 <= tree_index < _treepots.length){ 
+                _tree = structuredClone(_treepots[tree_index].tree);
+            };
 
         };
 
         // check if we're returning something
         if (typeof _tree != 'undefined'){
             
-            yinsh.objs.tree = structuredClone(_tree); // write tree in place
+            yinsh.objs.tree = _tree; // write tree in place
             const tree_id = f_ret_default ? '[ default ]' : `[ s_set: ${input_s_set}, s_rings: ${input_s_rings} ]`;
 
             console.log(`LOG - Tree ${tree_id} applied`);
@@ -1095,7 +1123,7 @@ function getIndexes_legal_drops(start_index){
 
     console.log(`TEST - searching for legal drops starting at ${start_index}`);
 
-    // keys (possible moves) are the first level of the branch for a ring loc
+    // keys (possible moves) paare the first level of the branch for a ring loc
     const tree_branch = get_tree()[start_index];
 
     console.log(`TEST - tree ${typeof tree_branch} found for ${start_index}`, tree_branch);

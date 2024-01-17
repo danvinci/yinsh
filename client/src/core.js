@@ -173,7 +173,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         // log error
         console.log(`LOG - Game setup ERROR. ${Date.now() - request_start_time}ms`);
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Whoopsie, error while setting up the game` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Error while setting up the game` }));
 
 
         console.log(err);
@@ -762,35 +762,47 @@ async function end_turn_wait_opponent(turn_recap) {
 
 };
 
-// function for retrieving active scoring rows, given raw scoring info + id of row taken
-function active_scoring_rows(s_rows, w_s_sets, row_id) {
+// wrapper around splice for easier array manipulation
+// modifies array in-place if v is found, otherwise left as-is 
+function remove_fromArray(array, v){
 
+    if (array.includes(v)){
+        array.splice(array.indexOf(v),1);
+    };
+};
+
+// function for retrieving active scoring rows, given raw scoring info + id of row taken
+function active_scoring_rows(s_rows, s_sets_obj, row_id) {
     // given the if of the row taken, we're looking for matching sets 
     // they should contain the id of the row we took, and have other rows available for picking -> otherwise we return empty
     // w_s_sets is updated every time we call this function, in progressive refinements
 
-    const dummy_copy = structuredClone(w_s_sets);
+    let sets_vec = structuredClone(s_sets_obj.v); // working copy, before modifying vec in passed obj
 
-    console.log(`TEST - input w_s_sets: `, dummy_copy);
+    console.log(`TEST - input w_s_sets: `, s_sets_obj.v);
     console.log(`TEST - picked row_id: `, row_id);
     
-    // remove sets for which row_id was not a possibility, keep the ones that allow it
-    w_s_sets = w_s_sets.filter(s => s.includes(row_id))
+    // keep only sets for which row_id is a possibility
+    sets_vec = sets_vec.filter(s => s.includes(row_id));
+    
+    if (sets_vec.flat().length > 0) { // using flat() as we might get a bunch of empty arrays
 
-    if (w_s_sets.length > 0) { 
+        console.log(`TEST - filtered w_s_sets: `, sets_vec);
 
-        console.log(`TEST - filtered w_s_sets: `, w_s_sets);
+        // remove from surviving sets the row that was picked/removed
+        sets_vec.map(s => remove_fromArray(s, row_id));
+        
+        // overwrite vector inside object, as starting point for next pick
+        // https://stackoverflow.com/questions/21978392/modify-a-variable-inside-a-function -> modifying var by reference
+        s_sets_obj.v = structuredClone(sets_vec);
 
-        // remove from surviving sets the row that was picked/removed -> valid sets (without picked row) remain
-        w_s_sets.map(s => s.splice(s.indexOf(row_id), 1));
-
-        console.log(`TEST - new w_s_sets: `, w_s_sets);
+        console.log(`TEST - new w_s_sets: `, sets_vec);
 
         // take unique rows ids across all valid sets, and shift row ids by one
-        const rows_ids = [ ...new Set(w_s_sets.flat()) ].map(k => k - 1); 
+        const rows_ids = [ ...new Set(sets_vec.flat()) ].map(k => k - 1); 
 
         // retrieve scoring rows data by id
-        const active_rows = s_rows.filter( (row, k) => rows_ids.includes(k) );
+        const active_rows = s_rows.filter( (row, id) => rows_ids.includes(id) );
 
         console.log(`TEST - new active_rows: `, active_rows);
 
@@ -798,8 +810,10 @@ function active_scoring_rows(s_rows, w_s_sets, row_id) {
 
     } else { // return directly empty array if we got nothing to work with
        
+        s_sets_obj.v = [];
         return [];
     };
+
 };
 
 // function for retrieving 1-based index of removed scoring row, taking mk_sel in input
@@ -832,7 +846,7 @@ async function scoring_handler(player_scoring_ops, pre_move = false){
     // using an utility function to filter over the 
 
     // save results of actions taken in dedicated variables (preMove_score_actions, score_actions) through setters
-    let w_s_sets = structuredClone(s_sets);
+    let s_sets_obj = {v: structuredClone(s_sets)};
     let done_flag = false; // we'll set this to true once we run out of set options
     let active_rows = structuredClone(s_rows);
     let taken_rows_ids = [];
@@ -894,12 +908,12 @@ async function scoring_handler(player_scoring_ops, pre_move = false){
 
             
         // update available scoring sets -> change flag if needed OR repeat
-        active_rows = active_scoring_rows(s_rows, w_s_sets, row_id)
+        active_rows = active_scoring_rows(s_rows, s_sets_obj, row_id)
 
         if (active_rows.length == 0){
             done_flag = true; // -> exit loop
         } else {
-            await sleep(350); // -> wait before turning on new rows
+            await sleep(300); // -> wait before turning on new rows
         };
 
     };
@@ -1394,7 +1408,8 @@ export async function game_exit_handler(event){
 };
 
 
-// HELPER FUNCTION
+// HELPER FUNCTIONS
+
 // animate last ring (ie. on top of canvas) to move between start and end points -> as the ring is moved, it triggers redraw of the canvas
 // can also be used for moving markers - either last or a specific ID (multi-object animation, without array re-ordering)
 async function syn_object_move(start, end, no_steps, sleep_ms, obj = 'ring', id_in_array = -1){

@@ -1104,16 +1104,18 @@ function save_new_clientPkg!(games_log_ref, game_id, _client_pkg)
 end
 
 # ╔═╡ 157f5ee5-b517-4d71-b7ab-4e3a6bfb160a
-_gst = gen_random_gameState(8,30)
+_gst = gen_random_gameState(8,32)
 
 # ╔═╡ 823ce280-15c4-410f-8216-efad03897282
 function new_gs_only_rows(rows::Vector{Vector{CartesianIndex}}, player, h_row=[])
 
 	gs = fill("", (19,11))
 
-	for r in rows
-		for loc in r
-			gs[loc] = "M"*player
+	if !isempty(rows)
+		for r in rows
+			for loc in r
+				gs[loc] = "M"*player
+			end
 		end
 	end
 
@@ -1131,27 +1133,13 @@ function new_gs_only_rows(rows::Vector{Vector{CartesianIndex}}, player, h_row=[]
 
 end
 
-# ╔═╡ 571c2bdc-2452-4e19-a8c9-3d18bf579a16
-function combine_vectors(vec_of_vec, indexes)
-# returns vector of appended rows which id is contained in set
-
-	combined_vec = []
-
-	for k in indexes
-		append!(combined_vec, vec_of_vec[k])
-	end
-	
-	return combined_vec
-
-end
-
 # ╔═╡ c0c45548-9792-4969-9147-93f09411a71f
 function remove_subsets!(vec::Vector)
 
 	len::Int = length(vec)
 	keep_mask::Vector{Bool} = fill(false, len)
 
-	for i in 1:len
+	@inbounds for i in 1:len
 
 		# compare against all elements (inclding itself)
 		@inbounds superset_index = findfirst(s -> ⊊(vec[i], s), vec)
@@ -1170,7 +1158,7 @@ end
 # ╔═╡ dd941045-3b5f-4393-a6ae-b3d1f029a585
 function remove_subsets!(set::Set)
 
-	for s in set
+	@inbounds for s in set
 		
 		for r in setdiff(set, s) # compare against all the others
 
@@ -1184,7 +1172,7 @@ function remove_subsets!(set::Set)
 end
 
 # ╔═╡ 39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
-function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})::Vector{Set{Int}}
+function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})::Set{Set{Int}}
 # takes in input rows of locations (CI) and returns the possible sets representing groups of scoring actions
 # with multiple scoring and rows overlap, some scores preclude others
 # having A/B/C, depending on their configuration, A/B/C, A/B, B/C, C/A might be available for scoring
@@ -1194,13 +1182,13 @@ function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})::Vector{Set
 	
 	# base sets to be expanded, every row can be with itself
 	# sets guarantee uniqueness btw
-	base_sets::Set{Set{Int}} = Set([ Set(r) for r in 1:len ]) 
+	base_sets = Set([ Set{Int}(r) for r in 1:len ]) 
 
 	# final sets to be returned
-	scoring_sets::Vector{Set{Int}} = [] 
+	scoring_sets = Set{Set{Int}}() 
 
 	# log who can be with who - each row can be in a set with itself
-	matches_vec::Vector{Vector{Int}} = [[r] for r in 1:len] 
+	matches_vec = [Set{Int}(r) for r in 1:len] 
 	
 
 	#= 	
@@ -1227,7 +1215,7 @@ function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})::Vector{Set
 				@inbounds push!(matches_vec[k], j)
 
 				# save set
-				push!(base_sets, Set([j, k]))
+				push!(base_sets, Set{Int}([j, k]))
 				
 			end
 		end
@@ -1235,43 +1223,42 @@ function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})::Vector{Set
 
 	# extend each set -> use ref to find other rows that can be added 
 	while length(base_sets) > 0
-
+		
 		# prune set -> avoid already found extensions
 		remove_subsets!(base_sets) 
 	
 		for s in base_sets
 
 			# ids of rows that match with all the others in set
-			@inbounds ids = intersect( [ matches_vec[r] for r in s ]...)
+			@inbounds ids = intersect( [ matches_vec[r] for r in s ]...)::Set{Int}
 
 			# keep only potential new additions
-			new_ids = setdiff(ids, s)
+			new_ids = setdiff(ids, s)::Set{Int}
 
 			# this set can't be grown further
 			if isempty(new_ids)
 				
 				if !(s in scoring_sets) # save it if new
-					push!(scoring_sets, s)
+					push!(scoring_sets, s) 
 				end
 				
 			else # create N new sets for each new id
 				for i in new_ids
 					
-					new_set::Set{Int} = union(s, i)
+					new_set = union(s, i)::Set{Int}
 					
-					if !(new_set in base_sets) # put it back for later
+					if !(new_set in base_sets) # put it back for later if new
 						push!(base_sets, new_set) 
-						#txt= "save $new_set"
 					end					
 				end
 			end
 
 			# always delete starting branch to avoid re-expanding the same set 
+			# function never converges without this
 			delete!(base_sets, s) 
 		
 		end
 	end
-	
 		
 	# clean up results
 	remove_subsets!(scoring_sets)
@@ -1279,12 +1266,6 @@ function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})::Vector{Set
 	return scoring_sets
 	
 end
-
-# ╔═╡ eb641dc2-2b7b-4c0b-8260-49041877dba5
-# ╠═╡ disabled = true
-#=╠═╡
-@benchmark identify_scoring_sets(tt)
-  ╠═╡ =#
 
 # ╔═╡ 69b9885f-96bd-4f8d-9bde-9ac09521f435
 function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
@@ -1294,8 +1275,10 @@ function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
 	# :B/:W -> {:s_rows => [], :s_sets => []}
 	scores_info::Dict{Symbol, Dict} = Dict()
 
-	# helper array to store found locations for scoring rows
-	found_rows::Dict{Symbol, Vector{Vector{CartesianIndex}}} = Dict(_B_key => [], _W_key => [])
+	# helper vecs/dict to store found locations for scoring rows
+	rows_B = Vector{CartesianIndex}[]
+	rows_W = Vector{CartesianIndex}[]
+	found_rows = Dict(_B_key => rows_B, _W_key => rows_W)
 
 	# all markers locations
 	all_mks::Vector{CartesianIndex} = findall(s -> contains(s, _M), gs)
@@ -1308,7 +1291,7 @@ function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
 		for locs_vec in mk_search_locs
 
 			# reading states for all locs in search array
-			states_vec::Vector{String} = []
+			states_vec = String[]
 			for loc in locs_vec
 				@inbounds s::String = gs[loc]
 				contains(s, _M) ? push!(states_vec, s) : @goto skip_vec
@@ -1335,17 +1318,18 @@ function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
 
 	
 	# identify mk_sel for row selection within same groups
-	mk_sel_taken::Vector{CartesianIndex} = [] # keep track of ones already taken
+	mk_sel_taken = Vector{CartesianIndex}(undef,0) # keep track of ones already taken
 	for player_k in keys(found_rows)
 
 		# extract rows
 		@inbounds rows::Vector{Vector{CartesianIndex}} = found_rows[player_k]
 
 		# identify scoring sets among rows and save them in container
-		scoring_sets::Vector{Set{Int}} = identify_scoring_sets(rows)
+		scoring_sets::Set{Set{Int}} = identify_scoring_sets(rows)
 
-		# prep container
-		s_player = Dict(:s_rows => Dict[], :s_sets => scoring_sets)
+		# prep containers
+		s_rows = Dict[]
+		s_player = Dict{Symbol,Union{Vector{Dict}, Set}}(:s_rows => s_rows, :s_sets => scoring_sets)
 
 		# summary info for all markers across all rows
 		mk_group::Vector{CartesianIndex} = vcat(rows...)
@@ -1358,15 +1342,15 @@ function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
 			mk_sel_avail::Vector{CartesianIndex} = setdiff(r, mk_sel_taken)
 
 			# find marker with min frequency and save it
-			_, id::Int64 = findmin(i -> mk_freq[i], mk_sel_avail)
+			_, id::Int = findmin(i -> mk_freq[i], mk_sel_avail)
 			@inbounds mk_sel::CartesianIndex = mk_sel_avail[id]
 			push!(mk_sel_taken, mk_sel)
 
 			# package score information
-			score_row_info::Dict{Symbol,Union{CartesianIndex, Vector{CartesianIndex}}} = Dict(:mk_sel => mk_sel, :mk_locs => r)
+			score_row_info = Dict{Symbol,Union{CartesianIndex, Vector{CartesianIndex}}}(:mk_sel => mk_sel, :mk_locs => r)
 
 			# save prepared scoring row
-			@inbounds push!(s_player[:s_rows], score_row_info)
+			@inbounds push!(s_rows, score_row_info)
 
 		end
 
@@ -1386,7 +1370,7 @@ ss = search_scores_gs(_gst)
 ss[:W][:s_sets]
 
 # ╔═╡ ba1310d4-4abb-411d-a6a8-3dcd75d541af
-__locs = deepcopy([d[:mk_locs] for d in ss[:W][:s_rows]] )
+__locs::Vector{Vector{CartesianIndex}} = deepcopy([d[:mk_locs] for d in ss[:W][:s_rows]] )
 
 # ╔═╡ fff12b2b-a603-48a9-a126-f00615d20582
 @bind j Slider(1:length(__locs), show_value=true)
@@ -1394,17 +1378,14 @@ __locs = deepcopy([d[:mk_locs] for d in ss[:W][:s_rows]] )
 # ╔═╡ 2824b152-389f-4a51-8817-5f5ecfed433e
 f_gs = new_gs_only_rows(__locs, "W", __locs[j]);
 
+# ╔═╡ ab5cc6c5-5cce-4fd6-910e-1019177af4cf
+@benchmark identify_scoring_sets(__locs) # all sets
+
+# ╔═╡ 93168704-cabd-4888-8740-e1ec957c9868
+length(identify_scoring_sets(__locs))
+
 # ╔═╡ a6cd7b32-92b8-4424-bffe-cef0fec49278
 tt = deepcopy([d[:mk_locs] for d in search_scores_gs(_gst)[:W][:s_rows] ])
-
-# ╔═╡ eea45a50-b3d8-43b4-a178-d4734484b978
-# ╠═╡ disabled = true
-#=╠═╡
-@benchmark identify_scoring_sets(tt)
-  ╠═╡ =#
-
-# ╔═╡ 69511b0a-afc3-417b-9bb3-7f27c1ea4037
-@benchmark search_scores_gs(_gst)
 
 # ╔═╡ 9f1d770b-7c67-4b25-bf2b-0fbf6a29fb6a
 function identify_scoring_sets_old(rows::Vector{Vector{CartesianIndex}})
@@ -1531,12 +1512,6 @@ function identify_scoringSets_old(rows::Vector{Vector{CartesianIndex}})::Vector{
 	return scoring_sets
 	
 end
-
-# ╔═╡ a3d77187-e70a-433a-8b17-4c040580d0a5
-# ╠═╡ disabled = true
-#=╠═╡
-@benchmark identify_scoringSets_old(tt)
-  ╠═╡ =#
 
 # ╔═╡ 18f8a5d6-c775-44a3-9490-cd11352c4a63
 function set_nested!(dict::Dict, val, first_key, second_key)
@@ -1732,10 +1707,13 @@ md"### Running websocket server"
 
 # ╔═╡ c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
 begin
-	ws_servers_array = []; # array of server handles
-	ws_messages_log = []; # log for all received messages
-	ws_messages_log_OG = []; # log for all received messages (only parsing)
+	const ws_servers_array = []; # array of server handles
+	const ws_messages_log = []; # log for all received messages
+	const ws_messages_log_OG = []; # log for all received messages (only parsing)
 end
+
+# ╔═╡ 5633121b-8304-4940-90c9-fdea38cc1c64
+ws_messages_log
 
 # ╔═╡ 0bb77295-be29-4b50-bff8-f712ebe08197
 begin
@@ -2679,7 +2657,7 @@ function gen_newGame(vs_server = false)
 
 	# generate random initial game state (server format)
 	# true param => GENERATING STATES w/ 4MKS in a row for a randomly picked player
-	gs = gen_random_gameState(6, 35)
+	gs = gen_random_gameState(4, 30)
 
 	# RINGS
 		# retrieves location ids in client format 
@@ -2894,6 +2872,9 @@ function fn_nextPlaying_payload(game_code::String)
 	end
 
 end
+
+# ╔═╡ 33925e0b-8df6-41cc-98d8-e8742bf282c9
+sim_scenarioTrees(_gst, "W",0) |> reshape_out_fields
 
 # ╔═╡ f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = false)
@@ -3173,11 +3154,11 @@ try
 	if !isempty(score_player_sc) && isempty(valid_scoring_sc) 
 		# # no net scoring options -> pick one only if winning move
 		if last_srv_score == 2 # to be made configurable, for quick opt & 2x scores
-			move_action = score_player_sc[begin]
+			move_action = rand(score_player_sc)
 		end
 	elseif !isempty(valid_scoring_sc)
 		# valid scoring options
-		move_action = valid_scoring_sc[begin]
+		move_action = rand(valid_scoring_sc)
 	end
 
 		# if we have a scoring move -> save info {mk_locs, ring_score} for replay
@@ -3192,7 +3173,7 @@ try
 			@inbounds s_sets = tree[m_start][m_end][:scores_avail_player][:s_sets]
 
 			# pick a random sequence among the sets
-			set_pick::Set{Int} = s_sets[begin]
+			set_pick::Set{Int} = rand(s_sets)
 
 			# a ring was moved -> swap start w/ end
 			new_rings_locs::Vector{CartesianIndex} = replace(rings_locs, m_start => m_end)
@@ -3341,6 +3322,9 @@ catch e
 end
 
 end
+
+# ╔═╡ 2bcc0cf2-61b5-438f-86ea-331b565902f5
+play_turn_server("UMG6S8", "B",0)
 
 # ╔═╡ e6cc0cf6-617a-4231-826d-63f36d6136a5
 function mark_player_ready!(game_code::String, who::Symbol)
@@ -4384,28 +4368,27 @@ version = "17.4.0+2"
 # ╠═1df30830-1a44-49f5-bb9a-309a8e9f2274
 # ╠═157f5ee5-b517-4d71-b7ab-4e3a6bfb160a
 # ╠═95a23b62-b73e-4366-b888-50aa7b46f47f
+# ╠═33925e0b-8df6-41cc-98d8-e8742bf282c9
 # ╠═18913f59-f3d2-40c8-8f2c-530dc1deeec5
 # ╠═fff12b2b-a603-48a9-a126-f00615d20582
 # ╠═e6d5acba-60e9-431f-8aaf-c77ee841f5f9
-# ╠═eea45a50-b3d8-43b4-a178-d4734484b978
-# ╠═a3d77187-e70a-433a-8b17-4c040580d0a5
 # ╠═182a1472-84df-486e-bb17-58948bbb36b6
 # ╠═ba1310d4-4abb-411d-a6a8-3dcd75d541af
 # ╠═2824b152-389f-4a51-8817-5f5ecfed433e
 # ╟─823ce280-15c4-410f-8216-efad03897282
-# ╟─571c2bdc-2452-4e19-a8c9-3d18bf579a16
 # ╟─c0c45548-9792-4969-9147-93f09411a71f
 # ╟─dd941045-3b5f-4393-a6ae-b3d1f029a585
-# ╠═39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
-# ╠═eb641dc2-2b7b-4c0b-8260-49041877dba5
+# ╠═ab5cc6c5-5cce-4fd6-910e-1019177af4cf
+# ╠═5633121b-8304-4940-90c9-fdea38cc1c64
+# ╠═93168704-cabd-4888-8740-e1ec957c9868
 # ╠═a6cd7b32-92b8-4424-bffe-cef0fec49278
-# ╠═69511b0a-afc3-417b-9bb3-7f27c1ea4037
+# ╠═39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
 # ╠═69b9885f-96bd-4f8d-9bde-9ac09521f435
 # ╟─9f1d770b-7c67-4b25-bf2b-0fbf6a29fb6a
 # ╟─fae1cebf-9355-4c4c-b0aa-0eab1f517785
 # ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
 # ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
-# ╟─a27e0adf-aa09-42ee-97f5-ede084a9edc3
+# ╠═a27e0adf-aa09-42ee-97f5-ede084a9edc3
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
@@ -4427,7 +4410,8 @@ version = "17.4.0+2"
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╟─ca346015-b2c9-45da-8c1e-17493274aca2
-# ╟─88616e0f-6c85-4bb2-a856-ea7cee1b187d
+# ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
+# ╠═2bcc0cf2-61b5-438f-86ea-331b565902f5
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
 # ╟─5d6e868b-50a9-420b-8533-5db4c5d8f72c
@@ -4450,7 +4434,7 @@ version = "17.4.0+2"
 # ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 # ╠═fdb40907-1047-41e5-9d39-3f94b06b91c0
-# ╠═c6e915be-2853-48ff-a8da-49755b9b1a44
+# ╟─c6e915be-2853-48ff-a8da-49755b9b1a44
 # ╟─8e1673fe-5286-43cd-8830-fba353f1cd89
 # ╟─ea7779ea-cd11-4f9e-8022-ff4f370ffddd
 # ╟─3d09a15d-685b-4d9b-a47f-95067441928d
