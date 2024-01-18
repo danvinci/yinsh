@@ -8,7 +8,7 @@ WORKDIR ${workdir_name}
 # copy selected files to destination (workdir) 
 # prod packages only (dev packages in commented line)
 COPY proto_logic.jl ${workdir_name}
-RUN julia -t auto -e 'using Pkg; Pkg.add.(["Dates", "HTTP", "JSON3", "Random", "StatsBase"]);'
+RUN julia -t auto -e 'using Pkg; Pkg.add.(["Dates", "HTTP", "JSON3", "Random", "Combinatorics", "StatsBase"]);'
 # RUN julia -t auto -e 'using Pkg; Pkg.add.(["PlotThemes", "Plots", "PlutoUI"]);'
 
 # expose port for communication

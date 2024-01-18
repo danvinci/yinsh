@@ -4,18 +4,11 @@
 using Markdown
 using InteractiveUtils
 
-# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
-macro bind(def, element)
-    quote
-        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
-        local el = $(esc(element))
-        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
-        el
-    end
-end
-
 # ╔═╡ 6f0ad323-1776-4efd-bf1e-667e8a834f41
 using Random
+
+# ╔═╡ e68b41fc-cbf5-477f-b211-2462d835def0
+using Combinatorics
 
 # ╔═╡ c2797a4c-81d3-4409-9038-117fe50540a8
 using StatsBase
@@ -29,14 +22,11 @@ using HTTP, JSON3
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
 
-# ╔═╡ e68b41fc-cbf5-477f-b211-2462d835def0
-using Combinatorics
-
-# ╔═╡ 8e83063a-0f85-4767-b787-e423fa85b76b
-using PlutoUI
-
 # ╔═╡ 1df30830-1a44-49f5-bb9a-309a8e9f2274
+# ╠═╡ disabled = true
+#=╠═╡
 using JET
+  ╠═╡ =#
 
 # ╔═╡ 20bc797e-c99b-417d-8921-9b95c8e21679
 using BenchmarkTools
@@ -60,7 +50,10 @@ using Plots, PlotThemes;  plotly() ; theme(:default)
   ╠═╡ =#
 
 # ╔═╡ cd36abda-0f4e-431a-a4d1-bd5366c83b9b
-row_m = 19; col_m = 11;
+begin
+const row_m::Int = 19 
+const col_m::Int = 11
+end
 
 # ╔═╡ 2d69b45e-d8e4-4505-87ed-382e45bebae7
 function partOfBoard(row_id::Int64, col_id::Int64)
@@ -214,13 +207,6 @@ print(mm_print_01)
 
 end
 
-
-# ╔═╡ 00468008-0cbc-4f68-832b-2a5b46431fb7
-# ╠═╡ disabled = true
-#=╠═╡
-# call printing function
-printable_base_m()
-  ╠═╡ =#
 
 # ╔═╡ ff94655f-3603-4553-9ca3-e1dec83361b8
 #=
@@ -1075,10 +1061,6 @@ function gen_random_gameState(near_score_rows = 0, num_mks = 0)
 	return server_game_state
 end
 
-# ╔═╡ 61a0e2bf-2fed-4141-afc0-c8b5507679d1
-md"#### Server-side storage of game data"
-
-
 # ╔═╡ bc19e42a-fc82-4191-bca5-09622198d102
 const games_log_dict = Dict()
 
@@ -1103,28 +1085,23 @@ function save_new_clientPkg!(games_log_ref, game_id, _client_pkg)
 	
 end
 
-# ╔═╡ 157f5ee5-b517-4d71-b7ab-4e3a6bfb160a
-_gst = gen_random_gameState(8,32)
-
 # ╔═╡ 823ce280-15c4-410f-8216-efad03897282
-function new_gs_only_rows(rows::Vector{Vector{CartesianIndex}}, player, h_row=[])
+function new_gs_only_rows(rows::Vector{Vector{CartesianIndex}}, id_h_row=-1)
 
 	gs = fill("", (19,11))
 
 	if !isempty(rows)
 		for r in rows
 			for loc in r
-				gs[loc] = "M"*player
+				gs[loc] = "MB" # black by default, so highlight can be seen better 
 			end
 		end
 	end
 
-	if !isempty(h_row) # highlight this row as color of opposite player
+	if id_h_row != -1 # highlight this row as color of opposite player
 
-		other_player = player == "W" ? "B" : "W"
-
-		for loc in h_row
-			gs[loc] = "M"*other_player
+		for loc in rows[id_h_row]
+			gs[loc] = "MW"
 		end
 
 	end
@@ -1171,21 +1148,33 @@ function remove_subsets!(set::Set)
 
 end
 
-# ╔═╡ 39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
-function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})::Set{Set{Int}}
-# takes in input rows of locations (CI) and returns the possible sets representing groups of scoring actions
-# with multiple scoring and rows overlap, some scores preclude others
-# having A/B/C, depending on their configuration, A/B/C, A/B, B/C, C/A might be available for scoring
-# using the 1-based index of row in input array as the ID for the row
+# ╔═╡ 8348950a-11cb-4eaa-a639-fcd2b758fb3b
+t_gs = gen_random_gameState(8, 15);
 
+# ╔═╡ 39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
+function discover_scoring_sets(rows::Vector{Vector{CartesianIndex}}, max_ssize=0)::Set{Set{Int}}
+#= 
+Fn akes in input rows of locations (CI) and returns the possible sets representing groups of scoring actions: with multiple scoring and rows overlap, some scores preclude others having A/B/C, depending on their configuration, A/B/C, A/B, B/C, C/A might be available as different valid scoring sets
+
+notes:
+- we're using the 1-based index of row (in input array) as the ID for the row
+- we make heavy use of sets for uniqueness and fast ops
+- the additional parameter is passed to limit the size of the sets: propagated from sim_scenarioTrees > sim_new_gameState > search_scores_gs > here, represents the distance in rings a player has from winning
+
+=#
+	
 	len::Int = length(rows)
 	
 	# base sets to be expanded, every row can be with itself
-	# sets guarantee uniqueness btw
-	base_sets = Set([ Set{Int}(r) for r in 1:len ]) 
+	base_sets = Set([ Set{Int}(r) for r in 1:len ]) # sets of size 1
 
 	# final sets to be returned
 	scoring_sets = Set{Set{Int}}() 
+
+	if max_ssize == 1 # sets of size 1
+		scoring_sets = base_sets
+		@goto return_ss
+	end
 
 	# log who can be with who - each row can be in a set with itself
 	matches_vec = [Set{Int}(r) for r in 1:len] 
@@ -1194,15 +1183,16 @@ function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})::Set{Set{In
 	#= 	
 		The general idea is to extend the sets in a bottom up way
 		- iterate through all ids/rows pair-wise, log matches
-		- on each pair, check what the rows don't clash with that might be added
-		- update log for both rows involved in comparison
-		- check how each set can be further expanded, 1-by-1, add what's new
-		- prune the base sets, and avoid adding duplicates to the final vector
+		- on each pair, check which matches are possible (disjoint rows)
+		- if is a match, update log for both rows involved in comparison
+		- prune set, take our a set, and try extending it by-1
+		- transfer to the final return_value that sets that can't be extended further
+		- repeat until empty until there are no more sets to evaluate
 		- strip the final array of subsets 
 	=#
 
 	
-	# iterate over row indexes and build a matching reference 
+	# iterate over row indexes and build a matches reference 
 	for j in 1:len, k in j:len
 
 		if j != k
@@ -1221,44 +1211,63 @@ function identify_scoring_sets(rows::Vector{Vector{CartesianIndex}})::Set{Set{In
 		end
 	end
 
-	# extend each set -> use ref to find other rows that can be added 
+	if max_ssize == 2 # sets of max size 2
+		scoring_sets = base_sets
+		@goto return_ss
+	end
+
+	# extend each set to 2+ -> use ref to find other rows that can be added 
+	# sets are extended by 1 at each loop
 	while length(base_sets) > 0
 		
-		# prune set -> avoid already found extensions
+		# prune 
 		remove_subsets!(base_sets) 
-	
-		for s in base_sets
 
-			# ids of rows that match with all the others in set
-			@inbounds ids = intersect( [ matches_vec[r] for r in s ]...)::Set{Int}
+		# take out a set to evaluate for extension
+		# always delete 'starting branch' to avoid restarting from same set 
+		# function never converges without this
+		# also, we loop & prune after every set evaluation
+		# instead of adding and keep iterating without pruning
+		s = pop!(base_sets)
 
-			# keep only potential new additions
-			new_ids = setdiff(ids, s)::Set{Int}
-
-			# this set can't be grown further
-			if isempty(new_ids)
-				
-				if !(s in scoring_sets) # save it if new
-					push!(scoring_sets, s) 
-				end
-				
-			else # create N new sets for each new id
-				for i in new_ids
-					
-					new_set = union(s, i)::Set{Int}
-					
-					if !(new_set in base_sets) # put it back for later if new
-						push!(base_sets, new_set) 
-					end					
-				end
+		# not extend set if it's at max_size, just save it and skip to the next
+		if (max_ssize > 2 && length(s) == max_ssize)
+			if !(s in scoring_sets)
+				push!(scoring_sets, s) 
 			end
-
-			# always delete starting branch to avoid re-expanding the same set 
-			# function never converges without this
-			delete!(base_sets, s) 
-		
+			@goto skip_set
 		end
+
+		# ids of rows that match with all the others in set
+		@inbounds ids = intersect( [ matches_vec[r] for r in s ]...)::Set{Int}
+
+		# keep only potential new additions
+		new_ids = setdiff(ids, s)::Set{Int}
+
+		# this set can't be grown further
+		if isempty(new_ids)
+			
+			if !(s in scoring_sets) # save it if new
+				push!(scoring_sets, s) 
+			end
+			
+		else # create N new sets for each new id
+			for i in new_ids
+				
+				new_set = union(s, i)::Set{Int}
+				
+				if !(new_set in base_sets) # put it back for later if new
+					push!(base_sets, new_set) 
+				end					
+			end
+		end
+
+		@label skip_set
+		
 	end
+
+	
+	@label return_ss # jump to before final pruning!
 		
 	# clean up results
 	remove_subsets!(scoring_sets)
@@ -1325,7 +1334,7 @@ function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
 		@inbounds rows::Vector{Vector{CartesianIndex}} = found_rows[player_k]
 
 		# identify scoring sets among rows and save them in container
-		scoring_sets::Set{Set{Int}} = identify_scoring_sets(rows)
+		scoring_sets::Set{Set{Int}} = discover_scoring_sets(rows)
 
 		# prep containers
 		s_rows = Dict[]
@@ -1363,29 +1372,35 @@ function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
 
 end
 
-# ╔═╡ 182a1472-84df-486e-bb17-58948bbb36b6
-ss = search_scores_gs(_gst)
+# ╔═╡ fd1b186d-b042-4e42-97ea-7e2338eaf75c
+ss = search_scores_gs(t_gs)
 
-# ╔═╡ e6d5acba-60e9-431f-8aaf-c77ee841f5f9
-ss[:W][:s_sets]
+# ╔═╡ c3ab8073-165e-4013-99bc-6d32cf9f4514
+t_rows = [ row[:mk_locs] for row in ss[:B][:s_rows] ]
 
-# ╔═╡ ba1310d4-4abb-411d-a6a8-3dcd75d541af
-__locs::Vector{Vector{CartesianIndex}} = deepcopy([d[:mk_locs] for d in ss[:W][:s_rows]] )
+# ╔═╡ 5ea1985d-8788-445e-9c8c-f8ebab01ecf6
+f_gs = new_gs_only_rows(t_rows);
 
-# ╔═╡ fff12b2b-a603-48a9-a126-f00615d20582
-@bind j Slider(1:length(__locs), show_value=true)
+# ╔═╡ 9b2123a3-12fb-4ebf-ad9b-1aa65ff9ee43
+# ╠═╡ disabled = true
+#=╠═╡
+@benchmark discover_scoring_sets(t_rows)
+  ╠═╡ =#
 
-# ╔═╡ 2824b152-389f-4a51-8817-5f5ecfed433e
-f_gs = new_gs_only_rows(__locs, "W", __locs[j]);
+# ╔═╡ 00e20281-2046-487b-89a2-1a9f848c67fa
+# ╠═╡ disabled = true
+#=╠═╡
+@benchmark discover_scoring_sets(t_rows)
+  ╠═╡ =#
 
-# ╔═╡ ab5cc6c5-5cce-4fd6-910e-1019177af4cf
-@benchmark identify_scoring_sets(__locs) # all sets
+# ╔═╡ 60cb964f-1cd4-4dc4-bb6e-12e4be395fcd
+# ╠═╡ disabled = true
+#=╠═╡
+discover_scoring_sets(t_rows)
+  ╠═╡ =#
 
-# ╔═╡ 93168704-cabd-4888-8740-e1ec957c9868
-length(identify_scoring_sets(__locs))
-
-# ╔═╡ a6cd7b32-92b8-4424-bffe-cef0fec49278
-tt = deepcopy([d[:mk_locs] for d in search_scores_gs(_gst)[:W][:s_rows] ])
+# ╔═╡ bff81fc8-bce9-4f45-8a2e-21f7d2c18648
+discover_scoring_sets(t_rows,6) 
 
 # ╔═╡ 9f1d770b-7c67-4b25-bf2b-0fbf6a29fb6a
 function identify_scoring_sets_old(rows::Vector{Vector{CartesianIndex}})
@@ -1536,12 +1551,19 @@ function reshape_out_fields(srv_dict::Dict)::Dict
 # takes dict in input -> reshapes out any field that is of type CI or CI[]
 # will reshape CI keys as well if it finds any
 # used to translate any server-like coordinates to client format
+# it also skips/omits some keys that are only used server-side, to lighten the payload
 
 	_ret = Dict() 
 
+	keys_to_skip = Symbol[:gs, :tree_summary]
+
 	for (k,v) in srv_dict
 
-		## updating the key of it's a CI
+		if isa(k, Symbol) && k in keys_to_skip
+			@goto skip_key
+		end
+
+		## updating the key if it's a CI
 		_nk = isa(k, CartesianIndex) ? reshape_out(k) : k
 		
 		## checking which case we'll have to handle
@@ -1595,6 +1617,10 @@ function reshape_out_fields(srv_dict::Dict)::Dict
 			setindex!(_ret, v, _nk)
 			
 		end
+		
+
+		@label skip_key
+		
 	end
 
 	return _ret
@@ -1681,10 +1707,10 @@ print(mm_to_print)
 
 end
 
-# ╔═╡ 95a23b62-b73e-4366-b888-50aa7b46f47f
-print_gameState(_gst, true)
+# ╔═╡ c0881f04-40e5-4108-85e2-f3aca3420513
+print_gameState(t_gs, true)
 
-# ╔═╡ 18913f59-f3d2-40c8-8f2c-530dc1deeec5
+# ╔═╡ 74951f2f-1bc4-4d0f-a2ee-fd6862c6feec
 print_gameState(f_gs, true)
 
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
@@ -1711,9 +1737,6 @@ begin
 	const ws_messages_log = []; # log for all received messages
 	const ws_messages_log_OG = []; # log for all received messages (only parsing)
 end
-
-# ╔═╡ 5633121b-8304-4940-90c9-fdea38cc1c64
-ws_messages_log
 
 # ╔═╡ 0bb77295-be29-4b50-bff8-f712ebe08197
 begin
@@ -2873,9 +2896,6 @@ function fn_nextPlaying_payload(game_code::String)
 
 end
 
-# ╔═╡ 33925e0b-8df6-41cc-98d8-e8742bf282c9
-sim_scenarioTrees(_gst, "W",0) |> reshape_out_fields
-
 # ╔═╡ f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = false)
 # updates server state for game given a scenario by a player 
@@ -3834,7 +3854,6 @@ Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
@@ -3844,7 +3863,6 @@ Combinatorics = "~1.0.2"
 HTTP = "~1.10.1"
 JET = "~0.8.24"
 JSON3 = "~1.14.0"
-PlutoUI = "~0.7.1"
 StatsBase = "~0.33.21"
 """
 
@@ -3854,7 +3872,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "e075af813458ed70cf8e7e9aa4ee04cf67b23fc3"
+project_hash = "69f18d64fc8c683b2f249253fff556ae4cc3b75a"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -4138,12 +4156,6 @@ deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.10.0"
 
-[[deps.PlutoUI]]
-deps = ["Base64", "Dates", "InteractiveUtils", "Logging", "Markdown", "Random", "Suppressor"]
-git-tree-sha1 = "45ce174d36d3931cd4e37a47f93e07d1455f038d"
-uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.1"
-
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
 git-tree-sha1 = "03b4c25b43cb84cee5c90aa9b5ea0a78fd848d2f"
@@ -4238,12 +4250,6 @@ deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.2.1+1"
 
-[[deps.Suppressor]]
-deps = ["Logging"]
-git-tree-sha1 = "6cd9e4a207964c07bf6395beff7a1e8f21d0f3b2"
-uuid = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
-version = "0.2.6"
-
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -4303,12 +4309,14 @@ version = "17.4.0+2"
 # ╔═╡ Cell order:
 # ╠═69c4770e-1091-4744-950c-ed23deb55661
 # ╠═6f0ad323-1776-4efd-bf1e-667e8a834f41
+# ╠═e68b41fc-cbf5-477f-b211-2462d835def0
 # ╠═c2797a4c-81d3-4409-9038-117fe50540a8
 # ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
 # ╠═70ecd4ed-cbb1-4ebd-85a8-42f7b072bee3
 # ╠═bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 # ╠═f6dc2723-ab4a-42fc-855e-d74915b4dcbf
 # ╠═43f89626-8583-11ed-2b3d-b118ff996f37
+# ╠═1df30830-1a44-49f5-bb9a-309a8e9f2274
 # ╠═9505b0f0-91a2-46a8-90a5-d615c2acdbc1
 # ╠═cd36abda-0f4e-431a-a4d1-bd5366c83b9b
 # ╟─2d69b45e-d8e4-4505-87ed-382e45bebae7
@@ -4317,7 +4325,6 @@ version = "17.4.0+2"
 # ╠═b6292e1f-a3a8-46d7-be15-05a74a5736de
 # ╟─55987f3e-aaf7-4d85-a6cf-11eda59cd066
 # ╟─d996152e-e9e6-412f-b4db-3eacf5b7a5a6
-# ╠═00468008-0cbc-4f68-832b-2a5b46431fb7
 # ╠═ff94655f-3603-4553-9ca3-e1dec83361b8
 # ╠═dffecc3d-4737-4bf3-b109-882687b2e361
 # ╠═bfb15937-a3b0-434d-ac5e-0d6d6b42e92e
@@ -4355,33 +4362,26 @@ version = "17.4.0+2"
 # ╟─b56084e8-7286-404b-9088-094070331afe
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
-# ╠═c334b67e-594f-49fc-8c11-be4ea11c33b5
-# ╠═f1949d12-86eb-4236-b887-b750916d3493
+# ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
+# ╟─f1949d12-86eb-4236-b887-b750916d3493
 # ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
-# ╟─61a0e2bf-2fed-4141-afc0-c8b5507679d1
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╟─57153574-e5ca-4167-814e-2d176baa0de9
 # ╟─1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╟─156c508f-2026-4619-9632-d679ca2cae50
-# ╠═e68b41fc-cbf5-477f-b211-2462d835def0
-# ╠═8e83063a-0f85-4767-b787-e423fa85b76b
-# ╠═1df30830-1a44-49f5-bb9a-309a8e9f2274
-# ╠═157f5ee5-b517-4d71-b7ab-4e3a6bfb160a
-# ╠═95a23b62-b73e-4366-b888-50aa7b46f47f
-# ╠═33925e0b-8df6-41cc-98d8-e8742bf282c9
-# ╠═18913f59-f3d2-40c8-8f2c-530dc1deeec5
-# ╠═fff12b2b-a603-48a9-a126-f00615d20582
-# ╠═e6d5acba-60e9-431f-8aaf-c77ee841f5f9
-# ╠═182a1472-84df-486e-bb17-58948bbb36b6
-# ╠═ba1310d4-4abb-411d-a6a8-3dcd75d541af
-# ╠═2824b152-389f-4a51-8817-5f5ecfed433e
 # ╟─823ce280-15c4-410f-8216-efad03897282
 # ╟─c0c45548-9792-4969-9147-93f09411a71f
 # ╟─dd941045-3b5f-4393-a6ae-b3d1f029a585
-# ╠═ab5cc6c5-5cce-4fd6-910e-1019177af4cf
-# ╠═5633121b-8304-4940-90c9-fdea38cc1c64
-# ╠═93168704-cabd-4888-8740-e1ec957c9868
-# ╠═a6cd7b32-92b8-4424-bffe-cef0fec49278
+# ╠═8348950a-11cb-4eaa-a639-fcd2b758fb3b
+# ╠═c0881f04-40e5-4108-85e2-f3aca3420513
+# ╠═74951f2f-1bc4-4d0f-a2ee-fd6862c6feec
+# ╠═5ea1985d-8788-445e-9c8c-f8ebab01ecf6
+# ╠═9b2123a3-12fb-4ebf-ad9b-1aa65ff9ee43
+# ╠═00e20281-2046-487b-89a2-1a9f848c67fa
+# ╠═60cb964f-1cd4-4dc4-bb6e-12e4be395fcd
+# ╠═bff81fc8-bce9-4f45-8a2e-21f7d2c18648
+# ╠═c3ab8073-165e-4013-99bc-6d32cf9f4514
+# ╠═fd1b186d-b042-4e42-97ea-7e2338eaf75c
 # ╠═39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
 # ╠═69b9885f-96bd-4f8d-9bde-9ac09521f435
 # ╟─9f1d770b-7c67-4b25-bf2b-0fbf6a29fb6a
