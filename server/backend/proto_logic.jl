@@ -4,6 +4,16 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
 # ╔═╡ 6f0ad323-1776-4efd-bf1e-667e8a834f41
 using Random
 
@@ -22,11 +32,8 @@ using HTTP, JSON3
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
 
-# ╔═╡ 1df30830-1a44-49f5-bb9a-309a8e9f2274
-# ╠═╡ disabled = true
-#=╠═╡
-using JET
-  ╠═╡ =#
+# ╔═╡ 43f89626-8583-11ed-2b3d-b118ff996f37
+using PlutoUI
 
 # ╔═╡ 20bc797e-c99b-417d-8921-9b95c8e21679
 using BenchmarkTools
@@ -37,10 +44,10 @@ using BenchmarkTools
 # ╔═╡ f6dc2723-ab4a-42fc-855e-d74915b4dcbf
 # dev packages
 
-# ╔═╡ 43f89626-8583-11ed-2b3d-b118ff996f37
+# ╔═╡ 1df30830-1a44-49f5-bb9a-309a8e9f2274
 # ╠═╡ disabled = true
 #=╠═╡
-using PlutoUI
+using JET
   ╠═╡ =#
 
 # ╔═╡ 9505b0f0-91a2-46a8-90a5-d615c2acdbc1
@@ -1149,18 +1156,18 @@ function remove_subsets!(set::Set)
 end
 
 # ╔═╡ 8348950a-11cb-4eaa-a639-fcd2b758fb3b
-t_gs = gen_random_gameState(8, 15);
+t_gs = gen_random_gameState(8, 20);
 
 # ╔═╡ 39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
-function discover_scoring_sets(rows::Vector{Vector{CartesianIndex}}, max_ssize=0)::Set{Set{Int}}
+function discover_scoring_sets(rows::Vector{Vector{CartesianIndex}}, max_ssize::Int=0)::Set{Set{Int}}
 #= 
 Fn akes in input rows of locations (CI) and returns the possible sets representing groups of scoring actions: with multiple scoring and rows overlap, some scores preclude others having A/B/C, depending on their configuration, A/B/C, A/B, B/C, C/A might be available as different valid scoring sets
 
-notes:
-- we're using the 1-based index of row (in input array) as the ID for the row
+Notes:
+- we're using the 1-based index of row (in input array) as its ID
 - we make heavy use of sets for uniqueness and fast ops
 - the additional parameter is passed to limit the size of the sets: propagated from sim_scenarioTrees > sim_new_gameState > search_scores_gs > here, represents the distance in rings a player has from winning
-
+- in case of multiple scoring, sets of max_ssize will be the winning ones
 =#
 	
 	len::Int = length(rows)
@@ -1224,14 +1231,15 @@ notes:
 		remove_subsets!(base_sets) 
 
 		# take out a set to evaluate for extension
-		# always delete 'starting branch' to avoid restarting from same set 
-		# function never converges without this
+		# always delete the 'starting branch', as function never converges otherwise
 		# also, we loop & prune after every set evaluation
-		# instead of adding and keep iterating without pruning
+		# instead of adding to and iterating the same collection with less pruning
+		
 		s = pop!(base_sets)
 
 		# not extend set if it's at max_size, just save it and skip to the next
-		if (max_ssize > 2 && length(s) == max_ssize)
+		if max_ssize > 2 && length(s) == max_ssize
+			
 			if !(s in scoring_sets)
 				push!(scoring_sets, s) 
 			end
@@ -1276,8 +1284,11 @@ notes:
 	
 end
 
+# ╔═╡ c92be6ed-fd32-41f3-8554-5f851a79f0a3
+_rgs = gen_random_gameState(8, 25)
+
 # ╔═╡ 69b9885f-96bd-4f8d-9bde-9ac09521f435
-function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
+function search_scores_gs(gs::Matrix{String}, max_sset_d=Dict{Symbol,Int}())::Dict{Symbol, Dict}
 # look at the game state as it is to check if there are scoring opportunities
 
 	# to be returned -> returns empty vector if nothing found for player
@@ -1285,13 +1296,12 @@ function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
 	scores_info::Dict{Symbol, Dict} = Dict()
 
 	# helper vecs/dict to store found locations for scoring rows
-	rows_B = Vector{CartesianIndex}[]
-	rows_W = Vector{CartesianIndex}[]
-	found_rows = Dict(_B_key => rows_B, _W_key => rows_W)
+	found_rows = Dict(_B_key => Vector{CartesianIndex}[], _W_key => Vector{CartesianIndex}[])
 
 	# all markers locations
 	all_mks::Vector{CartesianIndex} = findall(s -> contains(s, _M), gs)
-	
+
+	# find scoring rows
 	for mk_index in all_mks
 
 		# for each marker retrieve search space for scoring ops
@@ -1325,16 +1335,23 @@ function search_scores_gs(gs::Matrix{String})::Dict{Symbol, Dict}
 		end
 	end
 
-	
-	# identify mk_sel for row selection within same groups
-	mk_sel_taken = Vector{CartesianIndex}(undef,0) # keep track of ones already taken
+	# add extra info on scoring sets and mk_sel for each row
 	for player_k in keys(found_rows)
 
 		# extract rows
 		@inbounds rows::Vector{Vector{CartesianIndex}} = found_rows[player_k]
 
+		# check if we have data on how far player is from winning score
+		max_set_size = 0
+		if !isempty(max_sset_d)
+			max_set_size = max_sset_d[player_k]
+		end
+
 		# identify scoring sets among rows and save them in container
-		scoring_sets::Set{Set{Int}} = discover_scoring_sets(rows)
+		scoring_sets::Set{Set{Int}} = discover_scoring_sets(rows, max_set_size)
+
+		# # keep track of mk_sel already taken for the same color/player
+		mk_sel_taken = Vector{CartesianIndex}(undef,0) 
 
 		# prep containers
 		s_rows = Dict[]
@@ -1378,155 +1395,62 @@ ss = search_scores_gs(t_gs)
 # ╔═╡ c3ab8073-165e-4013-99bc-6d32cf9f4514
 t_rows = [ row[:mk_locs] for row in ss[:B][:s_rows] ]
 
+# ╔═╡ b314af4d-87c4-4d91-99fb-c8fdb1cd1595
+@bind h Slider(1:length(t_rows), show_value=true)
+
 # ╔═╡ 5ea1985d-8788-445e-9c8c-f8ebab01ecf6
-f_gs = new_gs_only_rows(t_rows);
-
-# ╔═╡ 9b2123a3-12fb-4ebf-ad9b-1aa65ff9ee43
-# ╠═╡ disabled = true
-#=╠═╡
-@benchmark discover_scoring_sets(t_rows)
-  ╠═╡ =#
-
-# ╔═╡ 00e20281-2046-487b-89a2-1a9f848c67fa
-# ╠═╡ disabled = true
-#=╠═╡
-@benchmark discover_scoring_sets(t_rows)
-  ╠═╡ =#
+f_gs = new_gs_only_rows(t_rows,h);
 
 # ╔═╡ 60cb964f-1cd4-4dc4-bb6e-12e4be395fcd
-# ╠═╡ disabled = true
-#=╠═╡
 discover_scoring_sets(t_rows)
-  ╠═╡ =#
 
-# ╔═╡ bff81fc8-bce9-4f45-8a2e-21f7d2c18648
-discover_scoring_sets(t_rows,6) 
+# ╔═╡ 60909cf5-1c6a-4dbc-91d0-acd2d507c450
+search_scores_gs(_rgs, Dict(:W => 1, :B => 2))
 
-# ╔═╡ 9f1d770b-7c67-4b25-bf2b-0fbf6a29fb6a
-function identify_scoring_sets_old(rows::Vector{Vector{CartesianIndex}})
-# takes in input rows of locations (CI) and returns the possible sets representing groups of scoring actions
-# with multiple scoring and rows overlap, some scores preclude others
-# having A/B/C, depending on their configuration, A/B/C, A/B, B/C, C/A might be available for scoring
-# using the 1-based index of row in input array as the ID for the row
+# ╔═╡ 3d97a528-ccd7-40e8-8f18-c6630eceb708
+#=
+is the game over now?
+if so, what should happen?
+who needs to be informed of what?
 
-	len_range::UnitRange{Int} = 1:length(rows)
-	pair_sets::Set{Set{Int}} = Set([]) # using a set guarantees they're unique
-	scoring_sets::Vector{Set{Int}} = [] # returning value
-	
-	ref::Dict{Int, Dict{Symbol, Vector{Int}}} = Dict(k => Dict() for k in len_range)
 
-	#= 	the general idea is to grow the sets in a bottom up way
-		- iterate through all ids/rows pair-wise, log clash or no_clash
-		- update log for both rows involved in comparison
-		- on each pair, check what the rows don't clash with that might be added
-		- check those potential additions among themselves -> add what's left
-		- strip the final array of dublicates and subsets 
-	=#
+SCENARIOS
 
-	
-	# iterate over row indexes and build a reference dictionary
-	for i in len_range
+(A)
+- final score for a given player
+- sets generated with max_ssize = 1
+- player scores -> end_game
+- other player replay -> loose
 
-		clash::Vector{Int} = []
-		no_clash::Vector{Int} = [i] # each row can be in a set with itself
+(B)
+- player is N points away from victory
+- scoring sets always generated with max size N
+- multiple scoring in same score_move
+- player might pick or not the most complete set (sets are 1..N in size)
+- depending on size of picked sets, score may be terminal or not
 
-		# check against all other rows
-		for k in len_range[i:end]
-			
-			if k != i # skip itself 
 
-				# check for clashes/no_clashes 
-				@inbounds if isdisjoint(rows[i], rows[k])
-					
-					push!(no_clash, k) 
-					push!(pair_sets, Set([i, k]))
-					
-				else
-					push!(clash, k) 
-				end
+(C)
+- player moves, placing 51th marker
+- wins who has most rings -> otherwise draw
 
-			end
-		end
 
-		# save results in log
-		setindex!(ref[i], clash, :c)
-		setindex!(ref[i], no_clash, :nc)
+(D)
+- player moves, placing 51th marker, but also scores
+- ssets generated with distance from winning score
+- can score point -> if first to 3, wins
+- ending assessed as of previous case
 
-	end
 
-	#@info ref
-	#@info pair_sets
-	
-	# grow each set -> use ref to find other rows that can be added to each
-	for s in pair_sets
+(E)
+- player moves, placing 51th marker, but scores for both self and opponent
+- ssets generated with distance from winning score
+- player can score -> if goes to winning score -> endgame
+- otherwise replay + score_premove ops on other side
+- other player scores -> who has the most rings wins
 
-		# ids of rows that don't clash with either of the others in set
-		@inbounds pot_new_ids = intersect([ ref[r][:nc] for r in s ]...)
 
-		# cleaning up ids to ensure they don't clash among themselves
-		@inbounds new_ids = intersect([ ref[r][:nc] for r in pot_new_ids ]...)
-		
-		if isempty(new_ids) # keep as-is
-			push!(scoring_sets, s) 
-		else # add ids to set
-			push!(scoring_sets, union(s, new_ids...)) 
-		end
-
-	end
-
-	# clean up results
-	remove_subsets!(scoring_sets)
-
-	return scoring_sets
-	
-end
-
-# ╔═╡ fae1cebf-9355-4c4c-b0aa-0eab1f517785
-function identify_scoringSets_old(rows::Vector{Vector{CartesianIndex}})::Vector{Set{Int}}
-# takes in input rows of locations (CI) and returns the possible sets representing groups of scoring actions
-# with multiple scoring and rows overlap, some scores preclude others
-# having A/B/C, depending on their configuration, A/B/C, A/B, B/C, C/A might be available for scoring
-# using the 1-based index of row in input array as the ID for the row
-
-	len_range::UnitRange{Int} = 1:length(rows)
-	c_grouped::Vector{Int} = [0 for i in len_range] # track times we group each
-	scoring_sets::Vector{Set{Int}} = [] # set of row IDs that go together
-
-	for j in len_range
-
-		# stop when all have been grouped 1+
-		count(>=(1), c_grouped) == len_range && break
-
-		# start w/ its own lonely group
-		v_locs::Vector{CartesianIndex} = []; append!(v_locs, rows[j])
-		set_ids::Set{Int} = Set(j)
-		
-		@inbounds c_grouped[j] += 1  # increase counter for row
-	
-		# check against all other rows
-		for k in len_range 
-
-			# skip itself 
-			if k != j 
-				
-				# add to set if disjoint from everything else in it 
-				if isdisjoint(v_locs, rows[k])
-					append!(v_locs, rows[k]) # save locs for next comparisons
-					push!(set_ids, k) # save id of row
-					
-					@inbounds c_grouped[k] += 1 
-				end
-			end
-		end
-
-		# save found set ids, if not redundant
-		!(set_ids in scoring_sets) && push!(scoring_sets, set_ids) 
-		
-	end
-
-	return scoring_sets
-	
-end
+=#
 
 # ╔═╡ 18f8a5d6-c775-44a3-9490-cd11352c4a63
 function set_nested!(dict::Dict, val, first_key, second_key)
@@ -1555,7 +1479,7 @@ function reshape_out_fields(srv_dict::Dict)::Dict
 
 	_ret = Dict() 
 
-	keys_to_skip = Symbol[:gs, :tree_summary]
+	keys_to_skip = Symbol[:gs, :tree_summary, :new_game_state, :mode]
 
 	for (k,v) in srv_dict
 
@@ -1625,6 +1549,14 @@ function reshape_out_fields(srv_dict::Dict)::Dict
 
 	return _ret
 	
+end
+
+# ╔═╡ 0d5558ca-7e01-4ed2-8b37-61649690346a
+function mks_limit_hit(gs::Matrix{String})::Bool
+# checks if we hit the maximum number of markers on the board 
+
+	return findall(s -> ( s ==_MW || s == _MB), gs) |> length == 51
+
 end
 
 # ╔═╡ cf587261-6193-4e7a-a3e8-e24ba27929c7
@@ -1713,6 +1645,9 @@ print_gameState(t_gs, true)
 # ╔═╡ 74951f2f-1bc4-4d0f-a2ee-fd6862c6feec
 print_gameState(f_gs, true)
 
+# ╔═╡ 0d79bd4d-032d-43a9-a4e9-1a49f232b649
+print_gameState(_rgs, true)
+
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
 # returns random locations for 5 + 5 rings
@@ -1782,9 +1717,10 @@ end
 
 # ╔═╡ ca522939-422f-482a-8658-452790c463f6
 function dict_keys_to_sym(input::Dict)::Dict{Symbol, Any}
-# swaps dict keys from String to Symbol
+# swaps dict keys from String to Symbol, RECURSIVELY
+# JSON3.read can take a type specification but it won't turn keys into symbols beyond the first layer of depth, unless a more complex type specification is provided
 	
-	_new = Dict()
+	_new = Dict{Symbol, Any}()
 
 	for (k,v) in input
 
@@ -1799,7 +1735,7 @@ function dict_keys_to_sym(input::Dict)::Dict{Symbol, Any}
 			_nval = isa(v[begin], Dict) ? dict_keys_to_sym.(v) : v
 		end
 
-		# write anyway
+		# write everything anyway
 		setindex!(_new, _nval, _nkey)
 		
 	end
@@ -2061,6 +1997,7 @@ function strip_reshape_in_recap(recap::Dict)
 	_srv_recap = Dict()
 
 	# keep only dicts (within arrays) that have non-default values in their fields
+	# TODO - should work by reverse, just eliminating what's not needed
 	for (k, v) in recap
 		if isa(v, Array) && !isempty(v) && isa(v[begin], Dict)
 			if haskey(v[begin], :ring_score) && v[begin][:ring_score] != -1
@@ -2086,6 +2023,12 @@ function filter_msg_logs_by_gameID(game_id::String)::Array
 								,logs)
 
 end
+
+# ╔═╡ 1b301201-86bd-4b3c-bdc3-ea590dc66c6a
+__logs = filter_msg_logs_by_gameID("BT88LB") 
+
+# ╔═╡ 7063a0cc-776d-4245-bf9d-7c3c41e85daf
+__logs[3][:payload][:turn_recap]
 
 # ╔═╡ 276dd93c-05f9-46b1-909c-1d449c07e2b5
 function get_player_score(game_id::String, player_id::String)
@@ -2114,6 +2057,31 @@ function edit_player_score!(game_id::String, player_id::String, new_score::Int)
 	
 	catch e
 		throw(error("ERROR - while increasing $player_id score for game $game_id $e"))
+	end
+
+end
+
+# ╔═╡ f0e69ff9-9388-4a4e-a111-6514faaa373b
+games_log_dict
+
+# ╔═╡ 0193d14a-9e55-42c2-97d6-2a0bef50da1e
+function get_scores_byID(game_id::String)::Dict{String, Int}
+# returns {"B" => n, "W" => n}
+	
+	try
+		
+		orig_player_score = games_log_dict[game_id][:players][:orig_player_score] 
+		join_player_score = games_log_dict[game_id][:players][:join_player_score] 
+
+		orig_player_id = games_log_dict[game_id][:identity][:orig_player_id]
+
+		B_score_val = orig_player_id == _B ? orig_player_score : join_player_score
+		W_score_val = orig_player_id == _W ? orig_player_score : join_player_score
+		
+		
+		return Dict(_W => W_score_val, _B => B_score_val)
+	catch e
+		throw(error("ERROR - while retrieving player scores for game $game_id $e"))
 	end
 
 end
@@ -2236,6 +2204,21 @@ function get_last_turn_details(game_code::String)
 
 end
 
+# ╔═╡ a3b11f4c-6b28-4303-bfe2-66460dda86fe
+#=
+_msg_code = msg[:msg_code]
+	_game_code = msg[:payload][:game_id]
+	_player_id = msg[:payload][:player_id]
+	_who = whos_player(_game_code, _player_id) # :originator || :joiner
+	_game_vs_ai_flag = is_game_vs_ai(_game_code)
+	_turn_recap = msg[:payload][:turn_recap]
+
+
+=#
+
+# ╔═╡ 24d9fd2c-4c3b-44ce-9bce-ea54f6d3edd7
+_mmssg = filter(m -> haskey(m, :msg_id) && m[:msg_id]=="lrkxg6jf", ws_messages_log)[1]
+
 # ╔═╡ c6e915be-2853-48ff-a8da-49755b9b1a44
 function setindex_container!(d::Dict, val, key, use_set = false)
 # saves value within array or set container within a dictionary at :key index
@@ -2278,14 +2261,15 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 	! id
 		! player_id -> B/W
-		! player_score -> 0...3
-		() opp_score -> 0...3 # it can't increase until after opponent scores
-		() game_mode -> classic (3) vs quick (1)
+		! players_scores -> { W => 0...3, B => 0...3 }
+		() game_mode -> classic (3) vs quick (1) -> used to calc max_sset size
 		() game_id / turn_no / scenario_id -> have a single id for N choices and read changes from DB ?
 
 	-- all data in dicts below can be reshaped-in/out as a whole, only coordinates --
 
-	() score_actions_preMove [] -> opponent scored for player at the end of their turn
+	turn recap data:
+
+	() score_actions_preMove [] 
 			mk_locs
 			ring_score
 	
@@ -2299,6 +2283,10 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 =#
 
+
+	# following value is hardcoded for now
+	winning_score::Int = 3; # game_mode == quick ? 1 : 3
+
 	## extract relevant flags from input (given by presence of keys in dict)
 	f_scores_act_preMove::Bool = haskey(sc, :score_actions_preMove)
 	f_move_act::Bool = haskey(sc, :move_action)
@@ -2310,25 +2298,31 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 	# baseline game state that we'll modify and return later
 	new_gs::Matrix{String} = deepcopy(ex_game_state)
-	new_player_score::Int = sc[:id][:player_score]
-	#new_opp_score::Int = sc[:id][:opp_score] # returned as-is, we can't pick opp ring
+	new_player_score::Int = deepcopy(sc[:id][:players_scores][_player_id]) # updated 
+	new_opp_score::Int = deepcopy(sc[:id][:players_scores][_opp_id])
 
 	# dict to return w/ game state delta - used for replay or add leaves to the tree
 	_ret::Dict{Symbol, Union{Dict, Array, Matrix, Int, Symbol}} = Dict()
 
 	#= OUTPUT structure - fields are added only if valued
-	
+
+	> delta
 		:scores_preMove_done => [ (:mk_locs => CI[], :ring_score => CI) ]
 		:move_done => (:mk_add => (loc, player), :ring_move = (start, end, player))
-		:mk_flip => CI[]
+		:mk_flip => CI[] (to be flipped) | used only by client, server recomputes them
 		:scores_done => [ (:mk_locs => CI[], :ring_score => CI) ]
-		:scores_avail_opp => { :s_rows => Dict[], :s_sets => [ (1,2,4), (3,5)] } # scoring rows and their possible sets
-		:scores_avail_player => { :s_rows => Dict[], :s_sets => [ (1,2,4), (3,5)] } # scoring-row: Dict(mk_locs, mk_sel, player)
 
+	> new state post-delta 
 		:new_game_state => Matrix
-		:mode => Symbol (sames as how this fn was called)
 		:new_player_score => Int
-		:new_opp_score => Int (needed to check if game is over)
+		:new_opp_score => Int 
+		
+	> inspect results
+		:scores_avail_opp => { :s_rows => Dict[], :s_sets => { (1,2,4), (3,5) } 
+		:scores_avail_player => { :s_rows => Dict[], :s_sets => { (1,2,4), (3,5) }
+
+	> log/debug value
+		:mode => Symbol (how this fn was called)
 
 	=#
 	
@@ -2357,12 +2351,10 @@ Making sense of move/flip data depends on the mode the function was called in.
 	
 
 	function move_do!() # ring moved -> mk placement -> flipping
-
-		### move ring & place marker
 		
 		start_loc::CartesianIndex = sc[:move_action][:start]
 		end_loc::CartesianIndex = sc[:move_action][:end]
-
+		
 		# marker placed in start_move (same color as picked ring / player_id)
 		@inbounds new_gs[start_loc] = _player_id == _B ? _MB : _MW
 		
@@ -2407,6 +2399,7 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 		for score in sc[:score_actions]
 
+
 			# remove markers from game state
 			sd_mks_locs::Vector{CartesianIndex} = score[:mk_locs]
 			foreach(mk_id -> new_gs[mk_id] = "", sd_mks_locs)
@@ -2428,8 +2421,19 @@ Making sense of move/flip data depends on the mode the function was called in.
 	
 	function score_check!() # post-move scoring
 
+		f_last_score = mks_limit_hit(new_gs)::Bool
+
+		# distance from winning -> max_sset for player/opp
+		# only using black/white keys here
+		W_score_val::Int = _player_id == "W" ? new_player_score : new_opp_score
+		B_score_val::Int = _opp_id == "B" ? new_opp_score : new_player_score
+		
+		W_max_sset = winning_score - W_score_val
+		B_max_sset = winning_score - B_score_val
+		max_sset_d = Dict(_W_key => W_max_sset, _B_key => B_max_sset)
+		
 		# search for possible scoring options
-		scores::Dict{Symbol, Dict} = search_scores_gs(new_gs)
+		scores::Dict{Symbol, Dict} = search_scores_gs(new_gs, max_sset_d)
 
 		# save scores information for each player
 		sinfo_player = scores[Symbol(_player_id)]
@@ -2446,7 +2450,7 @@ Making sense of move/flip data depends on the mode the function was called in.
 	if fn_mode == :replay # whole turn
 		
 		f_scores_act_preMove && scores_preMove_do!() # -> win check
-		f_move_act && move_do!()
+		f_move_act && move_do!() # -> mks check you can move only if limit not hit
 		f_scores_act && scores_do!()
 
 	elseif fn_mode == :move # single move -> check score
@@ -2475,7 +2479,7 @@ Making sense of move/flip data depends on the mode the function was called in.
 end
 
 # ╔═╡ 156c508f-2026-4619-9632-d679ca2cae50
-function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, nx_player_score::Int)
+function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, players_scores::Dict)
 # takes as input an ex game state (server format) and info of next moving player
 # computes results for all possible moves of next moving player
 
@@ -2489,16 +2493,29 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, nx_player_score:
 			!/() :treepots => [ ]
 					:tree_summary => { :sc_flip => [] , :sc_score => []}
 					:gs_id = { s_set, s_rings} # ID absent if only 1 tree
-					:tree => { :start => :end => flags/deltas }
+					:tree => { :start => :end => flags/deltas/new-scores }
 					:gs => Matrix{String} # starting gamestate for tree
 		=#
 
 	# ring id for this player
 	_ring_id::String = nx_player_id == _W ? _RW : _RB
 
+	# retrieve player/opp scores
+	opp_id = nx_player_id == _W ? _B : _W
+	
+	nx_player_score::Int = deepcopy(players_scores[nx_player_id])
+	opp_score::Int = deepcopy(players_scores[opp_id])
+
+	# lower functions take in scores as white/black, not player/opp
+	# the dict will be referenced later on, values directly written in it
+	last_W_score = nx_player_id == _W ? nx_player_score : opp_score
+	last_B_score = opp_id == _B ? opp_score : nx_player_score 
+	last_scores = Dict(_W => last_W_score, _B => last_B_score)
+
 	# identify any pre-move score to be acted on - ie. left by previous player
 	pms_sc_id = Dict( :id => Dict( 	:player_id => nx_player_id, 
-									:player_score => nx_player_score))
+									:players_scores => last_scores,
+									:opp_score => opp_score))
 	
 	pm_scores_inspect = sim_new_gameState(ex_gs, pms_sc_id, :inspect)
 	flag_pms::Bool = haskey(pm_scores_inspect, :scores_avail_player)
@@ -2559,7 +2576,7 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, nx_player_score:
 
 				# prep scenario data
 				pms_actions = Dict( :id => Dict(:player_id => nx_player_id, 
-									:player_score => nx_player_score),
+												:players_scores => last_scores),
 									:score_actions_preMove => preMove_actions_array)
 
 				# replay pre-move scores and get new game state
@@ -2622,7 +2639,7 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, nx_player_score:
 
 					# simulate new game state for start/end combination
 					move = Dict(:id => Dict(:player_id => nx_player_id, 
-											:player_score => nx_player_score),
+											:players_scores => last_scores),
 											:move_action => sc_id)
 
 					### NOTE: PLAYER SCORE NEEDS HANDLING
@@ -2704,8 +2721,9 @@ function gen_newGame(vs_server = false)
 		# prepare markers array to be sent to client
 		_markers = union(white_mks, black_mks)
 		
+	players_scores = Dict(_W => 0, _B => 0) # starting scores for both
 	# pre possible moves and scoring/flipping outcomes for each -> in client's format
-	_scenario_trees = sim_scenarioTrees(gs, first_moving, 0) |> reshape_out_fields
+	_scenario_trees = sim_scenarioTrees(gs, first_moving, players_scores) |> reshape_out_fields
 	
 	
 	### package data for server storage
@@ -2844,9 +2862,10 @@ function gen_new_clientPkg(game_id::String, nx_player_id::String)
 	
 
 	# simulates possible moves and outcomes for each -> in client's format
-	ex_score = get_player_score(game_id, nx_player_id)
+	#ex_score = get_player_score(game_id, nx_player_id)
+	players_scores = get_scores_byID(game_id)
 	
-	_scenario_trees = sim_scenarioTrees(gs, nx_player_id, ex_score) |> reshape_out_fields
+	_scenario_trees = sim_scenarioTrees(gs, nx_player_id, players_scores) |> reshape_out_fields
 		
 	### package data for client
 	_cli_pkg = Dict(:game_id => game_id,
@@ -2902,20 +2921,12 @@ function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = fals
 # replays move server-side and logs score
 # generates delta payload info 
 
-	#= SCENARIO PICK data format OLD (turn_recap)
+	#= 
+		TURN RECAP data format (same used internally by sim_game_state)
 
-		{ 	start: start_move_index, 
-            end: drop_loc_index,
-            mk_sel_pick: scoring_mk_sel_picked, // default to -1
-            ring_removed: scoring_ring_picked, // defaults to -1
-            completed_turn_no: _played_turn_no
-                                }; 
-
-		SCENARIO PICK data format NEW (same used internally by sim_game_state)
-
-		score_action_preMove : { mk_sel: -1, mk_locs: [], ring_score: -1 },
+		score_actions_preMove : [ { mk_sel: -1, mk_locs: [], ring_score: -1 } ],
 		move_action: { start: start_move_index, end: drop_loc_index },
-		score_action: { mk_sel: -1, mk_locs: [], ring_score: -1 }, 
+		score_actions: [ { mk_sel: -1, mk_locs: [], ring_score: -1 } ], 
 		completed_turn_no: _played_turn_no       
 
 	=#
@@ -2934,8 +2945,8 @@ function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = fals
 	ex_gs = get_last_srv_gameState(_game_code)
 
 	# sim new game state with turn recap sent from client (as-is)
-	_sc_id = Dict( :player_id => _player_id, 
-					:player_score => get_player_score(_game_code, _player_id))
+	_sc_id = Dict( 	:player_id => _player_id, 
+				  	:players_scores => get_scores_byID(_game_code))
 
 	# add pre-move/move/score info from client
 	_sc_info = setindex!(srv_turn_recap, _sc_id, :id)
@@ -3059,11 +3070,11 @@ try
 	ex_gs::Matrix{String} = deepcopy(get_last_srv_gameState(game_code, prev))
 	
 	# scenarios
-	ex_srv_score::Int = get_player_score(game_code, srv_player_id)
-	sim::Dict{Symbol, Any} = sim_scenarioTrees(ex_gs, srv_player_id, ex_srv_score)
+	players_scores = get_scores_byID(game_code)::Dict{String, Int}
+	sim::Dict{Symbol, Any} = sim_scenarioTrees(ex_gs, srv_player_id, players_scores)
 
 	# keep track of score across server play
-	last_srv_score::Int = deepcopy(ex_srv_score) 
+	last_srv_score::Int = deepcopy(players_scores[srv_player_id]) 
 
 	# ring id for this player
 	_ring_id::String = srv_player_id == _W ? _RW : _RB
@@ -3230,8 +3241,8 @@ try
 	if isempty(move_action) # no move action taken yet 
 
 
-		# split move candidates in these groups
-		candidate_moves_sc::Vector{Dict} = [];  # candidate moves
+		# split all possible moves in groups
+		px_moves_sc::Vector{Dict} = [];  # candidate moves
 			best_sc::Vector{Dict} = []; # closer to score for us
 			neutral_sc::Vector{Dict} = []; # no close to score for us or opponent
 			risky_sc::Vector{Dict} = []; # closer for both
@@ -3241,24 +3252,29 @@ try
 
 		opp_player_id::String = srv_player_id == _W ? _B : _W
 		
-		# traverse the whole tree, create candidate move sc to categorize later
+		# traverse the whole tree, all possible moves sc to be categorized later
 		@inbounds for start_k in eachindex(tree), end_k in eachindex(tree[start_k])
 			# exlude same-loc-drop moves
 			if start_k != end_k
 				sc::Dict{Symbol, CartesianIndex} = Dict(:start => start_k,:end => end_k)
-				push!(candidate_moves_sc, sc)
+				push!(px_moves_sc, sc)
 			end
+
+			# NOTE -> we could prune the tree from bad/worst moves before going on
+			# but ensure we at least got some options left
 		end
 
 		# categorize moves
-		len_cm::Int = candidate_moves_sc |> length
-		for (i, sc) in enumerate(candidate_moves_sc) 
+		len_cm::Int = px_moves_sc |> length
+		_last_scores = Dict(_W => 0, _B => 0) # should reflect real vs potential 
+		for (i, sc) in enumerate(px_moves_sc) 
 
 			max_i::Int = i # keep track of how many scenarios we explore
 			
 			@inbounds new_gs::Matrix{String} = get_new_gs(tree, sc)
-			new_sim::Dict = sim_scenarioTrees(new_gs, opp_player_id, 0) 
-			# any opp score is fine for now, as any score is put in worst
+			new_sim::Dict = sim_scenarioTrees(new_gs, opp_player_id, _last_scores) 
+			# any opp score is fine for now, as any potential score by other is bad
+			# but ideally we should use this to prune winning options for other player
 
 			# prevent states that can lead opponent to score next
 				# no scores_preMove_avail (root)
@@ -3276,6 +3292,7 @@ try
 			server_score_px = sim_check[:opp_score_possible]
 			user_score_px = sim_check[:player_score_possible]
 
+			# replace below with a simpler scoring system for each outcome
 			# 2x2 possible outcomes: best > neutral > risky > bad 
 			f_best::Bool = server_score_px == true && user_score_px == false
 			f_neutral::Bool = server_score_px == false && user_score_px == false
@@ -3343,8 +3360,8 @@ end
 
 end
 
-# ╔═╡ 2bcc0cf2-61b5-438f-86ea-331b565902f5
-play_turn_server("UMG6S8", "B",0)
+# ╔═╡ 0ec27d7a-cea6-4933-bbdc-bf6aaacb94de
+play_turn_server("DG3VIS", "W")
 
 # ╔═╡ e6cc0cf6-617a-4231-826d-63f36d6136a5
 function mark_player_ready!(game_code::String, who::Symbol)
@@ -3591,6 +3608,7 @@ function fn_advance_game(ws, msg)
 	catch e
 
 		println("ERROR in fn_advance_game - $e")
+		stacktrace(catch_backtrace())
 	end
 end
 
@@ -3754,6 +3772,9 @@ end
 # ╔═╡ 8b6264b0-f7ea-4177-9700-30072d4c5826
 reactive_start_server(ws_servers_array, ws_messages_log, ws_messages_log_OG)
 
+# ╔═╡ 93d2cb64-36b5-4cb8-9b99-2c6c2ea0a3cf
+game_runner(_mmssg)
+
 # ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 function test_ws_client()
 
@@ -3824,7 +3845,8 @@ md"#### Open issues "
 # ╔═╡ 9b8a5995-d8f0-4528-ad62-a2113d5790fd
 #=
 
-- better end detection (51 mks) and 'draw' option
+- end detection for (51 mks) and 'draw' option
+- stop use of "B" and "W" strings everywhere, make everything global parameters
 - game history in client (snapshots <> navigation while no animations in play)
 - uniform handling/naming of originator vs joiner
 - clients disconnecting / non-responsive are not handled / websocket disconneting
@@ -3852,8 +3874,8 @@ BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
@@ -3861,8 +3883,8 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 BenchmarkTools = "~1.4.0"
 Combinatorics = "~1.0.2"
 HTTP = "~1.10.1"
-JET = "~0.8.24"
 JSON3 = "~1.14.0"
+PlutoUI = "~0.7.55"
 StatsBase = "~0.33.21"
 """
 
@@ -3872,7 +3894,13 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "69f18d64fc8c683b2f249253fff556ae4cc3b75a"
+project_hash = "ba8cb9cf2cab3de99eac778bdf22d3af2998ac8b"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "c278dfab760520b8bb7e9511b968bf4ba38b7acc"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.2.3"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -3895,17 +3923,17 @@ git-tree-sha1 = "2dc09997850d68179b69dafb58ae806167a32b1b"
 uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
 version = "0.1.8"
 
-[[deps.CodeTracking]]
-deps = ["InteractiveUtils", "UUIDs"]
-git-tree-sha1 = "c0216e792f518b39b22212127d4a84dc31e4e386"
-uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
-version = "1.3.5"
-
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
 git-tree-sha1 = "cd67fc487743b2f0fd4380d4cbd3a24660d0eec8"
 uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
 version = "0.7.3"
+
+[[deps.ColorTypes]]
+deps = ["FixedPointNumbers", "Random"]
+git-tree-sha1 = "eb7f0f8307f71fac7c606984ea5fb2817275d6e4"
+uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
+version = "0.11.4"
 
 [[deps.Combinatorics]]
 git-tree-sha1 = "08c8b6831dc00bfea825826be0bc8336fc369860"
@@ -3948,10 +3976,6 @@ version = "0.18.16"
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 
-[[deps.Distributed]]
-deps = ["Random", "Serialization", "Sockets"]
-uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
-
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
 git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
@@ -3972,11 +3996,35 @@ version = "0.1.10"
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
+[[deps.FixedPointNumbers]]
+deps = ["Statistics"]
+git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
+uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
+version = "0.8.4"
+
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
 git-tree-sha1 = "abbbb9ec3afd783a7cbd82ef01dcd088ea051398"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 version = "1.10.1"
+
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "179267cfa5e712760cd43dcae385d7ea90cc25a4"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.5"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.5"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "8b72179abc660bfab5e28472e019392b97d0985c"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.4"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -3986,12 +4034,6 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.2.2"
-
-[[deps.JET]]
-deps = ["InteractiveUtils", "JuliaInterpreter", "LoweredCodeUtils", "MacroTools", "Pkg", "PrecompileTools", "Preferences", "Revise", "Test"]
-git-tree-sha1 = "9587e44f478b5fddc70fc3baae60a587deaa3a31"
-uuid = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
-version = "0.8.24"
 
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
@@ -4016,12 +4058,6 @@ version = "1.14.0"
 
     [deps.JSON3.weakdeps]
     ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
-
-[[deps.JuliaInterpreter]]
-deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "04663b9e1eb0d0eabf76a6d0752e0dac83d53b36"
-uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
-version = "0.9.28"
 
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
@@ -4079,17 +4115,10 @@ git-tree-sha1 = "c1dd6d7978c12545b4179fb6153b9250c96b0075"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.0.3"
 
-[[deps.LoweredCodeUtils]]
-deps = ["JuliaInterpreter"]
-git-tree-sha1 = "0b8cf121228f7dae022700c1c11ac1f04122f384"
-uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
-version = "2.3.2"
-
-[[deps.MacroTools]]
-deps = ["Markdown", "Random"]
-git-tree-sha1 = "b211c553c199c111d998ecdaf7623d1b89b69f93"
-uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-version = "0.5.12"
+[[deps.MIMEs]]
+git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
+uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
+version = "0.1.4"
 
 [[deps.Markdown]]
 deps = ["Base64"]
@@ -4156,6 +4185,12 @@ deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.10.0"
 
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
+git-tree-sha1 = "68723afdb616445c6caaef6255067a8339f91325"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.55"
+
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
 git-tree-sha1 = "03b4c25b43cb84cee5c90aa9b5ea0a78fd848d2f"
@@ -4184,17 +4219,10 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
-[[deps.Requires]]
-deps = ["UUIDs"]
-git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
-uuid = "ae029012-a4dd-5104-9daa-d747884805df"
-version = "1.3.0"
-
-[[deps.Revise]]
-deps = ["CodeTracking", "Distributed", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Pkg", "REPL", "Requires", "UUIDs", "Unicode"]
-git-tree-sha1 = "3fe4e5b9cdbb9bbc851c57b149e516acc07f8f72"
-uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
-version = "3.5.13"
+[[deps.Reexport]]
+git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
+uuid = "189a3867-3050-52da-a836-e630ba90ab69"
+version = "1.2.2"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -4272,6 +4300,11 @@ weakdeps = ["Random", "Test"]
 
     [deps.TranscodingStreams.extensions]
     TestExt = ["Test", "Random"]
+
+[[deps.Tricks]]
+git-tree-sha1 = "eae1bb484cd63b36999ee58be2de6c178105112f"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.8"
 
 [[deps.URIs]]
 git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
@@ -4363,12 +4396,12 @@ version = "17.4.0+2"
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
 # ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
-# ╟─f1949d12-86eb-4236-b887-b750916d3493
-# ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
+# ╠═f1949d12-86eb-4236-b887-b750916d3493
+# ╠═e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╟─57153574-e5ca-4167-814e-2d176baa0de9
 # ╟─1fe8a98e-6dc6-466e-9bc9-406c416d8076
-# ╟─156c508f-2026-4619-9632-d679ca2cae50
+# ╠═156c508f-2026-4619-9632-d679ca2cae50
 # ╟─823ce280-15c4-410f-8216-efad03897282
 # ╟─c0c45548-9792-4969-9147-93f09411a71f
 # ╟─dd941045-3b5f-4393-a6ae-b3d1f029a585
@@ -4376,18 +4409,21 @@ version = "17.4.0+2"
 # ╠═c0881f04-40e5-4108-85e2-f3aca3420513
 # ╠═74951f2f-1bc4-4d0f-a2ee-fd6862c6feec
 # ╠═5ea1985d-8788-445e-9c8c-f8ebab01ecf6
-# ╠═9b2123a3-12fb-4ebf-ad9b-1aa65ff9ee43
-# ╠═00e20281-2046-487b-89a2-1a9f848c67fa
+# ╠═b314af4d-87c4-4d91-99fb-c8fdb1cd1595
 # ╠═60cb964f-1cd4-4dc4-bb6e-12e4be395fcd
-# ╠═bff81fc8-bce9-4f45-8a2e-21f7d2c18648
 # ╠═c3ab8073-165e-4013-99bc-6d32cf9f4514
 # ╠═fd1b186d-b042-4e42-97ea-7e2338eaf75c
-# ╠═39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
-# ╠═69b9885f-96bd-4f8d-9bde-9ac09521f435
-# ╟─9f1d770b-7c67-4b25-bf2b-0fbf6a29fb6a
-# ╟─fae1cebf-9355-4c4c-b0aa-0eab1f517785
+# ╟─39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
+# ╠═c92be6ed-fd32-41f3-8554-5f851a79f0a3
+# ╠═0d79bd4d-032d-43a9-a4e9-1a49f232b649
+# ╠═60909cf5-1c6a-4dbc-91d0-acd2d507c450
+# ╟─69b9885f-96bd-4f8d-9bde-9ac09521f435
+# ╠═3d97a528-ccd7-40e8-8f18-c6630eceb708
 # ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
 # ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
+# ╠═0d5558ca-7e01-4ed2-8b37-61649690346a
+# ╠═1b301201-86bd-4b3c-bdc3-ea590dc66c6a
+# ╠═7063a0cc-776d-4245-bf9d-7c3c41e85daf
 # ╠═a27e0adf-aa09-42ee-97f5-ede084a9edc3
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
@@ -4402,8 +4438,8 @@ version = "17.4.0+2"
 # ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
 # ╠═5e5366a9-3086-4210-a037-c56e1374a686
 # ╠═7316a125-3bfe-4bac-babf-4e3db953078b
-# ╟─ca522939-422f-482a-8658-452790c463f6
-# ╟─064496dc-4e23-4242-9e25-a41ddbaf59d1
+# ╠═ca522939-422f-482a-8658-452790c463f6
+# ╠═064496dc-4e23-4242-9e25-a41ddbaf59d1
 # ╟─28ee9310-9b7d-4169-bae4-615e4b2c386e
 # ╟─612a1121-b672-4bc7-9eee-f7989ac27346
 # ╟─a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
@@ -4411,7 +4447,6 @@ version = "17.4.0+2"
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╟─ca346015-b2c9-45da-8c1e-17493274aca2
 # ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
-# ╠═2bcc0cf2-61b5-438f-86ea-331b565902f5
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
 # ╟─5d6e868b-50a9-420b-8533-5db4c5d8f72c
@@ -4425,14 +4460,20 @@ version = "17.4.0+2"
 # ╟─5ae493f4-346d-40ce-830f-909ec40de8d0
 # ╟─276dd93c-05f9-46b1-909c-1d449c07e2b5
 # ╟─8797a304-aa98-4ce0-ab0b-759df0256fa7
-# ╟─f55bb88f-ecce-4c14-b9ac-4fc975c3592e
+# ╠═f0e69ff9-9388-4a4e-a111-6514faaa373b
+# ╠═0193d14a-9e55-42c2-97d6-2a0bef50da1e
+# ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
-# ╟─20a8fbe0-5840-4a70-be33-b4103df291a1
+# ╠═20a8fbe0-5840-4a70-be33-b4103df291a1
 # ╟─7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
 # ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
+# ╠═0ec27d7a-cea6-4933-bbdc-bf6aaacb94de
+# ╠═a3b11f4c-6b28-4303-bfe2-66460dda86fe
+# ╠═93d2cb64-36b5-4cb8-9b99-2c6c2ea0a3cf
+# ╠═24d9fd2c-4c3b-44ce-9bce-ea54f6d3edd7
 # ╠═fdb40907-1047-41e5-9d39-3f94b06b91c0
 # ╟─c6e915be-2853-48ff-a8da-49755b9b1a44
 # ╟─8e1673fe-5286-43cd-8830-fba353f1cd89

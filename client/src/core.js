@@ -413,14 +413,14 @@ async function replay_opponent_turn(){
 // called by replay_opponent_turn, used for both pre-move and post-move scoring replay
 // also takes care of increasing opponent's score and fill scoring slot
 async function replay_opponent_scoring(score_actions_array){
-
+ 
     for (const sc_action of score_actions_array){
 
         const mk_removed_locs = sc_action.mk_locs;
         const ring_score_loc = sc_action.ring_score;
 
-        const _score_mk_wait = 600;
-        const _score_ring_wait = 650;
+        const _score_mk_wait = 550;
+        const _score_ring_wait = 600;
                     
         // MARKERS ROW 
             await sleep(_score_mk_wait);
@@ -464,10 +464,14 @@ async function replay_opponent_scoring(score_actions_array){
             // refresh canvas (ring is drawn as part of the scoring slot now)
             refresh_canvas_state();
 
-            // txt for user
-            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored a point!` }));
+    };
 
-
+    // txt for user
+    const num_scores = score_actions_array.length;
+    if (num_scores > 1){
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored ${num_scores} points!` }));
+    } else {
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored!` }));
     };
 
 };
@@ -883,7 +887,7 @@ async function scoring_handler(player_scoring_ops, pre_move = false){
         activate_task(ring_scoring); 
 
             // highlight rings - need to pass player own rings ids to the function
-            await sleep(350);
+            await sleep(300);
             const _player_rings_ids = yinsh.objs.rings.filter((ring) => (ring.player == get_player_id())).map(ring => ring.loc.index);
             core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', {detail: {player_rings: _player_rings_ids}}));
 
@@ -913,7 +917,7 @@ async function scoring_handler(player_scoring_ops, pre_move = false){
         if (active_rows.length == 0){
             done_flag = true; // -> exit loop
         } else {
-            await sleep(300); // -> wait before turning on new rows
+            await sleep(250); // -> wait before turning on new rows
         };
 
     };

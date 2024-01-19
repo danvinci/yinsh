@@ -217,7 +217,6 @@ export function save_server_response(srv_input){
         // save to global obj and log
         yinsh.next_server_data = structuredClone(_srv_response);
 
-        console.log(`TEST - DELTA: `, srv_input.delta);
         console.log('LOG - Server NEXT MOVE data saved');
 
     //////////////////////////////
@@ -349,9 +348,9 @@ export function select_apply_scenarioTree(input_s_set, input_s_rings){
             const gsid_v_sset = _treepots.map(tp => new Set(tp.gs_id.s_set));
             const gsid_v_srings = _treepots.map(tp => new Set(tp.gs_id.s_rings));
 
-            // check at which indexes the sets match within each array (keep only numbers)
-            const indexes_sset = gsid_v_sset.map(s => areSetsEqual(s, in_sset)).map( (s,index) => s == true && index).filter(Number);
-            const indexes_srings = gsid_v_srings.map(s => areSetsEqual(s, in_srings)).map( (s,index) => s == true && index).filter(Number);
+            // keep indexes at which the sets match, within each array
+            const indexes_sset = gsid_v_sset.map( (s,index) => areSetsEqual(s, in_sset) ? index : -1 ).filter(s => s >= 0);
+            const indexes_srings = gsid_v_srings.map( (s,index) => areSetsEqual(s, in_srings) ? index : -1 ).filter(s => s >= 0);
 
             // find first intersection (element in both arrays) -> there should be only one
             const tree_index = indexes_srings.find(s => indexes_sset.includes(s));
