@@ -175,9 +175,9 @@ export function GameSetup() {
               <>
                 <button type="button" class="back_nav_btn" onClick={toggle_Play}>&#9665;</button>
                 <hr class="menu_line"></hr>
-                <button type="button" onClick={triggerRequest_newVSfriend}>NEW game vs Friend</button>
-                <button type="button" onClick={toggle_joinClick}>JOIN game vs Friend</button> 
-                <button type="button" onClick={triggerRequest_joinVS_AI}>NEW game vs AI</button> 
+                <button type="button" onClick={triggerRequest_newVSfriend}>Invite a Friend</button>
+                <button type="button" onClick={toggle_joinClick}>Join a Friend</button> 
+                <button type="button" onClick={triggerRequest_joinVS_AI}>Play vs AI</button> 
                 {/* <button type="button" onClick={trigger_test_fn}>- test button -</button> -- */}
               </>}>
 

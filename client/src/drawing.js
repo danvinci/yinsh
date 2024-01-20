@@ -374,9 +374,16 @@ function draw_rings(ring_spec = {}){
                 // draw white ring
                 } else if (ring.player == player_white_id){
 
-                    //inner almost white
+                    // linewidhts and radiuses for inner/outer-border
+                    // in theory the borders should be contained within the main linewidht (drawn on top the radius)
+                    // but in practice it's better drawing so that half border width goes beyond the main linewidth (for the white)
+                    const border_lineWidth = ring_lineWidth/10; 
+                    const radius_inner_border = inner - ring_lineWidth/2; //+ border_lineWidth/2;
+                    const radius_outer_border = inner + ring_lineWidth/2; //- border_lineWidth/2;
+
+                    // mid section
                     ctx.strokeStyle = _white_col;
-                    ctx.lineWidth = ring_lineWidth*0.9;            
+                    ctx.lineWidth = ring_lineWidth;            
                     
                     let ring_path = new Path2D()
                         ring_path.arc(ring.loc.x, ring.loc.y, inner, 0, 2*Math.PI);
@@ -384,23 +391,19 @@ function draw_rings(ring_spec = {}){
 
                     // outer border
                     ctx.strokeStyle = _lgray_col;
-                    ctx.lineWidth = ring_lineWidth/12; 
+                    ctx.lineWidth = border_lineWidth; 
                     
                     let outerB_path = new Path2D()
-                        outerB_path.arc(ring.loc.x, ring.loc.y, inner*1.15, 0, 2*Math.PI);
+                        outerB_path.arc(ring.loc.x, ring.loc.y, radius_outer_border, 0, 2*Math.PI);
                     ctx.stroke(outerB_path);
-                    
-                    ring_path.addPath(outerB_path);
 
                     // inner border
                     ctx.strokeStyle = _lgray_col;
-                    ctx.lineWidth = ring_lineWidth/12;  
+                    ctx.lineWidth = border_lineWidth;  
 
                     let innerB_path = new Path2D()
-                        innerB_path.arc(ring.loc.x, ring.loc.y, inner*0.85, 0, 2*Math.PI);
+                        innerB_path.arc(ring.loc.x, ring.loc.y, radius_inner_border, 0, 2*Math.PI);
                     ctx.stroke(innerB_path);
-
-                    ring_path.addPath(outerB_path);
 
                     // update path shape definition
                     ring.path = ring_path;
@@ -443,9 +446,13 @@ function draw_rings(ring_spec = {}){
             // draw white ring
             } else if (_ring_id == player_white_id){
 
-                //inner white 
+                const border_lineWidth = ring_lineWidth/10; 
+                const radius_inner_border = inner - ring_lineWidth/2; 
+                const radius_outer_border = inner + ring_lineWidth/2;
+
+                // mid section
                 ctx.strokeStyle = _white_col;
-                ctx.lineWidth = ring_lineWidth*0.9;            
+                ctx.lineWidth = ring_lineWidth;            
                 
                 let ring_path = new Path2D()
                     ring_path.arc(_ring_x, _ring_y, inner, 0, 2*Math.PI);
@@ -453,18 +460,18 @@ function draw_rings(ring_spec = {}){
 
                 // outer border
                 ctx.strokeStyle = _lgray_col;
-                ctx.lineWidth = ring_lineWidth/12; 
+                ctx.lineWidth = border_lineWidth; 
                 
                 let outerB_path = new Path2D()
-                    outerB_path.arc(_ring_x, _ring_y, inner*1.15, 0, 2*Math.PI);
+                    outerB_path.arc(_ring_x, _ring_y, radius_outer_border, 0, 2*Math.PI);
                 ctx.stroke(outerB_path);
 
                 // inner border
                 ctx.strokeStyle = _lgray_col;
-                ctx.lineWidth = ring_lineWidth/12;  
+                ctx.lineWidth = border_lineWidth;  
 
                 let innerB_path = new Path2D()
-                    innerB_path.arc(_ring_x, _ring_y, inner*0.85, 0, 2*Math.PI);
+                    innerB_path.arc(_ring_x, _ring_y, radius_inner_border, 0, 2*Math.PI);
                 ctx.stroke(innerB_path);
 
             };
@@ -499,7 +506,7 @@ function draw_markers(){
         for (let m of _markers) {
 
             let inner = S*0.25;
-            let marker_lineWidth = inner/5;
+            let marker_lineWidth = inner/4;
 
             // draw black marker
             if (m.player == player_black_id){ 

@@ -93,7 +93,7 @@ function window_resize_handler() {
 
         // turns off cues
         reset_move_action(); 
-        update_legal_cues()
+        update_legal_cues();
 
         refresh_canvas_state();
     };
@@ -113,7 +113,7 @@ function window_resize_handler() {
         core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF'));
     };
 
-    // draw what you have
+
     refresh_canvas_state();
 
 };
@@ -777,7 +777,7 @@ async function ringDrop_handler (event) {
         console.log("USER - Invalid drop location");
         // NOTE: we could play specific sound 'err'
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You can't drop the ring in that location` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You can't drop the ring there` }));
 
 
     };
