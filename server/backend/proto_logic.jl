@@ -1974,38 +1974,41 @@ function strip_reshape_in_recap(recap::Dict)
 #= 	# CLIENT - expected input 
 
 	score_actions_preMove : [ { mk_locs: [], ring_score: -1 } ],
-	move_action: { start: start_move_index, end: drop_loc_index },
+	move_action: { start: -1, end: -1 },
 	score_actions: [ { mk_locs: [], ring_score: -1 } ], 
 	completed_turn_no: _played_turn_no     
 
-	# SERVER/AI - input 
-	- returned by turn_play_server, has cartesianIndexes as coord -> should skip
-	- turn_play_AI instead returns client-like and needs pick-translation + this fn
-
-
-	# general notes
-	- v0 AI should remap to CI if it wants to survive
-	- V1 shouldn't not pass from this -> passing paramter to updateServerStates! ?
+	-1 is the default value sent by the client when the given action is not done,
+	this function strips the input dict of dict / dict[] that contain it before reshaping in client coordinates to cart_indexes
 
 =#
-	
-	_srv_recap = Dict()
 
-	# keep only dicts (within arrays) that have non-default values in their fields
-	# TODO - should work by reverse, just eliminating what's not needed
+	keys_to_keep = Set([:score_actions_preMove, :move_action, :score_actions])
+	
+	srv_recap = Dict()
+
+	# keep only relevant keys, skip default values (-1)
 	for (k, v) in recap
-		if isa(v, Array) && !isempty(v) && isa(v[begin], Dict)
-			if haskey(v[begin], :ring_score) && v[begin][:ring_score] != -1
-				setindex!(_srv_recap, v, k) 
+
+		if k in keys_to_keep
+			
+			if k == :move_action 
+				
+				v[:start] == -1 && @goto skip_default_value # no move took place
+
+			elseif v[begin][:ring_score] == -1 # no preMove_score/move_score 
+				@goto skip_default_value
 			end
-		elseif isa(v, Dict)
-			if haskey(v, :start)
-				setindex!(_srv_recap, v, k)
-			end
+
+			setindex!(srv_recap, v, k) # write only if not skipped
 		end
+
+		@label skip_default_value
+
 	end
 
-	return reshape_in(_srv_recap) # defined only on julia dicts 
+
+	return reshape_in(srv_recap) # defined only on julia dicts 
 	
 end
 
@@ -2201,6 +2204,15 @@ _msg_code = msg[:msg_code]
 
 
 =#
+
+# ╔═╡ 68173fea-5b20-4c6b-9d53-ec821dfbb815
+ws_messages_log
+
+# ╔═╡ f09fafa9-b2ec-465f-b417-3675dc5538d0
+_pregame_end_test = ws_messages_log[end-1]
+
+# ╔═╡ bf233022-2394-4271-b0f9-1022be23fde4
+strip_reshape_in_recap(_pregame_end_test[:payload][:turn_recap])
 
 # ╔═╡ 24d9fd2c-4c3b-44ce-9bce-ea54f6d3edd7
 _mmssg = filter(m -> haskey(m, :msg_id) && m[:msg_id]=="lrkxg6jf", ws_messages_log)[1]
@@ -3509,7 +3521,7 @@ function game_runner(msg)
 		end
 
 	
-	## REFLECT LAST MOVE
+	## REFLECT TURN DATA
 		if _turn_recap != false
 		
 			# update server state & generates delta for move replay
@@ -3828,8 +3840,8 @@ end
 # ╔═╡ 8b6264b0-f7ea-4177-9700-30072d4c5826
 reactive_start_server(ws_servers_array, ws_messages_log, ws_messages_log_OG)
 
-# ╔═╡ 93d2cb64-36b5-4cb8-9b99-2c6c2ea0a3cf
-game_runner(_mmssg)
+# ╔═╡ 43313e71-dfd6-4bf8-85c2-d2879d450554
+game_runner(_pregame_end_test)
 
 # ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 function test_ws_client()
@@ -4512,19 +4524,22 @@ version = "17.4.0+2"
 # ╟─5ae493f4-346d-40ce-830f-909ec40de8d0
 # ╟─276dd93c-05f9-46b1-909c-1d449c07e2b5
 # ╟─8797a304-aa98-4ce0-ab0b-759df0256fa7
-# ╠═0193d14a-9e55-42c2-97d6-2a0bef50da1e
-# ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
+# ╟─0193d14a-9e55-42c2-97d6-2a0bef50da1e
+# ╟─f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
-# ╠═20a8fbe0-5840-4a70-be33-b4103df291a1
+# ╟─20a8fbe0-5840-4a70-be33-b4103df291a1
 # ╟─7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
 # ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 # ╠═a3b11f4c-6b28-4303-bfe2-66460dda86fe
-# ╠═93d2cb64-36b5-4cb8-9b99-2c6c2ea0a3cf
+# ╠═68173fea-5b20-4c6b-9d53-ec821dfbb815
+# ╠═f09fafa9-b2ec-465f-b417-3675dc5538d0
+# ╠═43313e71-dfd6-4bf8-85c2-d2879d450554
+# ╠═bf233022-2394-4271-b0f9-1022be23fde4
 # ╠═24d9fd2c-4c3b-44ce-9bce-ea54f6d3edd7
-# ╠═fdb40907-1047-41e5-9d39-3f94b06b91c0
+# ╟─fdb40907-1047-41e5-9d39-3f94b06b91c0
 # ╟─fa924233-8ada-4289-9249-b6731edab371
 # ╟─eb3b3182-2e32-40f8-adf7-062691bf53c6
 # ╟─09c1e858-09ae-44b2-9de7-e73f1b4f188d

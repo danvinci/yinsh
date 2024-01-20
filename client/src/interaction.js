@@ -166,7 +166,7 @@ function mouseMove_handler (event) {
             if (typeof hovered_ring !== 'undefined') {
                 core_et.dispatchEvent(new CustomEvent('ring_sel_hover_ON', { detail: {player_rings: _p_rings_ids, hovered_ring: hovered_ring.loc.index }}));
             } else {
-                core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', {detail: {player_rings: _p_rings_ids}}));
+                core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF'));
             };
         };
 

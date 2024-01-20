@@ -251,7 +251,7 @@ export function save_server_response(srv_input){
         
         // make local working copy that we can alter, and from which markers/rings will be re-init in case of window resize
         // this way we can preserve local state without messing with server data
-        yinsh.local_server_data_ref = structuredClone(yinsh.server_data);
+        yinsh.local_server_data = structuredClone(yinsh.server_data);
 
         console.log('LOG - Server SETUP data saved');      
 
@@ -269,9 +269,9 @@ export function save_server_response(srv_input){
  };
 
 
-export function get_local_server_data_ref(){
+export function get_local_server_data(){
 
-return yinsh.local_server_data_ref;
+return yinsh.local_server_data;
 
 };
 
@@ -304,7 +304,7 @@ export function swap_data_next_turn() {
         yinsh.server_data.turn_no = yinsh.next_server_data.turn_no; // turn number
 
     // make local working copy
-    yinsh.local_server_data_ref = structuredClone(yinsh.server_data);
+    yinsh.local_server_data = structuredClone(yinsh.server_data);
 
     console.log('LOG - Data ready for next turn');
 
@@ -324,8 +324,6 @@ export function get_preMove_score_op_data(){
     return structuredClone(yinsh.server_data.scenario_trees.scores_preMove_avail); // [{}]
 
 };
-
-
 
 
 // return tree among trees given input, otherwise return the only one
@@ -417,13 +415,13 @@ export function pushTo_preMove_scoring_actions(mk_removed, score_ring_id){
 export function get_preMove_scoring_actions_done(){
 
     // return defaults if the array is empty
-    if (yinsh.objs.preMove_scoring_actions.length != 0) {
+    if (yinsh.objs.preMove_scoring_actions.length > 0) {
        
         console.log(`TEST - returning preMove: `, yinsh.objs.preMove_scoring_actions);
         return yinsh.objs.preMove_scoring_actions; 
 
-    } else {
-
+    } else { // pass on default values if container is empty
+ 
         console.log(`TEST - returning preMove: `, { mk_locs: [], ring_score: -1 });
         return [{ mk_locs: [], ring_score: -1 }];
     };
@@ -444,11 +442,11 @@ export function pushTo_scoring_actions(mk_removed, score_ring_id){
 export function get_scoring_actions_done(){
 
     // return defaults if the array is empty
-    if (yinsh.objs.scoring_actions.length != 0) {
+    if (yinsh.objs.scoring_actions.length > 0) {
         console.log(`TEST - returning move: `, yinsh.objs.scoring_actions);
         return yinsh.objs.scoring_actions; 
 
-    } else {
+    } else { // pass on default values if container is empty
         console.log(`TEST - returning move: `, { mk_locs: [], ring_score: -1 });
         return [{ mk_locs: [], ring_score: -1 }];
     };
@@ -817,7 +815,7 @@ function init_rings(){
     try {
 
         // initial locations of rings from server (use local working copy)
-        const server_rings = yinsh.local_server_data_ref.rings; 
+        const server_rings = yinsh.local_server_data.rings; 
 
         // constants used in logic
         const ring_id = yinsh.constant_params.ring_id;
@@ -869,7 +867,7 @@ function init_markers(){
     try {
 
         // initial locations of rings from server
-        const server_markers = yinsh.local_server_data_ref.markers; 
+        const server_markers = yinsh.local_server_data.markers; 
 
         // constants used in logic
         const marker_id = yinsh.constant_params.marker_id;
@@ -904,7 +902,7 @@ function init_markers(){
         // save rings and log
         yinsh.objs.markers = structuredClone(_markers_array);
         
-        console.log('LOG - Markers initialized');
+        console.log(`LOG - Markers initialized [ ${_markers_array.length} ]`);
 
 
     } catch {
@@ -914,7 +912,6 @@ function init_markers(){
     };
 
 };
-
 
 
 // keeps up to date the array of visual cues for legal moves, turning them on or off
@@ -982,7 +979,7 @@ export function add_marker(loc_index, as_opponent = false){
 
     // update local server data ref copy
     const _new_m = {id: structuredClone(m.loc.index), player: structuredClone(m.player)};
-    yinsh.local_server_data_ref.markers.push(_new_m);
+    yinsh.local_server_data.markers.push(_new_m);
 
     // log change
     console.log(`LOG - Marker ${m.player} added at index ${m.loc.index}`);
@@ -991,7 +988,7 @@ export function add_marker(loc_index, as_opponent = false){
 
 
 // removes markers -> called when ring dropped in same location or scoring row is selected
-export function remove_markers(mk_indexes_array){ // input is array of loc indexes
+export function remove_markers(mk_indexes_array){ 
 
     // retrieve array of markers 
     const _markers = yinsh.objs.markers;
@@ -1000,7 +997,7 @@ export function remove_markers(mk_indexes_array){ // input is array of loc index
     yinsh.objs.markers = _markers.filter(m => !mk_indexes_array.includes(m.loc.index));
 
     // update local working data ref (keep all markers which id is not included in markers to be removed)
-    yinsh.local_server_data_ref.markers = yinsh.local_server_data_ref.markers.filter(m => !mk_indexes_array.includes(m.id));
+    yinsh.local_server_data.markers = yinsh.local_server_data.markers.filter(m => !mk_indexes_array.includes(m.id));
 
     console.log(`LOG - Marker(s) removed from indexes: ${mk_indexes_array}`);
     
@@ -1013,7 +1010,7 @@ export function remove_ring_scoring(ring_loc_index){
     yinsh.objs.rings = yinsh.objs.rings.filter(r => r.loc.index != ring_loc_index);
 
     // update local working data ref
-    yinsh.local_server_data_ref.rings = yinsh.local_server_data_ref.rings.filter(r => r.id != ring_loc_index);
+    yinsh.local_server_data.rings = yinsh.local_server_data.rings.filter(r => r.id != ring_loc_index);
     
     console.log(`LOG - Ring removed from index ${ring_loc_index}`);
     
@@ -1048,7 +1045,7 @@ export function flip_markers(mk_indexes_array){
 
     // update local server data ref copy
     const _new_ref_markers = _markers.map((m) => ({id: m.loc.index, player: m.player}));
-    yinsh.local_server_data_ref.markers = structuredClone(_new_ref_markers);
+    yinsh.local_server_data.markers = structuredClone(_new_ref_markers);
 
     console.log(`LOG - Marker(s) flipped at indexes: ${mk_indexes_array}`);
     
@@ -1085,8 +1082,8 @@ export function updateLoc_last_ring(new_loc){
     yinsh.objs.rings[id_dropping_ring_inArray].loc = structuredClone(new_loc);
 
     // update ring index also in working copy of server ref data
-    const _index_ring_inArray = yinsh.local_server_data_ref.rings.findIndex(r => r.id == _old_ring_loc_id);
-    yinsh.local_server_data_ref.rings[_index_ring_inArray].id = structuredClone(new_loc.index)
+    const _index_ring_inArray = yinsh.local_server_data.rings.findIndex(r => r.id == _old_ring_loc_id);
+    yinsh.local_server_data.rings[_index_ring_inArray].id = structuredClone(new_loc.index)
 
 };
 
@@ -1186,11 +1183,8 @@ export function update_mk_halos(mk_ids = [], hot_flag = false){
             for(const d_zone of _drop_zones){
                 if (d_zone.loc.index == mk_id) {
 
-                    // create shape + coordinates and store in the global array
-                    let h_path = new Path2D()
-                    h_path.arc(d_zone.loc.x, d_zone.loc.y, S*0.33, 0, 2*Math.PI);
-            
-                    _mk_halos.push({path: h_path, hot: hot_flag});
+                    // create coordinates and store in the global array
+                    _mk_halos.push({x: d_zone.loc.x, y: d_zone.loc.y, hot: hot_flag});
             
                 };
             };  

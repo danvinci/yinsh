@@ -7,7 +7,7 @@ import { server_ws_send, close_ws } from './server.js'
 import { CODE_new_game_human, CODE_new_game_server, CODE_join_game, CODE_advance_game, CODE_resign_game } from './server.js'
 
 import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_game_id, get_player_id, get_winning_score, get_player_score } from './data.js'
-import { start_move_action, end_move_action, get_move_action_done, reset_move_action, update_legal_cues } from './data.js'
+import { get_move_status, start_move_action, end_move_action, get_move_action_done, reset_move_action, update_legal_cues } from './data.js'
 import { bind_adapt_canvas, reorder_rings, add_marker, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
 import { activate_task, get_scoring_options_fromTask, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
@@ -82,15 +82,36 @@ export function draw_empty_game_board() {
 // window resizing -> impacts canvas, board, and objects (via drawing constants)
 function window_resize_handler() {
 
-    // NOTE: resize triggers regen/redraw, which changes the order of rings in the array, and a mess can happen if a move is in progress
+    // if move is in-progress -> drop ring in place, to avoid weird stuff, due to rings re-ordering in array while last should be the one moving
+    // important to be called before objects are re-initialized
+    if (get_move_status()) {
+
+        // drop ring in-place and remove marker
+        const start_move_index = get_move_action_done().start;
+        end_move_action(start_move_index); 
+        remove_markers([start_move_index]);
+
+        // turns off cues
+        reset_move_action(); 
+        update_legal_cues()
+
+        refresh_canvas_state();
+    };
 
     // bind and make canvas size match its parent
     bind_adapt_canvas();
-
-    // regenerate objects using new S/H constants
-    // note -> temp issue with marker halos (need to be re-generated correctly or wiped / will regenerate on 1st hover interaction) + grave issue when handling rings when resizing (as order is changed while moving ring is expected to be on top)
-    // IDEA -> depending if move is in progress or not, we could restore objects from other store (and reset events as well?)
+        
+    // initialize other objects as well drop zones, rings, markers, scoring slots, cues - using new S/H constants
     init_game_objs(); 
+
+    // if scoring tasks are in progress -> re-emit events so that options are regenerated
+    if (get_task_status('mk_scoring_task')) {
+        core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
+    };
+
+    if (get_task_status('ring_scoring_task')) {
+        core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF'));
+    };
 
     // draw what you have
     refresh_canvas_state();
@@ -683,9 +704,9 @@ async function ringDrop_handler (event) {
         // CASE: same location drop, nothing to flip, remove added marker
         if (drop_loc_index == start_move_index){
 
-            reset_move_action(); // wipe move data if same-loc drop, won't be used
+            reset_move_action(); // just in case - wipe move data if same-loc drop, won't be used
 
-            // remove marker (only touches marker if in location, doesn't touch ring data)
+            // remove marker
             remove_markers([drop_loc_index]);
             refresh_canvas_state(); 
 
@@ -926,8 +947,7 @@ async function scoring_handler(player_scoring_ops, pre_move = false){
 
             // highlight rings - need to pass player own rings ids to the function
             await sleep(300);
-            const _player_rings_ids = yinsh.objs.rings.filter((ring) => (ring.player == get_player_id())).map(ring => ring.loc.index);
-            core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', {detail: {player_rings: _player_rings_ids}}));
+            core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF'));
 
             // user communications
             console.log("USER - Pick a ring to be removed from the board!");
@@ -1116,8 +1136,8 @@ function ring_sel_hover_handler (event) {
     // CASE: ring sel hovered off -> need to establish/restore baseline highlighting of all rings
     } else if (event.type === 'ring_sel_hover_OFF') {
 
-        // retrieve indexes of rings for current player
-        const player_rings_ids = event.detail.player_rings;
+        // retrieve indexes of rings for player
+        const player_rings_ids = yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map(r => r.loc.index);
 
         // prepare ring cores objects and refresh canvas
         update_ring_highlights(player_rings_ids);
@@ -1212,12 +1232,12 @@ async function text_exec_from_ui_handler(){
             // RINGS
             await Promise.all(_syn_RINGS_moves_prom_array);
             yinsh.objs.rings = [];
-            yinsh.local_server_data_ref.rings = [];
+            yinsh.local_server_data.rings = [];
         
             // MARKERS
             await Promise.all(_syn_MARKERS_moves_prom_array);
             yinsh.objs.markers = [];
-            yinsh.local_server_data_ref.markers = [];
+            yinsh.local_server_data.markers = [];
 
         // handle scoring slots - draw them more transparent over time and then delete them
             
@@ -1353,12 +1373,12 @@ async function win_animation() {
             // RINGS
             await Promise.all(_syn_RINGS_moves_prom_array);
             yinsh.objs.rings = [];
-            yinsh.local_server_data_ref.rings = [];
+            yinsh.local_server_data.rings = [];
         
             // MARKERS
             await Promise.all(_syn_MARKERS_moves_prom_array);
             yinsh.objs.markers = [];
-            yinsh.local_server_data_ref.markers = [];
+            yinsh.local_server_data.markers = [];
 
         // handle scoring slots - draw them more transparent over time and then delete them
             

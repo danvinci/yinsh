@@ -569,12 +569,15 @@ function draw_markers_halos(){
         // can paint hot/cold dynamically, for each specific halo's properties
         for(const mk_halo of _mk_halos){
 
+            let h_path = new Path2D()
+                h_path.arc(mk_halo.x, mk_halo.y, S*0.33, 0, 2*Math.PI);
+
             if (mk_halo.hot == true) {
                 ctx.strokeStyle = hot_color;
-                ctx.stroke(mk_halo.path); 
+                ctx.stroke(h_path); 
             } else {
                 ctx.strokeStyle = cold_color;
-                ctx.stroke(mk_halo.path); 
+                ctx.stroke(h_path); 
             };
             
         };        
