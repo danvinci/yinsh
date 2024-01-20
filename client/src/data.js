@@ -38,6 +38,7 @@ function init_const_parameters(){
     _params.marker_id =  "M";
     _params.player_black_id = "B";
     _params.player_white_id = "W";
+    _params.winning_score = 3; // set for now, can/should be altered with server payload in quick game mode
 
 
         // matrix of active points on the grid
@@ -71,6 +72,12 @@ function init_const_parameters(){
     yinsh.constant_params = structuredClone(_params);
     console.log('LOG - Constant params set');
 
+};
+
+
+export function get_winning_score(){
+
+    return yinsh.constant_params.winning_score;
 };
 
 export function init_game_objs(){
@@ -171,19 +178,20 @@ export function init_empty_game_objects(){
         _game_objects.current_turn = {in_progress: false}; // to track if this is the client's turn 
 
         _game_objects.preMove_scoring_actions = []; // save details in case pre-move scoring took place
+        _game_objects.move_action = {in_progress: false, start_index: -1, end_index: -1, legal_drops: []}; // -> details for move in progress or just done
         _game_objects.scoring_actions = []; // save details in case scoring took place
        
-        _game_objects.current_move = {in_progress: false, start_index: 0, legal_drops: []}; // -> details for move currently in progress 
         _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal drops ids)
         
         _game_objects.current_mk_scoring = {in_progress: false, task_ref: {}}; // referencing task of general score handling
         _game_objects.current_ring_scoring = {in_progress: false, task_ref: {}}; // referencing task of ring picking within score handling
         _game_objects.current_animation = {in_progress: false, task_ref: {}}; // task for tracking animations and prevent game resets from UI (only supports 1 task/time)
+
         _game_objects.mk_halos = []; // -> halos objects
         _game_objects.ring_highlights = []; // -> highlights for rings
 
-        _game_objects.player_score = 0; // -> player score 
-        _game_objects.opponent_score = 0; // -> opponent score 
+        _game_objects.player_score = 0;
+        _game_objects.opponent_score = 0; 
 
 
     // save to global obj and log
@@ -318,6 +326,8 @@ export function get_preMove_score_op_data(){
 };
 
 
+
+
 // return tree among trees given input, otherwise return the only one
 export function select_apply_scenarioTree(input_s_set, input_s_rings){
 
@@ -387,7 +397,7 @@ export function get_tree(){
 
 // Used by interaction
 export function get_move_status(){
-    return yinsh.objs.current_move.in_progress;
+    return yinsh.objs.move_action.in_progress;
 };
 
 
@@ -444,10 +454,6 @@ export function get_scoring_actions_done(){
     };
 
 };
-
-export function get_current_turn_no(){
-    return yinsh.server_data.turn_no;
-}
 
 // returns scoring options in the task (should be for current player only)
 export function get_scoring_options_fromTask(){
@@ -594,6 +600,10 @@ export function turn_start(){
    console.log(`USER - Turn #${get_current_turn_no()} started`); 
 };
 
+export function get_current_turn_no(){
+    return yinsh.server_data.turn_no;
+}
+
 export function turn_end(){
    yinsh.objs.current_turn.in_progress = false;
    console.log(`USER - Turn completed`);
@@ -715,16 +725,11 @@ export function init_scoring_slots(){
         const s_point_x = _start_BL_point.x + k*1.05*S; // goes rightward
         const s_point_y = _start_BL_point.y; // doesn't change
 
-        // create paths and add them to the global array
-        let slot_path = new Path2D();
-            slot_path.arc(s_point_x, s_point_y, S*0.3, 0, 2*Math.PI);
-
         // score can be 1 -> 3, fill slot accordingly as we go through them
         const _score_flag = local_score >= k ? true : false;
 
         const _bl_slot = {  x: s_point_x, 
                             y: s_point_y,  
-                            path: slot_path,
                             slot_no: k,
                             player: _this_player_slot_name,
                             filled: _score_flag
@@ -741,16 +746,11 @@ export function init_scoring_slots(){
         const s_point_x = _start_TR_point.x - k*1.05*S; // goes leftward
         const s_point_y = _start_TR_point.y; // doesn't change
 
-        // create paths and add them to the global array
-        let slot_path = new Path2D();
-            slot_path.arc(s_point_x, s_point_y, S*0.3, 0, 2*Math.PI);
-
         // score can be 1 -> 3, fill slot accordingly as we go through them (negative)
         const _score_flag = oppon_score >= k ? true : false;
 
         const _tr_slot = {  x: s_point_x, 
                             y: s_point_y, 
-                            path: slot_path,
                             slot_no: k,
                             player: _opponent_slot_name,
                             filled: _score_flag
@@ -806,7 +806,7 @@ function init_legal_moves_cues(){
     yinsh.objs.legal_moves_cues = _legal_moves_cues;
     
     // logs operation
-    console.log('LOG - Visual cues for legal moves initialized');
+    console.log('LOG - Legal moves cues initialized');
 
 }; 
         
@@ -852,7 +852,7 @@ function init_rings(){
         // save rings and log
         yinsh.objs.rings = structuredClone(_rings_array);
         
-        console.log('LOG - Rings initialized & game state updated');
+        console.log('LOG - Rings initialized');
 
     } catch {
         
@@ -904,7 +904,7 @@ function init_markers(){
         // save rings and log
         yinsh.objs.markers = structuredClone(_markers_array);
         
-        console.log('LOG - Markers initialized & game state updated');
+        console.log('LOG - Markers initialized');
 
 
     } catch {
@@ -922,8 +922,8 @@ function init_markers(){
 export function update_legal_cues(){
 
     // retrieves info on active move
-    const move_in_progress = yinsh.objs.current_move.in_progress; // -> true/false
-    const _legal_moves_ids = yinsh.objs.current_move.legal_drops; // -> [11,23,90,etc]
+    const move_in_progress = yinsh.objs.move_action.in_progress; // -> true/false
+    const _legal_moves_ids = yinsh.objs.move_action.legal_drops; // -> [11,23,90,etc]
 
     // retrieves array of visual cues (to be modified)
     let _legal_cues = yinsh.objs.legal_moves_cues
@@ -1090,31 +1090,61 @@ export function updateLoc_last_ring(new_loc){
 
 };
 
-    
-// manipulates global variable ontaining data on current move underway
-export function update_current_move(in_progress = false, start_index = 0){
+
+export function reset_move_action(){
     
     // editable copy
-    let _current_move = structuredClone(yinsh.objs.current_move)
+    let _move_action = structuredClone(yinsh.objs.move_action)
 
-        // reset global variable in case of defaults
-        if(in_progress == false){
-            _current_move.in_progress = false;
-            _current_move.start_index = 0;
-            _current_move.legal_drops = [];
-
-        // save data if different arguments are passed
-        } else if (in_progress == true){
-            _current_move.in_progress = true;
-            _current_move.start_index = start_index;
-            _current_move.legal_drops = getIndexes_legal_drops(start_index);
-
-        };
+            _move_action.in_progress = false;
+            _move_action.start_index = -1;
+            _move_action.end_index = -1;
+            _move_action.legal_drops = [];
 
     // save to global object
-    yinsh.objs.current_move = structuredClone(_current_move);
+    yinsh.objs.move_action = structuredClone(_move_action);
 
 };
+
+   
+// manipulates global variable ontaining data on current move underway
+export function start_move_action(start_index){
+    
+    // editable copy
+    let _move_action = structuredClone(yinsh.objs.move_action)
+       
+        _move_action.in_progress = true;
+        _move_action.start_index = start_index;
+        _move_action.end_index = -1;
+        _move_action.legal_drops = getIndexes_legal_drops(start_index);
+
+     // save to global object
+     yinsh.objs.move_action = structuredClone(_move_action);
+
+};
+
+export function end_move_action(end_index){
+    
+    // editable copy
+    let _move_action = structuredClone(yinsh.objs.move_action)
+       
+        _move_action.in_progress = false;
+        // start_index stays as-is;
+        _move_action.end_index = end_index;
+        _move_action.legal_drops = [];
+
+    // save to global object
+    yinsh.objs.move_action = structuredClone(_move_action);
+
+};
+
+export function get_move_action_done(){
+
+    const _return_obj = structuredClone({start: yinsh.objs.move_action.start_index, end: yinsh.objs.move_action.end_index});
+     
+    return _return_obj;
+};
+
 
 
 // retrieve indexes of legal moves/drops from saved server data

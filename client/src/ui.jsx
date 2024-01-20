@@ -38,12 +38,12 @@ export function UserText() {
       if (event.type === 'new_user_text') {
 
         // add text
-        const _new_text = (userText().length > 0) ? (userText() + "\n" + event.detail) : event.detail
+        const _new_text = (userText().length > 0) ? (userText() + "\n" + "\n" + event.detail) : event.detail;
         set_userText(_new_text);
         
         // scroll text to end
         let txt_div = document.getElementById('user_txt_id');
-        txt_div.scrollTop = txt_div.scrollHeight;
+        txt_div.scrollTop = txt_div.scrollHeight; 
 
       };
 

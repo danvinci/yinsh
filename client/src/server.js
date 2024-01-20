@@ -158,7 +158,7 @@ export async function init_ws () {
             } catch (err) { // if connection doesn't work -> event catched by onError_handler first
 
                 console.log(`LOG - WebSocket - something went wrong during connection`);
-                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: ` < Sorry, the server seems unreachable at the moment >` }));
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` })); 
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
                 reject(err); 
 
@@ -204,7 +204,9 @@ function onError_handler (event) {
 
     console.log(`LOG - Websocket - ERROR`);
     console.log(event);
-    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Server connection error >` })); // inform user
+
+    // inform user and reset game UI
+    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` })); 
     ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
 };
@@ -218,23 +220,16 @@ function onClose_handler (event) {
 ///// HANDLER FOR PUSH MESSAGES FROM SERVER - only events with a specific msg code are handled
 function push_messages_handler(event){
     
-    // see if we have the msg_code field 
-    if ( 'msg_code' in event.detail ) {
+    // see if we have the msg_code field -> advance_game_OK || game_resign_OK
+    if ( 'msg_code' in event.detail  && next_ok_codes.includes(event.detail.msg_code) ) {
 
-        // advance_game_OK -OR- game_resign_OK
-        if ( next_ok_codes.includes(event.detail.msg_code) ) {
-
-             // save server data -> data fn will take care of triggering event for core
-             save_server_response(event.detail);
+        // save server data -> data fn will take care of triggering event for core
+        save_server_response(event.detail);
         
-        } else {
-            console.log("ERROR - msg_code ERROR / NOT RECOGNIZED in msg from server");
-            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
-            ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
-        };
-
     } else {
-        console.log("ERROR - msg_code NOT FOUND in msg from server");
+        console.log("ERROR - msg_code ERROR in msg from server");
+
+        // inform user and reset game UI
         ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
         ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
     };
@@ -255,45 +250,34 @@ export async function server_ws_send(msg_code, msg_payload = {}){
 
         await init_ws(); // ensure connection is up whenever we're about to send something to the server
 
-        try {
+        // prepare message
+        const _msg = {msg_code: msg_code, payload: msg_payload};
 
-            // prepare message
-            const _msg = {msg_code: msg_code, payload: msg_payload};
-    
-            // package message, log it, send it
-            const [msg_time, msg_id] = fwd_outbound(_msg) // used later to recognize response and log times
+        // package message, log it, send it
+        const [msg_time, msg_id] = fwd_outbound(_msg) // used later to recognize response and log times
+        
+        // wait to receive a response -> will get resolved by message handler when we receive a response
+        await msgPromise_lookup(msg_id);
+
+        // check server response
+        const resp_code = messagePromises_log[msg_id].server_response.msg_code
+        if (resp_code == msg_code.concat(sfx_CODE_OK)) { 
+
+            console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
             
-            // wait to receive a response -> will get resolved by message handler when we receive a response
-            await msgPromise_lookup(msg_id);
-    
-            // check server response
-            const resp_code = messagePromises_log[msg_id].server_response.msg_code
-            if (resp_code == msg_code.concat(sfx_CODE_OK)){ 
-    
-                console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
-                
-                // save response, read from log (we already wrote the received message)
-                save_server_response(messagePromises_log[msg_id].server_response);
-    
-            } else if (resp_code == msg_code.concat(sfx_CODE_ERR)) {
-                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
-                ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
-                throw new Error(`ERROR - ${resp_code} - msg ID : ${msg_id}`);
+            // save response, read from log (we already wrote the received message)
+            save_server_response(messagePromises_log[msg_id].server_response);
 
-            } else {
-                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
-                ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
-                throw new Error(`ERROR - Unrecognized response code ${resp_code} - msg ID : ${msg_id}`);
-            };
+        } else if (resp_code == msg_code.concat(sfx_CODE_ERR)) {
 
-        } catch (err) {
-            console.log(err);
+            throw new Error(`ERROR - ${resp_code} - msg ID : ${msg_id}`);
+
+        } else {
+            throw new Error(`ERROR - Unrecognized response code ${resp_code} - msg ID : ${msg_id}`);
         };
 
     } else {
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
-        ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
         throw new Error(`ERROR - ${msg_code} is not a valid code`);
     };  
 };

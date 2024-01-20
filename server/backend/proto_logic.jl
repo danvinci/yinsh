@@ -1093,7 +1093,7 @@ function save_new_clientPkg!(games_log_ref, game_id, _client_pkg)
 end
 
 # ╔═╡ 823ce280-15c4-410f-8216-efad03897282
-function new_gs_only_rows(rows::Vector{Vector{CartesianIndex}}, id_h_row=-1)
+function new_gs_only_rows(rows::Vector{Vector{CartesianIndex}}, h_rows::Union{Set{Int}, Vector{Int}} = Int[])
 
 	gs = fill("", (19,11))
 
@@ -1105,12 +1105,12 @@ function new_gs_only_rows(rows::Vector{Vector{CartesianIndex}}, id_h_row=-1)
 		end
 	end
 
-	if id_h_row != -1 # highlight this row as color of opposite player
-
-		for loc in rows[id_h_row]
-			gs[loc] = "MW"
+	if !isempty(h_rows) # highlight these rows as white
+		for r_id in h_rows
+			for loc in rows[r_id]
+				gs[loc] = "MW"
+			end
 		end
-
 	end
 
 	return gs
@@ -1225,6 +1225,7 @@ Notes:
 
 	# extend each set to 2+ -> use ref to find other rows that can be added 
 	# sets are extended by 1 at each loop
+	
 	while length(base_sets) > 0
 		
 		# prune 
@@ -1283,9 +1284,6 @@ Notes:
 	return scoring_sets
 	
 end
-
-# ╔═╡ c92be6ed-fd32-41f3-8554-5f851a79f0a3
-_rgs = gen_random_gameState(8, 25)
 
 # ╔═╡ 69b9885f-96bd-4f8d-9bde-9ac09521f435
 function search_scores_gs(gs::Matrix{String}, max_sset_d=Dict{Symbol,Int}())::Dict{Symbol, Dict}
@@ -1395,17 +1393,17 @@ ss = search_scores_gs(t_gs)
 # ╔═╡ c3ab8073-165e-4013-99bc-6d32cf9f4514
 t_rows = [ row[:mk_locs] for row in ss[:B][:s_rows] ]
 
-# ╔═╡ b314af4d-87c4-4d91-99fb-c8fdb1cd1595
-@bind h Slider(1:length(t_rows), show_value=true)
+# ╔═╡ 60cb964f-1cd4-4dc4-bb6e-12e4be395fcd
+ssets = discover_scoring_sets(t_rows,3) 
+
+# ╔═╡ ff3b98c0-9546-4738-8b07-b122f0a7a720
+@bind ss_id Slider(1:length(ssets), show_value=true)
 
 # ╔═╡ 5ea1985d-8788-445e-9c8c-f8ebab01ecf6
-f_gs = new_gs_only_rows(t_rows,h);
+f_gs = new_gs_only_rows(t_rows,collect(ssets)[ss_id]);
 
-# ╔═╡ 60cb964f-1cd4-4dc4-bb6e-12e4be395fcd
-discover_scoring_sets(t_rows)
-
-# ╔═╡ 60909cf5-1c6a-4dbc-91d0-acd2d507c450
-search_scores_gs(_rgs, Dict(:W => 1, :B => 2))
+# ╔═╡ 8e621e29-e1dc-4dab-b8ce-e87c564741f0
+collect(ssets)[ss_id]
 
 # ╔═╡ 3d97a528-ccd7-40e8-8f18-c6630eceb708
 #=
@@ -1624,10 +1622,10 @@ function print_gameState(gs, symbols = false)
 
 			# build matrix
 			if j == 1 
-				mm_to_print *= "[" * string(print_val) * ""
+				mm_to_print *= "|" * string(print_val) * ""
 			
 			elseif j == col_m 
-				mm_to_print *= string(print_val) * "] \n"
+				mm_to_print *= string(print_val) * "| \n"
 				
 			else
 				mm_to_print *= string(print_val) * ""
@@ -1635,7 +1633,7 @@ function print_gameState(gs, symbols = false)
 		end
 	end
 
-print(mm_to_print)
+@info mm_to_print
 
 end
 
@@ -1644,9 +1642,6 @@ print_gameState(t_gs, true)
 
 # ╔═╡ 74951f2f-1bc4-4d0f-a2ee-fd6862c6feec
 print_gameState(f_gs, true)
-
-# ╔═╡ 0d79bd4d-032d-43a9-a4e9-1a49f232b649
-print_gameState(_rgs, true)
 
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
@@ -2024,12 +2019,6 @@ function filter_msg_logs_by_gameID(game_id::String)::Array
 
 end
 
-# ╔═╡ 1b301201-86bd-4b3c-bdc3-ea590dc66c6a
-__logs = filter_msg_logs_by_gameID("BT88LB") 
-
-# ╔═╡ 7063a0cc-776d-4245-bf9d-7c3c41e85daf
-__logs[3][:payload][:turn_recap]
-
 # ╔═╡ 276dd93c-05f9-46b1-909c-1d449c07e2b5
 function get_player_score(game_id::String, player_id::String)
 
@@ -2060,9 +2049,6 @@ function edit_player_score!(game_id::String, player_id::String, new_score::Int)
 	end
 
 end
-
-# ╔═╡ f0e69ff9-9388-4a4e-a111-6514faaa373b
-games_log_dict
 
 # ╔═╡ 0193d14a-9e55-42c2-97d6-2a0bef50da1e
 function get_scores_byID(game_id::String)::Dict{String, Int}
@@ -2218,6 +2204,64 @@ _msg_code = msg[:msg_code]
 
 # ╔═╡ 24d9fd2c-4c3b-44ce-9bce-ea54f6d3edd7
 _mmssg = filter(m -> haskey(m, :msg_id) && m[:msg_id]=="lrkxg6jf", ws_messages_log)[1]
+
+# ╔═╡ eb3b3182-2e32-40f8-adf7-062691bf53c6
+function get_first_maxL(set::Set)
+# return first element in set of maximum length 
+
+	if !isempty(set)
+		vec = collect(set)
+		fm_id = findfirst( v -> length(v) == maximum(vec .|> length), vec)
+		return @inbounds vec[fm_id]
+	else
+		throw(error("ERROR - get_first_maxL expects a non-empty input"))		
+	end
+
+end
+
+# ╔═╡ 09c1e858-09ae-44b2-9de7-e73f1b4f188d
+function get_first_maxL(vec::Vector)
+# return first element in array of maximum length
+
+	if !isempty(vec)
+		fm_id = findfirst( v -> length(v) == maximum(vec .|> length), vec)
+		return @inbounds vec[fm_id]
+	else
+		throw(error("ERROR - get_first_maxL expects a non-empty input"))		
+	end
+
+end
+
+# ╔═╡ fa924233-8ada-4289-9249-b6731edab371
+function get_hScoring_sc(tree, ref_sc)::Dict{Symbol, CartesianIndex}
+# explores a tree for the scenarios given in input [ {start, end} ] and finds the first one with the largest scoring possibility, returning its index
+# assumes all scenarios given lead to a score for the PLAYER in the tree
+	
+	try
+
+		h_sset_sizes = fill(0, length(ref_sc))
+		
+		for (i, sc) in enumerate(ref_sc)
+		
+			ssets = tree[sc[:start]][sc[:end]][:scores_avail_player][:s_sets]
+
+			max_ss_size::Int = ssets |> get_first_maxL |> length
+			#@info "max_ss_size for sc $i: $max_ss_size"
+			
+			@inbounds h_sset_sizes[i] = max_ss_size
+		
+		end
+
+		h_sc_index = argmax(h_sset_sizes) # index of sc in ref array 
+
+		return ref_sc[h_sc_index]
+
+	catch
+		throw(error("ERROR in get_hScoring_sc, no scenario found"))
+	end
+
+
+end
 
 # ╔═╡ c6e915be-2853-48ff-a8da-49755b9b1a44
 function setindex_container!(d::Dict, val, key, use_set = false)
@@ -3051,20 +3095,26 @@ function play_turn_server(game_code::String, srv_player_id::String, prev::Int=0)
 
 try
 
+	# logging
 	_time_start::DateTime = now()
+	num_px_moves = 0 # num of possible moves
+	max_i = 0 # moves explored (if server moves)
 
 	# returning value
 	turn_recap = Dict()
 
-#= output format for _turn_recap:
-
-	note: fields only added if valued/done/non-default
+	#= output format for _turn_recap:
 	
-	score_actions_preMove : [ { mk_sel: -1, mk_locs: [], ring_score: -1 } ],
-	move_action: { start: start_move_index, end: drop_loc_index },
-	score_actions: [ { mk_sel: -1, mk_locs: [], ring_score: -1 } ], 
+		note: fields only added if valued/done/non-default
+		
+		score_actions_preMove : [ { mk_sel: -1, mk_locs: [], ring_score: -1 } ],
+		move_action: { start: start_move_index, end: drop_loc_index },
+		score_actions: [ { mk_sel: -1, mk_locs: [], ring_score: -1 } ], 
+	
+	=#
 
-=#
+	# game parameters
+	winning_score = 3 # should be configurable 
 
 	# last game state in srv format
 	ex_gs::Matrix{String} = deepcopy(get_last_srv_gameState(game_code, prev))
@@ -3104,6 +3154,7 @@ try
 
 	### PRE-MOVE
 	# take any preMove scores if available
+	# set discovery function has found only scores set = max distance from score
 	preMove_score_actions = Dict[]
 	move_gs_id = Dict() # to be used later -> pick starting game state and its tree
 	
@@ -3112,8 +3163,8 @@ try
 		# extract data
 		@inbounds pm_scores_info = sim[:scores_preMove_avail]
 
-		# pick random sequence set and log it
-		@inbounds scoring_set_pick::Set{Int} = rand(pm_scores_info[:s_sets])
+		# pick first longeste sequence set and save it
+		@inbounds scoring_set_pick::Set{Int} = get_first_maxL(pm_scores_info[:s_sets])
 		setindex!(move_gs_id, scoring_set_pick, :s_set)
 
 		# rings array to pick from
@@ -3136,11 +3187,8 @@ try
 	
 			# increase score
 			last_srv_score += 1
-
-			# NOTE: check if game is over by score -> break sequence
 			
 		end
-
 
 		# save all moves in turn recap
 		setindex!(turn_recap, preMove_score_actions, :score_actions_preMove)
@@ -3148,7 +3196,19 @@ try
 	end
 
 
-	__pick_txt::String = "" 
+	__pick_txt::String = "no_move" 
+
+	#= NOTE: check if game is over by score or max num of markers
+
+		but, we might have just removed markers when the other player put the 51st marker - so the check on markers, and allowing for opponent to pick a score only if available, should be made before the server plays, and this 'last move' info passed as a parameter
+
+		here we check just for the winning score -> we should have clean ends, without score + move when server wins
+	=#
+	
+	if last_srv_score == winning_score
+		__pick_txt = "pre-move score"
+		@goto complete_turn
+	end
 
 	### MOVE
 
@@ -3175,26 +3235,24 @@ try
 	@inbounds score_opp_sc::Vector{Dict{Symbol, CartesianIndex}} = treepot[:tree_summary][:score_opp_sc]
 
 	## TRY SCORING
+	# prioritize moving actions that result in only a net score for us
+	# among those, pick the scenarios with the longest scoring sequences 
+	# avoid scoring also for the opponent while taking a score or us
+	
 	score_actions = Dict[]
+	
+	net_scoring_sc::Vector{Dict} = setdiff(score_player_sc, score_opp_sc)
 
-	## prioritize moving actions that result in a score
-	# but don't score for the opponent
-	valid_scoring_sc::Vector{Dict} = setdiff(score_player_sc, score_opp_sc)
-
-	# criterias for score pick
-	if !isempty(score_player_sc) && isempty(valid_scoring_sc) 
-		# # no net scoring options -> pick one only if winning move
-		if last_srv_score == 2 # to be made configurable, for quick opt & 2x scores
-			move_action = rand(score_player_sc)
+		if !isempty(net_scoring_sc) # clean
+			move_action = get_hScoring_sc(tree, net_scoring_sc)
+			
+		elseif !isempty(score_player_sc)  # risky
+			move_action = get_hScoring_sc(tree, score_player_sc)
 		end
-	elseif !isempty(valid_scoring_sc)
-		# valid scoring options
-		move_action = rand(valid_scoring_sc)
-	end
+	
 
 		# if we have a scoring move -> save info {mk_locs, ring_score} for replay
 		if !isempty(move_action)
-
 			
 			m_start::CartesianIndex = move_action[:start]
 			m_end::CartesianIndex = move_action[:end]
@@ -3203,8 +3261,8 @@ try
 			@inbounds s_rows = tree[m_start][m_end][:scores_avail_player][:s_rows]
 			@inbounds s_sets = tree[m_start][m_end][:scores_avail_player][:s_sets]
 
-			# pick a random sequence among the sets
-			set_pick::Set{Int} = rand(s_sets)
+			# pick longest sequence among the sets
+			set_pick::Set{Int} = get_first_maxL(s_sets)
 
 			# a ring was moved -> swap start w/ end
 			new_rings_locs::Vector{CartesianIndex} = replace(rings_locs, m_start => m_end)
@@ -3236,8 +3294,6 @@ try
 		end
 
 	## NO SCORING POSSIBLE -> PLACE/FLIP : minimax depth 2
-	len_cm = 0 # num of candidate moves
-	max_i = 0 # moves explored
 	if isempty(move_action) # no move action taken yet 
 
 
@@ -3265,8 +3321,8 @@ try
 		end
 
 		# categorize moves
-		len_cm::Int = px_moves_sc |> length
-		_last_scores = Dict(_W => 0, _B => 0) # should reflect real vs potential 
+		num_px_moves::Int = px_moves_sc |> length
+		_last_scores = Dict(_W => 0, _B => 0) # TODO should reflect real vs potential 
 		for (i, sc) in enumerate(px_moves_sc) 
 
 			max_i::Int = i # keep track of how many scenarios we explore
@@ -3342,26 +3398,26 @@ try
 	end
 
 
-	# save move action in turn recap (one should be always be found)
+	# save move action in turn recap
+	# skipped only when a pre-move score wins the game, as of label below
 	setindex!(turn_recap, move_action, :move_action)
 
-		# logging
-		_runtime::Int = (now() - _time_start).value
-		_expl_rate::Float64 = round(max_i/len_cm*100, digits=2)
-	
-		println("LOG - AI play, $__pick_txt pick - runtime: $(_runtime)ms, expl.rate: $(_expl_rate)%, # sc: $len_cm")
+	@label complete_turn 
+
+	# logging
+	_runtime::Int = (now() - _time_start).value
+	_expl_rate::Int = (num_px_moves == max_i == 0) ? 0 : round(max_i/num_px_moves*100)
+
+	println("LOG - Server turn, $__pick_txt pick - runtime: $(_runtime)ms - expl.rate: $(_expl_rate)% [ $num_px_moves ]")
 	
 	return turn_recap
 
 catch e
 	@error "ERROR during server play, $e"
-	stacktrace(catch_backtrace())
+	#stacktrace(catch_backtrace())
 end
 
 end
-
-# ╔═╡ 0ec27d7a-cea6-4933-bbdc-bf6aaacb94de
-play_turn_server("DG3VIS", "W")
 
 # ╔═╡ e6cc0cf6-617a-4231-826d-63f36d6136a5
 function mark_player_ready!(game_code::String, who::Symbol)
@@ -3504,7 +3560,7 @@ function game_runner(msg)
 				
 			else # AI plays current turn
 				
-				println("SRV - AI plays")
+				println("LOG - Server plays")
 
 				if _end_check[:end_flag] # AI loses by score or human resigned
 
@@ -4396,34 +4452,30 @@ version = "17.4.0+2"
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
 # ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
-# ╠═f1949d12-86eb-4236-b887-b750916d3493
-# ╠═e0368e81-fb5a-4dc4-aebb-130c7fd0a123
+# ╟─f1949d12-86eb-4236-b887-b750916d3493
+# ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╟─57153574-e5ca-4167-814e-2d176baa0de9
 # ╟─1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╠═156c508f-2026-4619-9632-d679ca2cae50
-# ╟─823ce280-15c4-410f-8216-efad03897282
+# ╠═823ce280-15c4-410f-8216-efad03897282
 # ╟─c0c45548-9792-4969-9147-93f09411a71f
 # ╟─dd941045-3b5f-4393-a6ae-b3d1f029a585
 # ╠═8348950a-11cb-4eaa-a639-fcd2b758fb3b
 # ╠═c0881f04-40e5-4108-85e2-f3aca3420513
 # ╠═74951f2f-1bc4-4d0f-a2ee-fd6862c6feec
 # ╠═5ea1985d-8788-445e-9c8c-f8ebab01ecf6
-# ╠═b314af4d-87c4-4d91-99fb-c8fdb1cd1595
+# ╟─8e621e29-e1dc-4dab-b8ce-e87c564741f0
+# ╟─ff3b98c0-9546-4738-8b07-b122f0a7a720
 # ╠═60cb964f-1cd4-4dc4-bb6e-12e4be395fcd
 # ╠═c3ab8073-165e-4013-99bc-6d32cf9f4514
 # ╠═fd1b186d-b042-4e42-97ea-7e2338eaf75c
 # ╟─39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
-# ╠═c92be6ed-fd32-41f3-8554-5f851a79f0a3
-# ╠═0d79bd4d-032d-43a9-a4e9-1a49f232b649
-# ╠═60909cf5-1c6a-4dbc-91d0-acd2d507c450
 # ╟─69b9885f-96bd-4f8d-9bde-9ac09521f435
 # ╠═3d97a528-ccd7-40e8-8f18-c6630eceb708
 # ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
 # ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
 # ╠═0d5558ca-7e01-4ed2-8b37-61649690346a
-# ╠═1b301201-86bd-4b3c-bdc3-ea590dc66c6a
-# ╠═7063a0cc-776d-4245-bf9d-7c3c41e85daf
 # ╠═a27e0adf-aa09-42ee-97f5-ede084a9edc3
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
@@ -4438,8 +4490,8 @@ version = "17.4.0+2"
 # ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
 # ╠═5e5366a9-3086-4210-a037-c56e1374a686
 # ╠═7316a125-3bfe-4bac-babf-4e3db953078b
-# ╠═ca522939-422f-482a-8658-452790c463f6
-# ╠═064496dc-4e23-4242-9e25-a41ddbaf59d1
+# ╟─ca522939-422f-482a-8658-452790c463f6
+# ╟─064496dc-4e23-4242-9e25-a41ddbaf59d1
 # ╟─28ee9310-9b7d-4169-bae4-615e4b2c386e
 # ╟─612a1121-b672-4bc7-9eee-f7989ac27346
 # ╟─a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
@@ -4460,7 +4512,6 @@ version = "17.4.0+2"
 # ╟─5ae493f4-346d-40ce-830f-909ec40de8d0
 # ╟─276dd93c-05f9-46b1-909c-1d449c07e2b5
 # ╟─8797a304-aa98-4ce0-ab0b-759df0256fa7
-# ╠═f0e69ff9-9388-4a4e-a111-6514faaa373b
 # ╠═0193d14a-9e55-42c2-97d6-2a0bef50da1e
 # ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
@@ -4470,11 +4521,13 @@ version = "17.4.0+2"
 # ╟─7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
 # ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
-# ╠═0ec27d7a-cea6-4933-bbdc-bf6aaacb94de
 # ╠═a3b11f4c-6b28-4303-bfe2-66460dda86fe
 # ╠═93d2cb64-36b5-4cb8-9b99-2c6c2ea0a3cf
 # ╠═24d9fd2c-4c3b-44ce-9bce-ea54f6d3edd7
 # ╠═fdb40907-1047-41e5-9d39-3f94b06b91c0
+# ╟─fa924233-8ada-4289-9249-b6731edab371
+# ╟─eb3b3182-2e32-40f8-adf7-062691bf53c6
+# ╟─09c1e858-09ae-44b2-9de7-e73f1b4f188d
 # ╟─c6e915be-2853-48ff-a8da-49755b9b1a44
 # ╟─8e1673fe-5286-43cd-8830-fba353f1cd89
 # ╟─ea7779ea-cd11-4f9e-8022-ff4f370ffddd

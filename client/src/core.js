@@ -6,18 +6,18 @@
 import { server_ws_send, close_ws } from './server.js'
 import { CODE_new_game_human, CODE_new_game_server, CODE_join_game, CODE_advance_game, CODE_resign_game } from './server.js'
 
-import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_game_id, get_player_id } from './data.js'
-import { bind_adapt_canvas, reorder_rings, update_current_move, add_marker, update_legal_cues, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
+import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_game_id, get_player_id, get_winning_score, get_player_score } from './data.js'
+import { start_move_action, end_move_action, get_move_action_done, reset_move_action, update_legal_cues } from './data.js'
+import { bind_adapt_canvas, reorder_rings, add_marker, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
 import { activate_task, get_scoring_options_fromTask, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
 import { preMove_score_op_check, get_preMove_score_op_data, select_apply_scenarioTree  } from './data.js'
 import { delta_replay_check, get_delta, wipe_delta, get_preMove_scoring_actions_done, reset_preMove_scoring_actions, pushTo_preMove_scoring_actions, get_tree } from './data.js'
 import { reset_scoring_actions, pushTo_scoring_actions, get_scoring_actions_done, get_task_status, task_completion } from './data.js'
 
-
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
-import { ringDrop_playS, markersRemoved_player_playS, markersRemoved_oppon_playS, endGame_win_playS, endGame_lose_playS } from './sound.js'
+import { ringDrop_playSound, markersRemoved_player_playSound, markersRemoved_oppon_playSound, endGame_win_playSound, endGame_lose_playSound } from './sound.js'
 
 //////////// GLOBAL DEFINITIONS
 
@@ -76,8 +76,7 @@ export function draw_empty_game_board() {
     // bind and make canvas size match its parent -> redraw everything
     window_resize_handler();
 
-
-    disableInteraction();  // just in case
+    disableInteraction();  // just in case -> when it's to move, other functions take care of enabling it again
 }
 
 // window resizing -> impacts canvas, board, and objects (via drawing constants)
@@ -110,7 +109,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
 
     // wait for any animation in progress to be done
     if (get_task_status('canvas_animation_task')) {
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< New game will start as soon as the animation is over >` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< New game will start soon >` }));
         await task_completion('canvas_animation_task');
     };
     
@@ -168,16 +167,15 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         // ask server what to do -> it will emit event on response
         await server_ws_send(CODE_advance_game, { game_id: get_game_id(), player_id: get_player_id(), turn_recap: false });
 
-    } catch (err){
+    } catch (err) {
 
         // log error
         console.log(`LOG - Game setup ERROR. ${Date.now() - request_start_time}ms`);
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Error while setting up the game` }));
-
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
+        ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
         console.log(err);
-        throw err;
 
     };
 };
@@ -221,27 +219,31 @@ async function server_actions_handler (event) {
         if (preMove_score_op_check()) {
 
             // wait a bit after move_replay is complete
-            await sleep(350);
-
-            // inform user
-            console.log(`USER - Your opponent scored for you!`)
-            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored for you!` }));
+            await sleep(300);
 
             const _player_scores_options = get_preMove_score_op_data();
             
             // handle (multiple) scoring for current player
             [ pm_s_set, pm_s_rings ] = await scoring_handler(_player_scores_options, true);
 
-            // check if game is over or not -> act accordingly
-
         };
 
-        // pick correct scenario tree to move on
-        select_apply_scenarioTree(pm_s_set, pm_s_rings);
+        // check if game is over -> return early
+        if (get_player_score() == get_winning_score()){
+            
+            disableInteraction();
+           
+            await end_turn_wait_opponent();
+        
+        } else { // otherwise enable move
+            
+            // pick correct scenario tree to move on
+            select_apply_scenarioTree(pm_s_set, pm_s_rings);
 
-        // inform user that they should still move
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Make your move` }));
+            // inform user that they should still move
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Make your move` }));
 
+        };
 
     } else if (_next_action == CODE_action_wait) {
 
@@ -269,7 +271,7 @@ async function server_actions_handler (event) {
             if (winning_player == _player_id){
 
                 // play win sound
-                endGame_win_playS();
+                endGame_win_playSound();
 
                 if (win_reason == 'resign') { // winning as the other player resigns
                     ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent resigned. You win! :)` }));
@@ -287,7 +289,7 @@ async function server_actions_handler (event) {
             } else {
 
                 // lose sound
-                endGame_lose_playS();
+                endGame_lose_playSound();
 
                 ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You lose! :(` }));
 
@@ -336,72 +338,95 @@ async function replay_opponent_turn(){
     // only executes if we have delta data
     if (delta_replay_check()) {
 
+        // log points made by opponent
+        let num_opp_preMove_scores = 0;
+        let num_opp_scores = 0;
+
         // activate single task for all the animations
         activate_task(new Task('canvas_animation_task'));
 
-        const delta = get_delta(); // get a copy of the data
+            const delta = get_delta(); // get a copy of the data
 
-        console.log(`USER - Replaying opponent's moves`);
-        console.log(`LOG - Delta: `, delta);
-        // ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent is moving` }));
+            console.log(`USER - Replaying opponent's moves`);
+            // console.log(`LOG - Delta: `, delta);
+            // ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent is moving` }));
 
-        const replay_start_time = Date.now();
+            const replay_start_time = Date.now();
 
-        // any part of the turn is replayed only if we have data about it (server includes data only if actionable)
+            // any part of the turn is replayed only if we have data about it (server includes data only if actionable)
 
-        // replay pre-move scoring 
-        if('scores_preMove_done' in delta) {
+            // replay pre-move scoring 
+            if('scores_preMove_done' in delta) {
 
-            // replay move and increase score (handle scoring slot too)
-            await replay_opponent_scoring(delta.scores_preMove_done);
+                // replay move and increase score (handle scoring slot too)
+                await replay_opponent_scoring(delta.scores_preMove_done);
 
-        };
+                num_opp_preMove_scores = delta.scores_preMove_done.length;
+            };
 
-        // check if game is over -> ? now handled by payload code, but implies full replay -> need to handle server-side first detection of game ending at pre-move score
+            // check if game is over -> ? now handled by payload code, but implies full replay -> need to handle server-side first detection of game ending at pre-move score
 
-        // replay move (mk-add + ring move)
-        if ('move_done' in delta) {
+            // replay move (mk-add + ring move)
+            if ('move_done' in delta) {
 
-            // add opponent's marker
-            await sleep(800);
-            const _added_mk_index = delta.move_done.mk_add.loc; 
-            add_marker(_added_mk_index, true); // -> as opponent
-            refresh_canvas_state();
+                // add opponent's marker
+                await sleep(800);
+                const _added_mk_index = delta.move_done.mk_add.loc; 
+                add_marker(_added_mk_index, true); // -> as opponent
+                refresh_canvas_state();
 
-            // move and drop ring
-            await sleep(800);
-            await replay_ring_move_drop(delta.move_done.ring_move);
-            ringDrop_playS(); 
+                // move and drop ring
+                await sleep(800);
+                await replay_ring_move_drop(delta.move_done.ring_move);
+                ringDrop_playSound(); 
 
-        };
+            };
 
-        // replay flipped markers
-        if ('mk_flip' in delta) {
+            // replay flipped markers
+            if ('mk_flip' in delta) {
 
-            await sleep(150);
-            flip_markers(delta.mk_flip);
-            refresh_canvas_state();
+                await sleep(150);
+                flip_markers(delta.mk_flip);
+                refresh_canvas_state();
 
-        };
+            };
 
-        // replay score
-        if ('scores_done' in delta) {
+            // replay score
+            if ('scores_done' in delta) {
+                await replay_opponent_scoring(delta.scores_done);
 
-            await replay_opponent_scoring(delta.scores_done);
+                num_opp_scores = delta.scores_done.length;
+            };
 
-        };
+            // total replay time
+            const _tot_time = Date.now() - replay_start_time;
 
-        // total replay time
-        const _tot_time = Date.now() - replay_start_time;
+            // log replay done
+            console.log(`LOG - Total replay time: ${_tot_time}ms`);
 
-        // log replay done
-        console.log(`LOG - Total replay time: ${_tot_time}ms`);
-
-        wipe_delta(); // clean up delta data to avoid weird replays at next turn, in case of last move - NOTE: should be prevented server-side
+            wipe_delta(); // clean up delta data to avoid weird replays at next turn, in case of last move - NOTE: should be prevented server-side
 
         // complete task
         complete_task('canvas_animation_task');
 
+        // inform user
+        const num_tot_opp_scores = num_opp_preMove_scores + num_opp_scores;
+        // line below is ugly > reading from next, as data for upcoming turn not swapped yet > if there's delta, there's also next_server_data
+        const num_player_preMove_rows = ('scores_preMove_avail' in yinsh.next_server_data.scenario_trees) ? yinsh.next_server_data.scenario_trees.scores_preMove_avail.s_rows.length : 0; 
+
+        if (num_tot_opp_scores > 0) {
+
+            let comm_string = (num_tot_opp_scores > 1) ? `Your opponent scored ${num_tot_opp_scores} points` : `Your opponent scored`;
+
+            if (num_player_preMove_rows > 0) {
+
+                comm_string += (num_player_preMove_rows > 1) ? `, but also formed rows for you` : `, but also formed a row for you`;
+            };
+
+            console.log(`USER - ${comm_string}`)
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: comm_string }));
+
+        };
 
     } else {
         console.log(`LOG - No delta to replay`);
@@ -434,7 +459,7 @@ async function replay_opponent_scoring(score_actions_array){
             update_mk_halos(); // turn off markers highlight
             refresh_canvas_state(); // materialize changes on canvas
     
-            markersRemoved_oppon_playS(); // play sound
+            markersRemoved_oppon_playSound(); // play sound
     
         //// RING SCORING
             await sleep(_score_ring_wait);
@@ -466,14 +491,6 @@ async function replay_opponent_scoring(score_actions_array){
 
     };
 
-    // txt for user
-    const num_scores = score_actions_array.length;
-    if (num_scores > 1){
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored ${num_scores} points!` }));
-    } else {
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent scored!` }));
-    };
-
 };
 
 // update current/next data -> reinit/redraw everything (on-canvas nothing should change)
@@ -487,6 +504,7 @@ function prep_next_turn(_turn_no){
         
         // -> set variables clean to avoid sending bad data to the server -> ghost replays on the other side, as they're sent in each move-end payload
         reset_preMove_scoring_actions(); 
+        reset_move_action();
         reset_scoring_actions();
         
         refresh_canvas_state(); 
@@ -554,7 +572,7 @@ function ringPicked_handler (event) {
     reorder_rings(index_picked_ring_in_array);
 
     // write start of the currently active move to a global variable
-    update_current_move(true, picked_ring_loc_index);
+    start_move_action(picked_ring_loc_index);
 
     // place marker in same location (it's assumed this player)
     add_marker(picked_ring_loc_index);
@@ -632,17 +650,16 @@ async function ringDrop_handler (event) {
     const snap_drop_loc = event.detail;
 
     // retrieves ids of legal drops for the ring that was picked up
-    const _current_legal_drops = yinsh.objs.current_move.legal_drops;
-    const player_id = get_player_id();
+    const _current_legal_drops = yinsh.objs.move_action.legal_drops;
 
     // save move starting index
-    const start_move_index = yinsh.objs.current_move.start_index;
+    const start_move_index = get_move_action_done().start;
 
     // retrieve ring and its index details (last)
     const dropping_ring = yinsh.objs.rings.at(-1);
     
     // retrieve index of drop location
-    const drop_loc_index = snap_drop_loc.index
+    const drop_loc_index = structuredClone(snap_drop_loc.index);
 
     // check if drop coordinates belong to possible moves or dropped in-place
     if (_current_legal_drops.includes(drop_loc_index) || drop_loc_index == start_move_index){
@@ -650,21 +667,23 @@ async function ringDrop_handler (event) {
         // drops ring -> update ring loc information 
         updateLoc_last_ring(snap_drop_loc);
 
-        // resets data for current move (move is complete/off)
-        update_current_move(); // -> important to close the move to prevent side effects
+        // // -> important to close the move to prevent side effects when it comes to visual cues
+        end_move_action(drop_loc_index); 
         
         // updates legal cues (all will be turned off as move is no longer in progress)
         update_legal_cues();
 
         // re-draw everything and play sound
         refresh_canvas_state(); 
-        ringDrop_playS(); 
+        ringDrop_playSound(); 
 
         // logging
         console.log(`LOG - Ring ${dropping_ring.player} moved to index ${drop_loc_index}`);
 
         // CASE: same location drop, nothing to flip, remove added marker
         if (drop_loc_index == start_move_index){
+
+            reset_move_action(); // wipe move data if same-loc drop, won't be used
 
             // remove marker (only touches marker if in location, doesn't touch ring data)
             remove_markers([drop_loc_index]);
@@ -691,25 +710,32 @@ async function ringDrop_handler (event) {
 
             // CASE: scoring was made -> score handling is triggered
 
-                const f_score_av_player = 'scores_avail_player' in move_scenario;
-                const f_score_av_opp = 'scores_avail_opp' in move_scenario;
+            const f_score_av_player = 'scores_avail_player' in move_scenario;
+            const f_score_av_opp = 'scores_avail_opp' in move_scenario;
 
-                // communications towards the user
-                // own score vs combined score vs scored for the opponent
-                if (f_score_av_player && !f_score_av_opp) {
-                    console.log("USER - You scored!");
-                    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You scored!` }));
+            // communications towards the user if we have a some outcome | own score vs also scored for the opponent
+            if (f_score_av_player || f_score_av_opp) {
 
-                } else if (f_score_av_player && f_score_av_opp) {
-                    console.log("USER - You scored for both!");
-                    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You scored for both you and your opponent!` }));
+                let comm_string = ``;
+
+                    if (f_score_av_player) { // scored
+
+                        comm_string = `You scored`;
+
+                        if (f_score_av_opp) { // but also formed row(s) for the opponent
+                            comm_string += (move_scenario.scores_avail_opp.s_rows.length > 1) ? `, but also formed rows for your opponent` : `, but also formed a row for your opponent`;
+                        };
+    
+                    } else if (f_score_av_opp) { // only formed row(s) for the opponent
+                        comm_string += (move_scenario.scores_avail_opp.s_rows.length > 1) ? `You formed rows for your opponent` : `You formed a row for your opponent`;        
+                    };
+
+                console.log(`USER - ${comm_string}`);
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: comm_string }));
                 
-                } else if (f_score_av_opp) {
-                    console.log("USER - Oh no, you scored for your opponent!");
-                    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Oh no, you scored for your opponent!` }));
-                };
+            };
 
-            // HANDLE MULTIPLE SCORING
+            // HANDLE (MULTIPLE) SCORING
             if (f_score_av_player){
 
                 // retrieve scoring information for player
@@ -719,18 +745,8 @@ async function ringDrop_handler (event) {
 
             };
 
-            const _played_turn_no = get_current_turn_no();
-            console.log(`LOG - Completed player turn no: ${_played_turn_no}`);
-
-            // turn completed -> wrap up info to send back on actions taken by player
-            const turn_recap = {    score_actions_preMove : get_preMove_scoring_actions_done(), // this happened at the beginning of the turn, in case, without ring_drop involved
-                                    move_action: { start: start_move_index, end: drop_loc_index },
-                                    score_actions: get_scoring_actions_done(), // defaults to -1
-                                    completed_turn_no: _played_turn_no
-                                }; 
-
-            // turn completed -> notify server with info on scenario
-            await end_turn_wait_opponent(turn_recap);
+            // TURN COMPLETED -> notify server with info on what happened in the turn
+            await end_turn_wait_opponent();
         
         };
 
@@ -748,23 +764,42 @@ async function ringDrop_handler (event) {
 
 
 // can be called from different points to terminate turn
-async function end_turn_wait_opponent(turn_recap) {
+async function end_turn_wait_opponent() {
 
+    // turn completed -> wrap up info to send back on actions taken by player
+    const turn_recap_info = {   score_actions_preMove : get_preMove_scoring_actions_done(), 
+                                move_action: get_move_action_done(),
+                                score_actions: get_scoring_actions_done(), 
+                                completed_turn_no: get_current_turn_no() 
+                            }; 
+
+    console.log(`LOG - Completed player turn no: ${get_current_turn_no()}`);
+    
     turn_end(); // local turn ends
 
-    disableInteraction();
+    // prep msg payload
+    let msg_payload = {};
+    msg_payload.turn_recap = turn_recap_info;
+    msg_payload.game_id = get_game_id();
+    msg_payload.player_id = get_player_id();
 
-    let msg_payload = {}
+    // notify server about completed turn
+    try{
+        
+        
+        await server_ws_send(CODE_advance_game, msg_payload); 
 
-        // add fields to the msg payload
-        msg_payload.turn_recap = turn_recap;
-        msg_payload.game_id = get_game_id();
-        msg_payload.player_id = get_player_id();
+    } catch(err) {
 
-    // -> notify server about completed move (next turn)
-    await server_ws_send(CODE_advance_game, msg_payload); 
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
+        ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
+        console.log(err);
+    };
+   
 };
+
+
 
 // wrapper around splice for easier array manipulation
 // modifies array in-place if v is found, otherwise left as-is 
@@ -802,7 +837,7 @@ function active_scoring_rows(s_rows, s_sets_obj, row_id) {
 
         console.log(`TEST - new w_s_sets: `, sets_vec);
 
-        // take unique rows ids across all valid sets, and shift row ids by one
+        // take unique rows ids across all valid sets, and get 0-based index of matching rows
         const rows_ids = [ ...new Set(sets_vec.flat()) ].map(k => k - 1); 
 
         // retrieve scoring rows data by id
@@ -871,8 +906,11 @@ async function scoring_handler(player_scoring_ops, pre_move = false){
             core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
 
             // user communications
-            console.log("USER - Pick a marker to indicate the row!");
-            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Pick a row of markers` }));
+            if (active_rows.length > 1){
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Pick a row of markers` }));
+            } else {
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Pick the row of markers` }));
+            }
 
             [ _mk_sel_pick, _mk_locs_removed ]= await mk_scoring.promise // wait for mk to be picked -> return value of loc_id
 
@@ -917,7 +955,7 @@ async function scoring_handler(player_scoring_ops, pre_move = false){
         if (active_rows.length == 0){
             done_flag = true; // -> exit loop
         } else {
-            await sleep(250); // -> wait before turning on new rows
+            await sleep(200); // -> wait before turning on new rows
         };
 
     };
@@ -965,7 +1003,7 @@ function mk_scoring_options_handler(event){
             refresh_canvas_state();
 
             // play sound
-            markersRemoved_player_playS();
+            markersRemoved_player_playSound();
 
             // complete score handling task (success)
             const success_msg = [mk_sel_picked_id, _mk_row_to_remove]; // value to be returned by completed task (mk_sel marker + mk_locs removed)
@@ -1118,7 +1156,7 @@ async function text_exec_from_ui_handler(){
         
         disableInteraction();
 
-        endGame_win_playS();
+        endGame_win_playSound();
 
         await sleep(150);
 
@@ -1259,7 +1297,7 @@ async function win_animation() {
         
         disableInteraction();
 
-        endGame_win_playS();
+        endGame_win_playSound();
 
         await sleep(250);
 
@@ -1392,7 +1430,7 @@ export async function game_exit_handler(event){
 
     // wait for any animation in progress to be done
     if (get_task_status('canvas_animation_task')) {
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Game will be over as the animation ends >` }));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Game will be over soon >` }));
         await task_completion('canvas_animation_task');
     };
 
@@ -1401,13 +1439,23 @@ export async function game_exit_handler(event){
 
     // notify server (game is lost automatically) --> other user is informed by server
     // note: we're keeping turn_recap here to avoid handling exceptions inside the server game_runner -> to be fixed
-    const _resign_msg_payload = { game_id: get_game_id(), player_id: get_player_id(), turn_recap: false }; 
-    await server_ws_send(CODE_resign_game, _resign_msg_payload); // server will acknowledge
-
-    // we receive formal 'you lost' response from server, handled by next_action_handler
-    // we should handle if/when communication w/ server fails, (eg. websocket timeout) so we trigger the game ending anyway and UI can be reset
+    const _resign_msg_payload = { game_id: get_game_id(), player_id: get_player_id(), turn_recap: false };
     
-    // force close WS connection to minimize surprises on either end
+    try {
+
+        // we receive formal 'you lost' response from server, handled by next_action_handler
+        await server_ws_send(CODE_resign_game, _resign_msg_payload); // server will acknowledge
+
+    } catch(err) {
+
+        // we handle if/when communication w/ server fails, (eg. websocket timeout) so we trigger the game ending anyway and UI can be reset
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Sorry, something went wrong >` }));
+        ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
+
+        console.log(err);
+    };
+    
+    // force close WS connection to avoid surprises on either end 
     close_ws();
 };
 

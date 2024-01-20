@@ -273,7 +273,10 @@ function draw_scoring_slots(alpha_param = 1){
     const _local_player = "this_player";
     const _oppon_player = "opponent";
 
+    // same drawing params as rings for empty slots
     const S = yinsh.drawing_params.S;
+    const inner = S*0.38;
+    const ring_lineWidth = inner/3;
 
     // ref color
     const _empty_score_color = "#d3dbf0";
@@ -285,10 +288,15 @@ function draw_scoring_slots(alpha_param = 1){
             // drawing
             ctx.save();
 
-                ctx.globalAlpha = 0.16*alpha_param; 
-                ctx.fillStyle = _empty_score_color;
+                // create paths and add them to the global array
+                let slot_path = new Path2D();
+                slot_path.arc(slot.x, slot.y, inner, 0, 2*Math.PI);
 
-                ctx.fill(slot.path);
+                ctx.globalAlpha = 0.15*alpha_param; 
+                ctx.lineWidth = ring_lineWidth;   
+                ctx.strokeStyle = _empty_score_color;
+
+                ctx.stroke(slot_path);
 
             ctx.restore();
 
