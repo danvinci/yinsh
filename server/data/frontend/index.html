@@ -2,11 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv = "Content-Security-Policy" content="default-src 'self'; script-src 'self' *.cloudflareinsights.com; connect-src 'self' wss://yinsh.net/api ; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com">
+    <meta http-equiv = "Content-Security-Policy" content="default-src 'self'; script-src 'self' *.cloudflareinsights.com 'unsafe-inline'; connect-src 'self' wss://yinsh.net/api ; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com">
     
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
-    <link rel="shortcut icon" type="image/ico" href="/assets/favicon-0e726a38.ico" />
+    <link rel="shortcut icon" type="image/ico" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAg1QTFRFAAAAP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtPrDtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP6/tP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtP7DtMC+MxwAAAK90Uk5TAAUSCj+pzW0cALD1//3UaR8PhuD27Nz+97wzGW/r8YcVryFR06VAAXvtIB0JRc78SAhOxPMAKZrf430aAlSz+PK6Rw4ljtcWiAY92PSkJG5WeOgoeZ/Dme7PXBs0+mwTrgQ7kftoIj69ZBHRtO9nC1OBLQdXDDyyu1JJj+nWZg1GuFsD59pyJpDmEAH5xsuJnsWT0jKmFEObWnbVo6xq0K0s26Be4ajelRc56mOYwp1/C+AAAAICSURBVHicY2AgETAy4ZVmZmFlY+fgxC3Nxc3Dw8vHL4BdXlBImEdElEdMXEJSCou0tIwsj5y8giKPkrIKj7iqmjqqNIeGJo+chhYDgyKPNoOOrh6PPpcBkrShkbGJibGRIQNEAYOpmbmFvqWVtQ3UZ7Z29g6OTs5gDlgBA4ONi6sYj5u8O1jMnY+Hx8MaahhUAQODp5cmD68yxHnePDw+vn6oCpj9VXh4eAJgCgKDeHwUgxEKmEO8eXhDwxAK3NXCI8Qjo6I5Ib6IYeWODYuLT0AoYGJITEoWTeFLBYZDWjqXZkpGZhYDA4oCBgZ1qWzxFD4xnpxcHom8fFB8oCkABkcB0D88PA4eLhAHYyhgcC4UASrIKGLArqC4JJInRYQngsfEXBqLgtKycnv7ikpHnqrqGp7aOiV1VAX1DY1y9jlN9SBvNksJtfC2tvkhK2jv6OQR8eiCBVR3pTdvT28ZkgIfHk0rbeSgZjTo4+HhRijg6Y/GiKx0TVhc1E8Q5ZmYx4SqgNFrkkjK5BiIoM6UqT4pE2WmIRQwTp+RK64309oUai6DzqzZPLxzBNShCjzjangc5rYzIAOdefN5JBYsBClwDlzE47A4jQEd2CxZKi6yjI3HYzlP7IqVphjyQBWrOlbzxPJI9FSsEcQiDQLNMWtb7NcBwxM3UF9YUIpHGhsAAGM3cTFD2j6TAAAAAElFTkSuQmCC" />
     
 
     <!-- preloading sounds -->
@@ -20,11 +20,15 @@
       </audio> 
 
       <audio preload="auto" id="score_opponent">
-        <source src="/assets/_alt_score_opponent-a8857722.mp3" type="audio/mp3">
+        <source src="/assets/score_opponent-a8857722.mp3" type="audio/mp3">
       </audio> 
 
       <audio preload="auto" id="end_game_win">
-        <source src="/assets/end_game_win_edited-6e68ed6c.wav" type="audio/wav">
+        <source src="/assets/end_game_win-33be59d6.wav" type="audio/wav">
+      </audio>
+
+      <audio preload="auto" id="end_game_draw">
+        <source src="/assets/end_game_draw-ed2f0b62.wav" type="audio/wav">
       </audio>
 
       <audio preload="auto" id="end_game_lose">
@@ -34,32 +38,39 @@
     <!---->
 
     <title>YINSH</title>
-    <script type="module" crossorigin src="/assets/index-11af7723.js"></script>
-    <link rel="stylesheet" href="/assets/index-4ccb671a.css">
+    <script type="module" crossorigin src="/assets/index-42b4afa5.js"></script>
+    <link rel="stylesheet" href="/assets/index-a16a85da.css">
   </head>
   <body>
 
     <noscript>Please enable JavaScript to run this app.</noscript>
+    <script>let FF_FOUC_FIX;</script> <!-- workaround for Firefox FOUC issue - https://stackoverflow.com/questions/21147149/flash-of-unstyled-content-fouc-in-firefox-only-is-ff-slow-renderer -->
     <header>
       <div>
         <p class="header_title">YINSH</p>
       </div>
       <div class="header_menu">
 
+        <!-- icons repo: https://www.svgrepo.com/collection/codicons-coding-icons/ -->
+        <!-- info on svg handling: https://css-tricks.com/scale-svg/ -->
+
         <!-- fixing height/width for svg necessary to avoid size-adj on load 800px -> normal -->
 
-        <a class="header_link" href="https://en.wikipedia.org/wiki/YINSH#Rules" target="_blank">
-          <img class="header_link_img" src="/assets/ico_rules-01731d67.svg"  height="18px" width="18px">
+        <a class="header_link" href="http://www.gipf.com/yinsh/rules/rules.html" target="_blank">
+          <img class="header_link_img header_rules" src="/assets/library-49fd24cf.svg"  height="18px" width="18px">
           <span class="header_link_text" >Rules</span>
         </a>
 
         <a class="header_link" href="https://github.com/danvinci/yinsh/" target="_blank">
-          <img class="header_link_img" src="/assets/ico_github-03301e36.svg" height="18px" width="18px">
+          <img class="header_link_img header_github" src="/assets/ico_github-03301e36.svg" height="18px" width="18px">
           <span class="header_link_text">GitHub</span>
-
-          <!-- icons repo: https://www.svgrepo.com/collection/codicons-coding-icons/ -->
-          <!-- info on svg handling: https://css-tricks.com/scale-svg/ -->
         </a>
+
+        <a class="header_link" href="https://www.buymeacoffee.com/danvinci" target="_blank">
+          <img class="header_link_img header_donate" src="/assets/ext-fff37028.svg"  height="18px" width="18px">
+          <span class="header_link_text">Donate</span>
+        </a>
+
       </div>
     </header>
 
