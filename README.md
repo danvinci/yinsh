@@ -8,13 +8,14 @@ When I started working on this project, I wanted to challenge myself in building
 
 ### Game rules
 - The game starts with 5 rings placed by each player.
-- Once all rings are placed, each player, in their own turn, can activate one of their rings by placing a same-color marker in it.
-- An activated ring can only move in straight lines.
+- Each player, in their own turn, can activate one of their rings by placing a same-color marker in it.
+- An activated ring can the be moved, but only in straight lines.
 - Rings can't move over other rings.
 - Rings can move over markers, but must stop at the first empty slot right after.
 - Once a ring is placed, all the hovered markers flip - changing their color.
-- If a player gets five markers in a row of their color, they can remove them as well as one of their rings to mark their score.
+- If a player gets five markers in a row of their color, they can remove them - as well as one of their rings to mark the score.
 - The first to recover three rings wins - or just one ring in the 'quick version' variant of the game.
+- More details can be found on the [rules webpage](https://www.gipf.com/yinsh/rules/rules.html) from the game inventor.
 
 &nbsp;
 
