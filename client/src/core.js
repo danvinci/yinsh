@@ -17,7 +17,7 @@ import { reset_scoring_actions, pushTo_scoring_actions, get_scoring_actions_done
 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
-import { ringDrop_playSound, markersRemoved_player_playSound, markersRemoved_oppon_playSound, endGame_win_playSound, endGame_lose_playSound } from './sound.js'
+import { ringDrop_playSound, markersRemoved_player_playSound, markersRemoved_oppon_playSound, endGame_win_playSound, endGame_draw_playSound, endGame_lose_playSound } from './sound.js'
 
 //////////// GLOBAL DEFINITIONS
 
@@ -130,7 +130,8 @@ export async function init_game_fromServer(originator = false, joiner = false, g
 
     // wait for any animation in progress to be done
     if (get_task_status('canvas_animation_task')) {
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< New game will start soon >` }));
+        ui_et.dispatchEvent(new CustomEvent('reset_dialog'));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< A new game will start as the animation ends >` }));
         await task_completion('canvas_animation_task');
     };
     
@@ -218,7 +219,6 @@ async function server_actions_handler (event) {
             // hide game setup controls in the first turns in which the player moves (can be either 1 or 3)
             if (get_current_turn_no() <= 3) {
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_in_progress` }));
-                //console.log("LOG - Hiding game controls on first playable turns");
             };
 
             // replay whole turn by opponent (if we have delta data)
@@ -280,45 +280,69 @@ async function server_actions_handler (event) {
 
         disableInteraction(); 
 
+        close_ws(); // disconnect from server
+
         // replay turn by opponent (if we have delta data)
         await replay_opponent_turn();
+        await sleep(700);
         refresh_canvas_state(); 
 
         const winning_player = event.detail.won_by;
-        const win_reason = event.detail.won_why;
+        const outcome = event.detail.outcome;
         const _player_id = get_player_id();
 
-            // local player wins 
-            if (winning_player == _player_id){
+        let user_comm_txt = "";
+
+            if (winning_player == _player_id){ // local player wins 
 
                 // play win sound
                 endGame_win_playSound();
 
-                if (win_reason == 'resign') { // winning as the other player resigns
-                    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Your opponent resigned. You win! :)` }));
-                } else { // winning by score
-                    ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You win! :)` }));
+                if (outcome == 'resign') { // winning as the other player resigns
+                    user_comm_txt = `Your opponent resigned. You win! :)`;
+
+                } else if (outcome == 'score') { // winning by score
+                    user_comm_txt = `You win! :)`;
+
+                } else if (outcome == 'mk_limit_score') {
+                    user_comm_txt = `All markers placed. You win! :)`;
                 };
 
-                // reset UI
-                ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt })); // inform user
+                ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` })); // reset UI
 
                 // trigger winning animation 
                 await win_animation(); 
 
-            // opponent wins
-            } else {
+            } else if (winning_player == '') {  // nobody won, it's a draw
 
-                // lose sound
+                endGame_draw_playSound();
+
+                user_comm_txt = `All markers placed. It's a draw! :|`;
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt }));
+                ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
+
+
+            } else { // opponent wins
+
                 endGame_lose_playSound();
 
-                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You lose! :(` }));
+                if (outcome == 'resign') { // winning as the other player resigns
+                    user_comm_txt = `You resigned and lost! :(`;
 
-                // reset UI
+                } else if (outcome == 'score') { // winning by score
+                    user_comm_txt = `You lose! :(`;
+
+                } else if (outcome == 'mk_limit_score') {
+                    user_comm_txt = `All markers placed. You lose! :(`;
+                };
+
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt }));
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
+
+                // lose animation ? -> 
             };
 
-        // NOTE -> force disconnect from server here, to prevent additional messages -> idea: disconnect on END message?
         
         console.log("LOG - GAME COMPLETED");
 
@@ -391,13 +415,13 @@ async function replay_opponent_turn(){
             if ('move_done' in delta) {
 
                 // add opponent's marker
-                await sleep(800);
+                await sleep(700);
                 const _added_mk_index = delta.move_done.mk_add.loc; 
                 add_marker(_added_mk_index, true); // -> as opponent
                 refresh_canvas_state();
 
                 // move and drop ring
-                await sleep(800);
+                await sleep(650);
                 await replay_ring_move_drop(delta.move_done.ring_move);
                 ringDrop_playSound(); 
 
@@ -1450,7 +1474,8 @@ export async function game_exit_handler(event){
 
     // wait for any animation in progress to be done
     if (get_task_status('canvas_animation_task')) {
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< Game will be over soon >` }));
+        ui_et.dispatchEvent(new CustomEvent('reset_dialog'));
+        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `< You resigned >` })); // acknowledging the user action even if the animation is on
         await task_completion('canvas_animation_task');
     };
 

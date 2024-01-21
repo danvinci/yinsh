@@ -377,6 +377,7 @@ function draw_rings(ring_spec = {}){
                     // linewidhts and radiuses for inner/outer-border
                     // in theory the borders should be contained within the main linewidht (drawn on top the radius)
                     // but in practice it's better drawing so that half border width goes beyond the main linewidth (for the white)
+                    // can be tested by overlap with black ring: especially on Chrome, you notice a non-clean overlap
                     const border_lineWidth = ring_lineWidth/10; 
                     const radius_inner_border = inner - ring_lineWidth/2; //+ border_lineWidth/2;
                     const radius_outer_border = inner + ring_lineWidth/2; //- border_lineWidth/2;

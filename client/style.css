@@ -131,11 +131,12 @@ body, html {
                     margin-bottom: 8px;
                     border-radius: 8px;
                 
-                    height: 80px;
+                    height: 65px;
                     
                     font-size: small;
                     white-space: pre-wrap;
                     overflow-y: scroll;
+                    line-height: 0.95;
 
                     font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
 

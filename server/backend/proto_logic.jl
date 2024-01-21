@@ -2094,93 +2094,110 @@ function get_last_moving_player(game_code)
 
 end
 
-# ╔═╡ 7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
-function is_game_over_by_score(game_id::String)::Dict
-# checks if one of the players scored 3
+# ╔═╡ 3da6325b-ea20-4faf-a3fb-ec05af8b53d8
+rand(games_log_dict)
 
-	ret = Dict(:end_flag => false, :won_by => :undef, :won_why => :score)
+# ╔═╡ 82f88f5d-d005-4f21-82ac-d37e831d8670
+get_scores_byID("WIOXXY")
 
-	_orig_player_sk = :orig_player_score
-	_join_player_sk = :join_player_score
+# ╔═╡ cb8ffb39-073d-4f2b-9df4-53febcf3ca99
+function get_resignedStatus_byID(game_id::String)::Dict{String, Bool}
+# returns {"B" => false/true, "W" => false/true}
+	
+	try
+		
+		orig_player_status = games_log_dict[game_id][:players][:orig_player_status] 
+		join_player_status = games_log_dict[game_id][:players][:join_player_status]
 
-	_orig_score = games_log_dict[game_id][:players][_orig_player_sk] 
-	_join_score = games_log_dict[game_id][:players][_join_player_sk] 
+		orig_p_resigned = orig_player_status == :resigned ? true : false
+		join_p_resigned = orig_player_status == :resigned ? true : false
 
-	if _orig_score == 3
-		ret[:end_flag] = true
-		ret[:won_by] = games_log_dict[game_id][:identity][:orig_player_id]
+		orig_player_id = games_log_dict[game_id][:identity][:orig_player_id]
 
-	elseif _join_score == 3
-		ret[:end_flag] = true
-		ret[:won_by] = games_log_dict[game_id][:identity][:join_player_id]
+		B_resigned = orig_player_id == _B ? orig_p_resigned : join_p_resigned
+		W_resigned = orig_player_id == _W ? orig_p_resigned : join_p_resigned
+		
+		return Dict(_W => W_resigned, _B => B_resigned)
+		
+	catch e
+		throw(error("ERROR - while retrieving player status for game $game_id $e"))
 	end
-
-	return ret
 
 end
 
-# ╔═╡ 42e4b611-abe4-41c4-8f92-ea39bb928122
-function is_game_over_by_resign(game_id::String)::Dict
-# checks if one of the players abandoned game
-
-	ret = Dict(:end_flag => false, :won_by => :undef, :won_why => :resign)
-
-	_orig_player_sk = :orig_player_status
-	_join_player_sk = :join_player_status
-
-	_orig_status = games_log_dict[game_id][:players][_orig_player_sk] 
-	_join_status = games_log_dict[game_id][:players][_join_player_sk] 
-
-	if _orig_status == :resigned
-		ret[:end_flag] = true
-		ret[:won_by] = games_log_dict[game_id][:identity][:join_player_id]
-
-	elseif _join_status == :resigned
-		ret[:end_flag] = true
-		ret[:won_by] = games_log_dict[game_id][:identity][:orig_player_id]
-	end
-
-	return ret
-
-end
+# ╔═╡ b6a979e0-f7b3-4043-ace0-7a122f199f64
+get_resignedStatus_byID("WIOXXY")
 
 # ╔═╡ 20a8fbe0-5840-4a70-be33-b4103df291a1
-function update_game_end!(game_id::String)::Dict
-# checks if game is over or not, either by scoring or resign by one of the players
-# marks reason in game log - who won, reason (score vs resign), and end time 
+function check_update_game_end!(game_id::String)::Dict
+# checks if game is over or not, either by scoring, resignation by one of the players, or if the maximum number of markers has been hit (51)
+# if max markers have been hit, checks if someone wins or if it's a draw
+# marks reason in game log - who won/lost (or if it's a draw), reason score vs resign vs markers, and the game end time 
+# outcome can be valued to one of [ score, mk_limit_score, mk_limit_draw, resign ]
+# won_by is B/W unless mk_limit_draw, in which case is left empty
+
+	winning_score = 3 # hardcoded, can be tied to game_id (-> game mode)
+	ret = Dict(:end_flag => false, :outcome => "", :won_by => "")
+
+	# retrieves scores and resign status
+	scores = get_scores_byID(game_id)
+	resign_status = get_resignedStatus_byID(game_id)
+
+	# check if we are at the limit of markers (51) in last game state
+	gs = get_last_srv_gameState(game_id)
+	f_mks_limit = mks_limit_hit(gs)
 	
-	_def_ret = Dict(:end_flag => false)
+	## HANDLE CASES
 
-	_end_check_by_score = is_game_over_by_score(game_id)
-	_end_check_by_resign = is_game_over_by_resign(game_id)
+	# winning score
+	if (scores[_W] == winning_score || scores[_B] == winning_score)
 
-	if _end_check_by_score[:end_flag] 
-
-		games_log_dict[game_id][:identity][:won_by] = _end_check_by_score[:won_by]
-		games_log_dict[game_id][:identity][:won_why] = :score
-		games_log_dict[game_id][:identity][:end_dateTime] = now()
-		games_log_dict[game_id][:identity][:status] = :completed
-
-		println("SRV - Game $game_id completed")
-		
-		return _end_check_by_score
-
-	elseif _end_check_by_resign[:end_flag]  
-
-		games_log_dict[game_id][:identity][:won_by] = _end_check_by_resign[:won_by]
-		games_log_dict[game_id][:identity][:won_why] = :resign
-		games_log_dict[game_id][:identity][:end_dateTime] = now()
-		games_log_dict[game_id][:identity][:status] = :completed
-
-		println("SRV - Game $game_id completed")
-
-		return _end_check_by_resign
-
-	else
-
-		return _def_ret
-	
+		ret[:end_flag] = true
+		ret[:outcome] = "score"
+		winning_player = scores[_W] == winning_score ? _W : _B
+		ret[:won_by] = winning_player
 	end
+	
+	# resignation
+	if (resign_status[_W] || resign_status[_B])
+		ret[:end_flag] = true
+		ret[:outcome] = "resign"
+		winning_player = resign_status[_W] ? _B : _W
+		ret[:won_by] = winning_player
+	end
+		
+	# markers limit hit -> assess winner or draw
+	if f_mks_limit
+
+		ret[:end_flag] = true
+		
+		if scores[_W] == scores[_B] 
+			ret[:outcome] = "mk_limit_draw"
+		else 
+			ret[:outcome] = "mk_limit_score"
+			
+			if scores[_W] > scores[_B] 
+				ret[:won_by] = _W
+			else
+				ret[:won_by] = _B
+			end
+		end
+	end
+	
+	
+	# save results in log if game is over
+	if ret[:end_flag]
+
+		games_log_dict[game_id][:identity][:won_by] = ret[:won_by]
+		games_log_dict[game_id][:identity][:outcome] = ret[:outcome]
+		games_log_dict[game_id][:identity][:end_dateTime] = now()
+		games_log_dict[game_id][:identity][:status] = :completed
+		
+	end
+	
+
+	return ret
+	
 
 end
 
@@ -2753,7 +2770,7 @@ function gen_newGame(vs_server = false)
 
 	# generate random initial game state (server format)
 	# true param => GENERATING STATES w/ 4MKS in a row for a randomly picked player
-	gs = gen_random_gameState(4, 30)
+	gs = gen_random_gameState(0, 50)
 
 	# RINGS
 		# retrieves location ids in client format 
@@ -2794,8 +2811,8 @@ function gen_newGame(vs_server = false)
 						:init_dateTime => now(),
 						:status => game_status,
 						:end_dateTime => now(),
-						:won_by => :undef,
-						:won_why => :undef)
+						:won_by => "",
+						:outcome => "")
 	
 		# logs of game messages (one per player)
 		_players = Dict(:orig_player_status => :not_available,
@@ -3475,49 +3492,50 @@ function game_runner(msg)
 	_player_id = msg[:payload][:player_id]
 	_who = whos_player(_game_code, _player_id) # :originator || :joiner
 	_game_vs_ai_flag = is_game_vs_ai(_game_code)
-	_turn_recap = msg[:payload][:turn_recap] # false || { :move_action {}, :score_actions [{}], :preMove_score_actions [{}] }
+	_turn_recap = msg[:payload][:turn_recap] 
 	
-	# println("SRV Game runner - scenario pick: ", _turn_recap)
-
+	# false || { :move_action {}, :score_actions [{}], :preMove_score_actions [{}] }
+	
 
 	# default variable, is overwritten later
-	_end_check = Dict(:end_flag => false)
+	end_check = Dict(:end_flag => false)
 
 
-	## EMPTY RESPONSE PAYLOADS
+	## RESPONSE TEMPLATES
 	
-		# template payload for playing player (+ turn info)
-		_PLAY_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_play)
+		# for playing player (+ turn info)
+		PLAY_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_play)
 		
-		# template payload for waiting player
-		_WAIT_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_wait)
+		# for waiting player
+		WAIT_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_wait)
 		
-		# template payload in case game ends
-		_END_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_end_game)
+		# if game ends
+		END_payload::Dict{Symbol, Any} = Dict(key_nextActionCode => CODE_end_game)
 	
-		# empty responses for CALLER / OTHER
+		# containers for CALLER / OTHER responses
+		# swapped before returning depending on who plays next
 		_caller_pld = Dict()
 		_other_pld = Dict()
 
 
 	# update player status 
-		if _msg_code == CODE_advance_game # player stays ready
+		if _msg_code == CODE_advance_game # player ready
 			mark_player_ready!(_game_code, _who)
 		
-		elseif _msg_code == CODE_resign_game # player resigned
+		elseif _msg_code == CODE_resign_game # a player resigned
 			
 			# flag player as resigned
 			mark_player_resigned!(_game_code, _who)
 		
-			# mark that game is over by resignation
-			_end_check = update_game_end!(_game_code)
+			# retrieve data on game end
+			end_check = check_update_game_end!(_game_code)
 		
 			# add ending info to template payload
-			merge!(_END_payload, _end_check)
+			merge!(END_payload, end_check)
 		
 			# inform both players with same base payload (END)
-			_PLAY_payload = copy(_END_payload)
-			_WAIT_payload = copy(_END_payload)
+			PLAY_payload = deepcopy(END_payload)
+			WAIT_payload = deepcopy(END_payload)
 		end
 
 	
@@ -3530,28 +3548,28 @@ function game_runner(msg)
 			# move turn due to scenario being picked
 			advance_turn!(_game_code, _turn_recap[:completed_turn_no])
 
-				# check if game is over after last move (by score)
-				_end_check = update_game_end!(_game_code)
-				println("SRV - end check $_end_check")
-				
-				if _end_check[:end_flag]
+			# check if game is over after last move (by score)
+			end_check = check_update_game_end!(_game_code)
+			println("SRV - Game end check $end_check")
+			
+			if end_check[:end_flag]
 
-					# add ending info to template payload
-					merge!(_END_payload, _end_check)
+				# add ending info to template payload
+				merge!(END_payload, end_check)
 
-					# inform both players with same base payload (END)
-					_PLAY_payload = copy(_END_payload)
-					_WAIT_payload = copy(_END_payload)
+				# inform both players with same base payload (END)
+				PLAY_payload = deepcopy(END_payload)
+				WAIT_payload = deepcopy(END_payload)
 
-				end
+			end
 			
 			if !_game_vs_ai_flag # human vs human games (just pass on changes)
 
 				# generate payload for next moving player
-				merge!(_PLAY_payload, fn_nextPlaying_payload(_game_code))
+				merge!(PLAY_payload, fn_nextPlaying_payload(_game_code))
 		
 				# add turn information
-				setindex!(_PLAY_payload, get_last_turn_details(_game_code)[:turn_no], :turn_no)
+				setindex!(PLAY_payload, get_last_turn_details(_game_code)[:turn_no], :turn_no)
 
 			end
 		end
@@ -3565,19 +3583,19 @@ function game_runner(msg)
 				println("SRV - HUMAN plays next, just passing on changes")
 
 				# add turn information
-				setindex!(_PLAY_payload, get_last_turn_details(_game_code)[:turn_no], :turn_no)
+				setindex!(PLAY_payload, get_last_turn_details(_game_code)[:turn_no], :turn_no)
 
 				# inform human it's their turn
-				_caller_pld = _PLAY_payload
+				_caller_pld = PLAY_payload
 				
 			else # AI plays current turn
 				
 				println("LOG - Server plays")
 
-				if _end_check[:end_flag] # AI loses by score or human resigned
+				if end_check[:end_flag] # AI loses by score or human resigned
 
 					# alter caller payload, PLAY was modified at first end_check
-					_caller_pld = _PLAY_payload
+					_caller_pld = PLAY_payload
 
 				else # AI moves
 
@@ -3592,16 +3610,16 @@ function game_runner(msg)
 
 					
 					# re-check if last AI play ended game
-					_end_check = update_game_end!(_game_code)
-					println("SRV - end check $_end_check")
+					end_check = check_update_game_end!(_game_code)
+					println("SRV - Game end check $end_check")
 				
-					if _end_check[:end_flag] # AI beats human w/ last move
+					if end_check[:end_flag] # AI beats human w/ last move
 	
 						# add ending info to template payload
-						merge!(_END_payload, _end_check)
+						merge!(END_payload, end_check)
 	
 						# alter base payload
-						_PLAY_payload = copy(_END_payload)
+						PLAY_payload = deepcopy(END_payload)
 
 					else
 
@@ -3610,16 +3628,16 @@ function game_runner(msg)
 						_new_turn_info = get_last_turn_details(_game_code)[:turn_no]
 
 						# add turn information
-						setindex!(_PLAY_payload, _new_turn_info, :turn_no)
+						setindex!(PLAY_payload, _new_turn_info, :turn_no)
 						
 					end 
 
-					
 					# prepare payload for client (delta information)
-					merge!(_PLAY_payload, fn_nextPlaying_payload(_game_code))
+					merge!(PLAY_payload, fn_nextPlaying_payload(_game_code))
 
 					# alter called payload
-					_caller_pld = _PLAY_payload
+					_caller_pld = PLAY_payload
+					
 				end
 			end
 
@@ -3631,18 +3649,13 @@ function game_runner(msg)
 				# check if the caller is who plays next
 				_caller_plays = _is_playing_next(_game_code, _player_id)
 		
-				# assigns payloads accordingly
-				_caller_pld = _caller_plays ? _PLAY_payload : _WAIT_payload
-				_other_pld = _caller_plays ? _WAIT_payload : _PLAY_payload 
-			
-			elseif _msg_code == CODE_resign_game # if one resigned
-
-				# inform both players with same END payload (modified above)
-				_caller_pld = _END_payload
-				_other_pld = _END_payload
+				# assign/swap payloads accordingly
+				# if game is over, both payloads are equal to END payload
+				_caller_pld = _caller_plays ? PLAY_payload : WAIT_payload
+				_other_pld = _caller_plays ? WAIT_payload : PLAY_payload 
 				
 			else # both players not ready, tell the caller to wait
-				_caller_pld = _WAIT_payload
+				_caller_pld = WAIT_payload
 				
 			end
 
@@ -3907,9 +3920,6 @@ end
 # ╔═╡ db1ce9bc-0593-4dd7-b905-a14295d47533
 md"### TODO"
 
-# ╔═╡ 5ce26cae-4604-4ad8-8d15-15f0bfc9a81a
-md"#### Open issues "
-
 # ╔═╡ 9b8a5995-d8f0-4528-ad62-a2113d5790fd
 #=
 
@@ -3923,12 +3933,6 @@ md"#### Open issues "
 - revise github readme + add note for suggestions -> or alt text/hover on page?
 
 =#
-
-# ╔═╡ c9d90fd5-4b65-435f-82e7-324340f31cd8
-# ╠═╡ disabled = true
-#=╠═╡
-using Profile, PProf
-  ╠═╡ =#
 
 # ╔═╡ 24185d12-d29c-4e72-a1de-a28319b4d369
 # make it wait forever
@@ -4417,6 +4421,7 @@ version = "17.4.0+2"
 # ╠═bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 # ╠═f6dc2723-ab4a-42fc-855e-d74915b4dcbf
 # ╠═43f89626-8583-11ed-2b3d-b118ff996f37
+# ╠═20bc797e-c99b-417d-8921-9b95c8e21679
 # ╠═1df30830-1a44-49f5-bb9a-309a8e9f2274
 # ╠═9505b0f0-91a2-46a8-90a5-d615c2acdbc1
 # ╠═cd36abda-0f4e-431a-a4d1-bd5366c83b9b
@@ -4464,7 +4469,7 @@ version = "17.4.0+2"
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
 # ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
-# ╟─f1949d12-86eb-4236-b887-b750916d3493
+# ╠═f1949d12-86eb-4236-b887-b750916d3493
 # ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╟─57153574-e5ca-4167-814e-2d176baa0de9
@@ -4529,9 +4534,11 @@ version = "17.4.0+2"
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
-# ╟─20a8fbe0-5840-4a70-be33-b4103df291a1
-# ╟─7a4cb25a-59cf-4d2c-8b1b-5881b8dad606
-# ╟─42e4b611-abe4-41c4-8f92-ea39bb928122
+# ╠═3da6325b-ea20-4faf-a3fb-ec05af8b53d8
+# ╠═82f88f5d-d005-4f21-82ac-d37e831d8670
+# ╠═b6a979e0-f7b3-4043-ace0-7a122f199f64
+# ╠═20a8fbe0-5840-4a70-be33-b4103df291a1
+# ╟─cb8ffb39-073d-4f2b-9df4-53febcf3ca99
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 # ╠═a3b11f4c-6b28-4303-bfe2-66460dda86fe
 # ╠═68173fea-5b20-4c6b-9d53-ec821dfbb815
@@ -4539,7 +4546,7 @@ version = "17.4.0+2"
 # ╠═43313e71-dfd6-4bf8-85c2-d2879d450554
 # ╠═bf233022-2394-4271-b0f9-1022be23fde4
 # ╠═24d9fd2c-4c3b-44ce-9bce-ea54f6d3edd7
-# ╟─fdb40907-1047-41e5-9d39-3f94b06b91c0
+# ╠═fdb40907-1047-41e5-9d39-3f94b06b91c0
 # ╟─fa924233-8ada-4289-9249-b6731edab371
 # ╟─eb3b3182-2e32-40f8-adf7-062691bf53c6
 # ╟─09c1e858-09ae-44b2-9de7-e73f1b4f188d
@@ -4552,10 +4559,7 @@ version = "17.4.0+2"
 # ╟─cd06cad4-4b47-48dd-913f-61028ebe8cb3
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 # ╟─db1ce9bc-0593-4dd7-b905-a14295d47533
-# ╟─5ce26cae-4604-4ad8-8d15-15f0bfc9a81a
 # ╠═9b8a5995-d8f0-4528-ad62-a2113d5790fd
-# ╠═20bc797e-c99b-417d-8921-9b95c8e21679
-# ╠═c9d90fd5-4b65-435f-82e7-324340f31cd8
 # ╠═24185d12-d29c-4e72-a1de-a28319b4d369
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
