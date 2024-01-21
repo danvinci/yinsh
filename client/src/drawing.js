@@ -3,7 +3,7 @@
 import {get_player_id, get_opponent_id} from './data.js'
 
 // glue function called by orchestrator after data manipulation
-export function refresh_canvas_state(alpha_param = 1, scale_param = 1, line_param = 1, offset_param = {x:0, y:0}, board_flag = false){
+export function refresh_canvas_state(board_params = {}, ss_alpha = 1){
 
     // https://docs.solidjs.com/references/api-reference/lifecycles/onMount
 
@@ -14,18 +14,13 @@ export function refresh_canvas_state(alpha_param = 1, scale_param = 1, line_para
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // Draw board
-            // pass params onto board only w/ flag enabled, otherwise only affects scoring_slots
-            if (board_flag) {
-                draw_board(alpha_param, scale_param, line_param, offset_param);
-            } else {
-                draw_board();
-            };
+            draw_board(board_params);
             
             // keep drop zones up
             draw_drop_zones();
 
             // scoring slots 
-            draw_scoring_slots(alpha_param);
+            draw_scoring_slots(ss_alpha);
 
             // draw cues for legal moves
             draw_legal_moves_cues();
@@ -72,18 +67,19 @@ export function refresh_canvas_state(alpha_param = 1, scale_param = 1, line_para
     */
 
 // game board
-function draw_board(alpha_param = 1, scale_param = 1, line_param = 1, offset_param = {x:0, y:0}){
+function draw_board(params_obj){
 
     // const painting_start_time = Date.now()
 
     // this whole function should be simplified at some point -> re-using premade paths?
 
     // function arguments - used for animations involving the board
-    // alpha_param -> transparency 0 -> 1
-    // scale_param -> ref size 1 -> N
-    // offset_param -> {x, y} -> drawing starting position
+    // extract and overwrite parameters from input object if present
+    const alpha_param = ('alpha' in params_obj) ? params_obj.alpha : 1;  // transparency modifier 0 -> 1
+    const scale_param = ('scale' in params_obj) ? params_obj.scale : 1; // scale factor size 1 -> N
+    const line_param = ('line' in params_obj) ? params_obj.line : 1; // line width modifier
+    const offset_param = ('offset' in params_obj) ? params_obj.offset : {x:0, y:0}; // {x, y} -> drawing starting position
 
-    // retrieve constants + drawing params
     // recovering constants
     const mm_points = yinsh.constant_params.mm_points;
     const mm_points_rows = yinsh.constant_params.mm_points_rows;
@@ -263,7 +259,7 @@ function draw_drop_zones(){
 
 // drop zones for scoring rings // TESTING-ONLY, to see how to define boundary with rings
 // is the array is non-empty all the time, we can also draw them on the empty board
-function draw_scoring_slots(alpha_param = 1){
+function draw_scoring_slots(alpha_param){
 
     // alpha_param can  be used for progressive fading, as the function is invoked w/ a lower value over time
 
@@ -490,8 +486,8 @@ function draw_markers(){
     // retrieve markers data (local copy) + other constants
     let _markers = yinsh.objs.markers;
 
-    const player_black_id = yinsh.constant_params.player_black_id;
-    const player_white_id = yinsh.constant_params.player_white_id;
+    let player_black_id = yinsh.constant_params.player_black_id;
+    let player_white_id = yinsh.constant_params.player_white_id;
 
     const S = yinsh.drawing_params.S;
 

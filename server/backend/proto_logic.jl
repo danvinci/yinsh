@@ -3550,7 +3550,6 @@ function game_runner(msg)
 
 			# check if game is over after last move (by score)
 			end_check = check_update_game_end!(_game_code)
-			println("SRV - Game end check $end_check")
 			
 			if end_check[:end_flag]
 
@@ -3560,6 +3559,8 @@ function game_runner(msg)
 				# inform both players with same base payload (END)
 				PLAY_payload = deepcopy(END_payload)
 				WAIT_payload = deepcopy(END_payload)
+
+				println("LOG - Game $_game_code completed")
 
 			end
 			
@@ -3580,7 +3581,7 @@ function game_runner(msg)
 
 			if is_human_playing_next(_game_code) # human plays current turn
 				
-				println("SRV - HUMAN plays next, just passing on changes")
+				println("SRV - HUMAN plays next, passing on delta")
 
 				# add turn information
 				setindex!(PLAY_payload, get_last_turn_details(_game_code)[:turn_no], :turn_no)
@@ -3611,7 +3612,9 @@ function game_runner(msg)
 					
 					# re-check if last AI play ended game
 					end_check = check_update_game_end!(_game_code)
-					println("SRV - Game end check $end_check")
+					if end_check[:end_flag]
+						println("LOG - Game $_game_code completed")
+					end
 				
 					if end_check[:end_flag] # AI beats human w/ last move
 	

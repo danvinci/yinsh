@@ -1004,7 +1004,7 @@ export function remove_markers(mk_indexes_array){
 };
 
 // removes ring -> called when scoring and picking ring to be removed
-export function remove_ring_scoring(ring_loc_index){
+export function remove_ring(ring_loc_index){
 
     // updates global object -> remove picked ring
     yinsh.objs.rings = yinsh.objs.rings.filter(r => r.loc.index != ring_loc_index);

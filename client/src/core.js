@@ -10,7 +10,7 @@ import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_ga
 import { get_move_status, start_move_action, end_move_action, get_move_action_done, reset_move_action, update_legal_cues } from './data.js'
 import { bind_adapt_canvas, reorder_rings, add_marker, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
-import { activate_task, get_scoring_options_fromTask, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring_scoring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
+import { activate_task, get_scoring_options_fromTask, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
 import { preMove_score_op_check, get_preMove_score_op_data, select_apply_scenarioTree  } from './data.js'
 import { delta_replay_check, get_delta, wipe_delta, get_preMove_scoring_actions_done, reset_preMove_scoring_actions, pushTo_preMove_scoring_actions, get_tree } from './data.js'
 import { reset_scoring_actions, pushTo_scoring_actions, get_scoring_actions_done, get_task_status, task_completion } from './data.js'
@@ -284,7 +284,7 @@ async function server_actions_handler (event) {
 
         // replay turn by opponent (if we have delta data)
         await replay_opponent_turn();
-        await sleep(700);
+        await sleep(600);
         refresh_canvas_state(); 
 
         const winning_player = event.detail.won_by;
@@ -294,9 +294,6 @@ async function server_actions_handler (event) {
         let user_comm_txt = "";
 
             if (winning_player == _player_id){ // local player wins 
-
-                // play win sound
-                endGame_win_playSound();
 
                 if (outcome == 'resign') { // winning as the other player resigns
                     user_comm_txt = `Your opponent resigned. You win! :)`;
@@ -311,21 +308,21 @@ async function server_actions_handler (event) {
                 ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt })); // inform user
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` })); // reset UI
 
-                // trigger winning animation 
+                // trigger sound & winning animation
+                endGame_win_playSound();
                 await win_animation(); 
 
-            } else if (winning_player == '') {  // nobody won, it's a draw
+            } else if (winning_player == '' && outcome == 'mk_limit_draw') {  // nobody won, it's a draw
 
-                endGame_draw_playSound();
-
-                user_comm_txt = `All markers placed. It's a draw! :|`;
+                user_comm_txt = `All markers placed. It's a draw!`;
                 ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt }));
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
+                await sleep(150); // draw animation is bit faster, adding extra pause post-replay/last-move
+                endGame_draw_playSound();
+                await draw_animation();
 
             } else { // opponent wins
-
-                endGame_lose_playSound();
 
                 if (outcome == 'resign') { // winning as the other player resigns
                     user_comm_txt = `You resigned and lost! :(`;
@@ -340,7 +337,8 @@ async function server_actions_handler (event) {
                 ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt }));
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
-                // lose animation ? -> 
+                endGame_lose_playSound(); // sound only
+
             };
 
         
@@ -529,7 +527,7 @@ async function replay_opponent_scoring(score_actions_array){
             console.log(`LOG - New opponent score: ${new_opponent_score}`);
     
             // remove ring from rings array 
-            remove_ring_scoring(ring_score_loc); // remove ring 
+            remove_ring(ring_score_loc); // remove ring 
     
             // refresh canvas (ring is drawn as part of the scoring slot now)
             refresh_canvas_state();
@@ -1128,7 +1126,7 @@ async function ring_scoring_handler (event) {
         refresh_canvas_state();
 
         // remove ring from rings array 
-        remove_ring_scoring(picked_ring_id);
+        remove_ring(picked_ring_id);
 
         // empty array of rings highlights
         update_ring_highlights(); 
@@ -1336,19 +1334,12 @@ async function win_animation() {
 
         const win_anim_start_time = Date.now();
 
-        // init new game (just to have elements on the board)
-        // await init_game_fromServer(true);
-        
-        disableInteraction();
 
-        endGame_win_playSound();
-
-        await sleep(250);
+        await sleep(200);
 
         // loop over every object (rings + markers)
         // pick a different one every 50ms or so
         // accelerate it downwards beyond 900 of height
-
 
         // RINGS
         // as we'll pick rings from last in array to the end (easier), we keep track of the virtual array length
@@ -1366,7 +1357,7 @@ async function win_animation() {
 
             const syn_move_prom = syn_object_move(_start, _end, 30, 15, 'ring', r_index_no); // we trigger it but don't await for it to finish, we move onto other objects
             _syn_RINGS_moves_prom_array.push(syn_move_prom);
-            await sleep(45);
+            await sleep(42);
 
             _rings_vir_len -= 1; // decrement virtual len 
 
@@ -1387,7 +1378,7 @@ async function win_animation() {
 
             const syn_move_prom = syn_object_move(_start, _end, 30, 15, 'marker', mk_index_no); // we trigger it but don't await for it to finish, we move onto other objects
             _syn_MARKERS_moves_prom_array.push(syn_move_prom);
-            await sleep(45);
+            await sleep(42);
 
             _markers_vir_len -= 1; // decrement virtual len 
 
@@ -1406,10 +1397,10 @@ async function win_animation() {
 
         // handle scoring slots - draw them more transparent over time and then delete them
             
-            const _f_alpha_array = Array(25).fill().map((_, i) => (i)/25).reverse(); // 0.96 -> 0 values
-            for (let i = 0; i < _f_alpha_array.length; i++) {
-                await sleep(5);
-                refresh_canvas_state(_f_alpha_array[i]);
+            const out_alpha_array = Array(25).fill().map((_, i) => (i)/25).reverse(); // 0.96 -> 0 values
+            for (let i = 0; i < out_alpha_array.length; i++) {
+                await sleep(3);
+                refresh_canvas_state({}, out_alpha_array[i]);
             };
             yinsh.objs.scoring_slots = [];
             yinsh.objs.player_score = 0;
@@ -1422,40 +1413,37 @@ async function win_animation() {
         let _line = 1;
         let _offset = {x:0, y:0};
 
-        for (let i = 0; i < _f_alpha_array.length; i++) {
+        for (let i = 0; i < out_alpha_array.length; i++) {
             
             await sleep(30);
 
-            const _alpha = _f_alpha_array[i];
             _line += 0.7;
-            _scale += 0.1; // increase scale over time
-            
+            _scale += 0.1;
+            _offset.x -= canvas.width/33;
+            _offset.y -= canvas.height/25;
+
             // move start drawing point up left as we zoom in - note: these values are okayish only for desktop
-            _offset.x += -canvas.width/33; 
-            _offset.y += -canvas.height/25;
+            const board_params = {  alpha: out_alpha_array[i], 
+                                    line: _line, 
+                                    scale: _scale, // increase scale over time
+                                    offset: _offset };
 
-            refresh_canvas_state(_alpha, _scale, _line, _offset, true);
-
+            refresh_canvas_state(board_params, 0); // scoring slots have been deleted, but passing 0 anyway
         };
-        
 
         // BOARD - fade-in
         init_scoring_slots(); // regenerate empty scoring slots (scores set to zero)
         
-        await sleep(400);
-        
-        _line = 1;
-        _scale = 1;
-        _offset.x = 0;
-        _offset.y = 0;
+        await sleep(350);
 
-        const _n_alpha_array = Array(25).fill().map((_, i) => (i)/25); // 0 -> 0.96 values
-        for (let i = 0; i < _n_alpha_array.length; i++) {
+        const in_alpha_array = Array(25).fill().map((_, i) => (i)/25); // 0 -> 0.96 values
+        for (let i = 0; i < in_alpha_array.length; i++) {
             
             await sleep(25);
-            const _alpha = _n_alpha_array[i];
+
+            let board_params = { alpha: in_alpha_array[i] }; // other values will be the default ones
             
-            refresh_canvas_state(_alpha, _scale, _line, _offset, true);
+            refresh_canvas_state(board_params, in_alpha_array[i]); // passing also non-zero alpha for scoring slots
 
         };
         refresh_canvas_state(); // calling refresh for last alpha step 0.96 -> 1
@@ -1465,6 +1453,88 @@ async function win_animation() {
 
     // win animation complete
     console.log(`LOG - Win animation done in: ${Date.now() - win_anim_start_time}ms`);
+
+};
+
+
+async function draw_animation(){
+
+    console.log('LOG - Draw endgame animation started');
+
+    // activate task to inform rest of application an animation is underway
+    activate_task(new Task('canvas_animation_task'));
+
+        const draw_anim_start_time = Date.now();
+
+        // fade away scoring slots
+        const out_alpha_array = Array(25).fill().map((_, i) => (i)/25).reverse(); // 0.96 -> 0 values
+        for (let i = 0; i < out_alpha_array.length; i++) {
+            await sleep(3);
+            refresh_canvas_state({}, out_alpha_array[i]);
+        };
+
+        // empty scoring slots and wipe scores
+        yinsh.objs.scoring_slots = [];
+        yinsh.objs.player_score = 0;
+        yinsh.objs.opponent_score = 0;
+
+
+        // remove random markers from the board
+        const N_mk = 3;
+        const n_mk_loops = Math.ceil(51/N_mk);
+
+        for (let i = 0; i < n_mk_loops; i++) {
+                
+            await sleep(50);
+            const mks_random_picks = sample_n(yinsh.objs.markers, N_mk).map(m => m.loc.index);
+
+            remove_markers(mks_random_picks);
+            refresh_canvas_state();
+
+        };
+
+        // remove random rings from the board
+        const N_rn = 1;
+        const n_rn_loops = Math.ceil(yinsh.objs.rings.length/N_rn);
+
+        for (let i = 0; i < n_rn_loops; i++) {
+                
+            await sleep(15);
+            const ring_random_pick = sample_n(yinsh.objs.rings, N_rn).map(r => r.loc.index);
+
+            remove_ring(ring_random_pick);
+            refresh_canvas_state();
+
+        };
+
+        await sleep(100);
+
+        // fade away board - scoring slots have been deleted, but passing 0 anyway
+        for (let i = 0; i < out_alpha_array.length; i++) {
+            await sleep(20);
+            refresh_canvas_state({alpha: out_alpha_array[i]},0);
+        };
+
+        // re-init scoring slots
+        init_scoring_slots();
+
+        await sleep(100);
+
+        // draw back scoring slots and board
+        const in_alpha_array = Array(25).fill().map((_, i) => (i)/25); // 0 -> 0.96 values
+        for (let i = 0; i < in_alpha_array.length; i++) {
+            
+            await sleep(20);
+            refresh_canvas_state({alpha: in_alpha_array[i]}, in_alpha_array[i]);
+        };
+
+        refresh_canvas_state(); // final refresh with default alpha == 1
+
+    // end task 
+    complete_task('canvas_animation_task');
+
+    // win animation complete
+    console.log(`LOG - Draw animation done in: ${Date.now() - draw_anim_start_time}ms`);
 
 };
 
@@ -1553,4 +1623,28 @@ async function syn_object_move(start, end, no_steps, sleep_ms, obj = 'ring', id_
         };
 
     };
+};
+
+// sample without replacement N elements from array
+function sample_n(array, N) {
+
+    // early return 
+    if (N >= array.length){
+        return array;
+    };
+
+    let sampled_indexes = [];
+    const sample_from = array.map((val, index) => index);
+    
+    while (sampled_indexes.length < N){
+
+        const picked_index = sample_from[Math.floor(Math.random() * sample_from.length)];
+
+        if (!sampled_indexes.includes(picked_index)){ // save only unique values
+            sampled_indexes.push(picked_index);
+        };
+    };
+
+    return array.filter((val, index) => sampled_indexes.includes(index));
+
 };
