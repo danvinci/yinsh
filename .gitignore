@@ -13,5 +13,5 @@ node_modules
 # profiling data 
 *.pb.gz
 
-# certificates in /certs must be copied to the server for NGiNX to work
+# certificates in /certs must be copied to the server separately for NGiNX (not in repo)
 *.pem

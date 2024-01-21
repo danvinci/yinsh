@@ -20,7 +20,7 @@
       </audio> 
 
       <audio preload="auto" id="score_opponent">
-        <source src="/src/assets/_alt_score_opponent.mp3" type="audio/mp3">
+        <source src="/src/assets/score_opponent.mp3" type="audio/mp3">
       </audio> 
 
       <audio preload="auto" id="end_game_win">
@@ -49,20 +49,26 @@
       </div>
       <div class="header_menu">
 
+        <!-- icons repo: https://www.svgrepo.com/collection/codicons-coding-icons/ -->
+        <!-- info on svg handling: https://css-tricks.com/scale-svg/ -->
+
         <!-- fixing height/width for svg necessary to avoid size-adj on load 800px -> normal -->
 
         <a class="header_link" href="http://www.gipf.com/yinsh/rules/rules.html" target="_blank">
-          <img class="header_link_img" src="/src/assets/ico_rules.svg"  height="18px" width="18px">
+          <img class="header_link_img header_rules" src="/src/assets/library.svg"  height="18px" width="18px">
           <span class="header_link_text" >Rules</span>
         </a>
 
         <a class="header_link" href="https://github.com/danvinci/yinsh/" target="_blank">
-          <img class="header_link_img" src="/src/assets/ico_github.svg" height="18px" width="18px">
+          <img class="header_link_img header_github" src="/src/assets/ico_github.svg" height="18px" width="18px">
           <span class="header_link_text">GitHub</span>
-
-          <!-- icons repo: https://www.svgrepo.com/collection/codicons-coding-icons/ -->
-          <!-- info on svg handling: https://css-tricks.com/scale-svg/ -->
         </a>
+
+        <a class="header_link" href="https://www.buymeacoffee.com/danvinci" target="_blank">
+          <img class="header_link_img header_donate" src="/src/assets/ext.svg"  height="18px" width="18px">
+          <span class="header_link_text">Donate</span>
+        </a>
+
       </div>
     </header>
 

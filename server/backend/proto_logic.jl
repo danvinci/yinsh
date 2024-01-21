@@ -4,16 +4,6 @@
 using Markdown
 using InteractiveUtils
 
-# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
-macro bind(def, element)
-    quote
-        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
-        local el = $(esc(element))
-        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
-        el
-    end
-end
-
 # ╔═╡ 6f0ad323-1776-4efd-bf1e-667e8a834f41
 using Random
 
@@ -33,10 +23,16 @@ using HTTP, JSON3
 using HTTP.WebSockets
 
 # ╔═╡ 43f89626-8583-11ed-2b3d-b118ff996f37
+# ╠═╡ disabled = true
+#=╠═╡
 using PlutoUI
+  ╠═╡ =#
 
 # ╔═╡ 20bc797e-c99b-417d-8921-9b95c8e21679
+# ╠═╡ disabled = true
+#=╠═╡
 using BenchmarkTools
+  ╠═╡ =#
 
 # ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
 # prod packages
@@ -291,10 +287,10 @@ this gives me the allowable moves
 =#
 
 # ╔═╡ bfb15937-a3b0-434d-ac5e-0d6d6b42e92e
-mm_yinsh_01 = map(x -> if x == 1 0 elseif x == 2 1 elseif x==0 0 end, mm_yinsh)
+mm_yinsh_01 = map(x -> if x == 1 0 elseif x == 2 1 elseif x==0 0 end, mm_yinsh);
 
 # ╔═╡ 856b71d6-130e-4312-9a51-62f04d97a02c
-mm_states = fill("",19,11)
+mm_states = fill("",19,11);
 
 # ╔═╡ 5fcd1944-57c8-4923-8f04-fc9ed24cd25c
 bounds_check(row::Int, col::Int)::Bool = mm_yinsh_01[row, col] == 1
@@ -1155,9 +1151,6 @@ function remove_subsets!(set::Set)
 
 end
 
-# ╔═╡ 8348950a-11cb-4eaa-a639-fcd2b758fb3b
-t_gs = gen_random_gameState(8, 20);
-
 # ╔═╡ 39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
 function discover_scoring_sets(rows::Vector{Vector{CartesianIndex}}, max_ssize::Int=0)::Set{Set{Int}}
 #= 
@@ -1387,69 +1380,6 @@ function search_scores_gs(gs::Matrix{String}, max_sset_d=Dict{Symbol,Int}())::Di
 
 end
 
-# ╔═╡ fd1b186d-b042-4e42-97ea-7e2338eaf75c
-ss = search_scores_gs(t_gs)
-
-# ╔═╡ c3ab8073-165e-4013-99bc-6d32cf9f4514
-t_rows = [ row[:mk_locs] for row in ss[:B][:s_rows] ]
-
-# ╔═╡ 60cb964f-1cd4-4dc4-bb6e-12e4be395fcd
-ssets = discover_scoring_sets(t_rows,3) 
-
-# ╔═╡ ff3b98c0-9546-4738-8b07-b122f0a7a720
-@bind ss_id Slider(1:length(ssets), show_value=true)
-
-# ╔═╡ 5ea1985d-8788-445e-9c8c-f8ebab01ecf6
-f_gs = new_gs_only_rows(t_rows,collect(ssets)[ss_id]);
-
-# ╔═╡ 8e621e29-e1dc-4dab-b8ce-e87c564741f0
-collect(ssets)[ss_id]
-
-# ╔═╡ 3d97a528-ccd7-40e8-8f18-c6630eceb708
-#=
-is the game over now?
-if so, what should happen?
-who needs to be informed of what?
-
-
-SCENARIOS
-
-(A)
-- final score for a given player
-- sets generated with max_ssize = 1
-- player scores -> end_game
-- other player replay -> loose
-
-(B)
-- player is N points away from victory
-- scoring sets always generated with max size N
-- multiple scoring in same score_move
-- player might pick or not the most complete set (sets are 1..N in size)
-- depending on size of picked sets, score may be terminal or not
-
-
-(C)
-- player moves, placing 51th marker
-- wins who has most rings -> otherwise draw
-
-
-(D)
-- player moves, placing 51th marker, but also scores
-- ssets generated with distance from winning score
-- can score point -> if first to 3, wins
-- ending assessed as of previous case
-
-
-(E)
-- player moves, placing 51th marker, but scores for both self and opponent
-- ssets generated with distance from winning score
-- player can score -> if goes to winning score -> endgame
-- otherwise replay + score_premove ops on other side
-- other player scores -> who has the most rings wins
-
-
-=#
-
 # ╔═╡ 18f8a5d6-c775-44a3-9490-cd11352c4a63
 function set_nested!(dict::Dict, val, first_key, second_key)
 # adds values to a dictionary following a first_key -> second_key -> value structure
@@ -1636,12 +1566,6 @@ function print_gameState(gs, symbols = false)
 @info mm_to_print
 
 end
-
-# ╔═╡ c0881f04-40e5-4108-85e2-f3aca3420513
-print_gameState(t_gs, true)
-
-# ╔═╡ 74951f2f-1bc4-4d0f-a2ee-fd6862c6feec
-print_gameState(f_gs, true)
 
 # ╔═╡ 466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 function initRand_ringsLoc()
@@ -2094,12 +2018,6 @@ function get_last_moving_player(game_code)
 
 end
 
-# ╔═╡ 3da6325b-ea20-4faf-a3fb-ec05af8b53d8
-rand(games_log_dict)
-
-# ╔═╡ 82f88f5d-d005-4f21-82ac-d37e831d8670
-get_scores_byID("WIOXXY")
-
 # ╔═╡ cb8ffb39-073d-4f2b-9df4-53febcf3ca99
 function get_resignedStatus_byID(game_id::String)::Dict{String, Bool}
 # returns {"B" => false/true, "W" => false/true}
@@ -2124,9 +2042,6 @@ function get_resignedStatus_byID(game_id::String)::Dict{String, Bool}
 	end
 
 end
-
-# ╔═╡ b6a979e0-f7b3-4043-ace0-7a122f199f64
-get_resignedStatus_byID("WIOXXY")
 
 # ╔═╡ 20a8fbe0-5840-4a70-be33-b4103df291a1
 function check_update_game_end!(game_id::String)::Dict
@@ -2209,30 +2124,6 @@ function get_last_turn_details(game_code::String)
 	return games_log_dict[game_code][:turns][:data][_current_turn]::Dict
 
 end
-
-# ╔═╡ a3b11f4c-6b28-4303-bfe2-66460dda86fe
-#=
-_msg_code = msg[:msg_code]
-	_game_code = msg[:payload][:game_id]
-	_player_id = msg[:payload][:player_id]
-	_who = whos_player(_game_code, _player_id) # :originator || :joiner
-	_game_vs_ai_flag = is_game_vs_ai(_game_code)
-	_turn_recap = msg[:payload][:turn_recap]
-
-
-=#
-
-# ╔═╡ 68173fea-5b20-4c6b-9d53-ec821dfbb815
-ws_messages_log
-
-# ╔═╡ f09fafa9-b2ec-465f-b417-3675dc5538d0
-_pregame_end_test = ws_messages_log[end-1]
-
-# ╔═╡ bf233022-2394-4271-b0f9-1022be23fde4
-strip_reshape_in_recap(_pregame_end_test[:payload][:turn_recap])
-
-# ╔═╡ 24d9fd2c-4c3b-44ce-9bce-ea54f6d3edd7
-_mmssg = filter(m -> haskey(m, :msg_id) && m[:msg_id]=="lrkxg6jf", ws_messages_log)[1]
 
 # ╔═╡ eb3b3182-2e32-40f8-adf7-062691bf53c6
 function get_first_maxL(set::Set)
@@ -2770,7 +2661,7 @@ function gen_newGame(vs_server = false)
 
 	# generate random initial game state (server format)
 	# true param => GENERATING STATES w/ 4MKS in a row for a randomly picked player
-	gs = gen_random_gameState(0, 50)
+	gs = gen_random_gameState(0, 0)
 
 	# RINGS
 		# retrieves location ids in client format 
@@ -3856,9 +3747,6 @@ end
 # ╔═╡ 8b6264b0-f7ea-4177-9700-30072d4c5826
 reactive_start_server(ws_servers_array, ws_messages_log, ws_messages_log_OG)
 
-# ╔═╡ 43313e71-dfd6-4bf8-85c2-d2879d450554
-game_runner(_pregame_end_test)
-
 # ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 function test_ws_client()
 
@@ -3919,23 +3807,6 @@ function test_ws_client()
 	end
 
 end
-
-# ╔═╡ db1ce9bc-0593-4dd7-b905-a14295d47533
-md"### TODO"
-
-# ╔═╡ 9b8a5995-d8f0-4528-ad62-a2113d5790fd
-#=
-
-- end detection for (51 mks) and 'draw' option
-- stop use of "B" and "W" strings everywhere, make everything global parameters
-- game history in client (snapshots <> navigation while no animations in play)
-- uniform handling/naming of originator vs joiner
-- clients disconnecting / non-responsive are not handled / websocket disconneting
-- should I use a DB?
-- perf optimizations
-- revise github readme + add note for suggestions -> or alt text/hover on page?
-
-=#
 
 # ╔═╡ 24185d12-d29c-4e72-a1de-a28319b4d369
 # make it wait forever
@@ -4472,31 +4343,21 @@ version = "17.4.0+2"
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
 # ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
-# ╠═f1949d12-86eb-4236-b887-b750916d3493
+# ╟─f1949d12-86eb-4236-b887-b750916d3493
 # ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╠═bc19e42a-fc82-4191-bca5-09622198d102
 # ╟─57153574-e5ca-4167-814e-2d176baa0de9
 # ╟─1fe8a98e-6dc6-466e-9bc9-406c416d8076
-# ╠═156c508f-2026-4619-9632-d679ca2cae50
-# ╠═823ce280-15c4-410f-8216-efad03897282
+# ╟─156c508f-2026-4619-9632-d679ca2cae50
+# ╟─823ce280-15c4-410f-8216-efad03897282
 # ╟─c0c45548-9792-4969-9147-93f09411a71f
 # ╟─dd941045-3b5f-4393-a6ae-b3d1f029a585
-# ╠═8348950a-11cb-4eaa-a639-fcd2b758fb3b
-# ╠═c0881f04-40e5-4108-85e2-f3aca3420513
-# ╠═74951f2f-1bc4-4d0f-a2ee-fd6862c6feec
-# ╠═5ea1985d-8788-445e-9c8c-f8ebab01ecf6
-# ╟─8e621e29-e1dc-4dab-b8ce-e87c564741f0
-# ╟─ff3b98c0-9546-4738-8b07-b122f0a7a720
-# ╠═60cb964f-1cd4-4dc4-bb6e-12e4be395fcd
-# ╠═c3ab8073-165e-4013-99bc-6d32cf9f4514
-# ╠═fd1b186d-b042-4e42-97ea-7e2338eaf75c
 # ╟─39d81ecc-ecf5-491f-bb6e-1e545f10bfd0
 # ╟─69b9885f-96bd-4f8d-9bde-9ac09521f435
-# ╠═3d97a528-ccd7-40e8-8f18-c6630eceb708
 # ╟─18f8a5d6-c775-44a3-9490-cd11352c4a63
 # ╟─67b8c557-1cf2-465d-a888-6b77f3940f39
-# ╠═0d5558ca-7e01-4ed2-8b37-61649690346a
-# ╠═a27e0adf-aa09-42ee-97f5-ede084a9edc3
+# ╟─0d5558ca-7e01-4ed2-8b37-61649690346a
+# ╟─a27e0adf-aa09-42ee-97f5-ede084a9edc3
 # ╟─cf587261-6193-4e7a-a3e8-e24ba27929c7
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
@@ -4508,8 +4369,8 @@ version = "17.4.0+2"
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
 # ╠═8b6264b0-f7ea-4177-9700-30072d4c5826
 # ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
-# ╠═5e5366a9-3086-4210-a037-c56e1374a686
-# ╠═7316a125-3bfe-4bac-babf-4e3db953078b
+# ╟─5e5366a9-3086-4210-a037-c56e1374a686
+# ╟─7316a125-3bfe-4bac-babf-4e3db953078b
 # ╟─ca522939-422f-482a-8658-452790c463f6
 # ╟─064496dc-4e23-4242-9e25-a41ddbaf59d1
 # ╟─28ee9310-9b7d-4169-bae4-615e4b2c386e
@@ -4518,7 +4379,7 @@ version = "17.4.0+2"
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╟─ca346015-b2c9-45da-8c1e-17493274aca2
-# ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
+# ╟─88616e0f-6c85-4bb2-a856-ea7cee1b187d
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
 # ╟─5d6e868b-50a9-420b-8533-5db4c5d8f72c
@@ -4537,19 +4398,10 @@ version = "17.4.0+2"
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
-# ╠═3da6325b-ea20-4faf-a3fb-ec05af8b53d8
-# ╠═82f88f5d-d005-4f21-82ac-d37e831d8670
-# ╠═b6a979e0-f7b3-4043-ace0-7a122f199f64
-# ╠═20a8fbe0-5840-4a70-be33-b4103df291a1
+# ╟─20a8fbe0-5840-4a70-be33-b4103df291a1
 # ╟─cb8ffb39-073d-4f2b-9df4-53febcf3ca99
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
-# ╠═a3b11f4c-6b28-4303-bfe2-66460dda86fe
-# ╠═68173fea-5b20-4c6b-9d53-ec821dfbb815
-# ╠═f09fafa9-b2ec-465f-b417-3675dc5538d0
-# ╠═43313e71-dfd6-4bf8-85c2-d2879d450554
-# ╠═bf233022-2394-4271-b0f9-1022be23fde4
-# ╠═24d9fd2c-4c3b-44ce-9bce-ea54f6d3edd7
-# ╠═fdb40907-1047-41e5-9d39-3f94b06b91c0
+# ╟─fdb40907-1047-41e5-9d39-3f94b06b91c0
 # ╟─fa924233-8ada-4289-9249-b6731edab371
 # ╟─eb3b3182-2e32-40f8-adf7-062691bf53c6
 # ╟─09c1e858-09ae-44b2-9de7-e73f1b4f188d
@@ -4561,8 +4413,6 @@ version = "17.4.0+2"
 # ╟─e6cc0cf6-617a-4231-826d-63f36d6136a5
 # ╟─cd06cad4-4b47-48dd-913f-61028ebe8cb3
 # ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
-# ╟─db1ce9bc-0593-4dd7-b905-a14295d47533
-# ╠═9b8a5995-d8f0-4528-ad62-a2113d5790fd
 # ╠═24185d12-d29c-4e72-a1de-a28319b4d369
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

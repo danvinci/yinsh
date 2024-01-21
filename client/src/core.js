@@ -208,15 +208,18 @@ export async function init_game_fromServer(originator = false, joiner = false, g
 //////////// EVENT HANDLERS FOR TURNS
 async function server_actions_handler (event) {
 
-    const _next_action = event.detail.next_action_code;
+    // triggered by data function, assumes next turn data has been saved by calling function
 
-    if (_next_action == CODE_action_play) {
+    const next_action_code = event.detail.next_action_code;
+    const next_turn_no = event.detail.next_turn_no;
+
+    if (next_action_code == CODE_action_play) {
 
         disableInteraction(); // a bit redundant, should be off from end of prev. turn
 
             console.log(`LOG - ${CODE_action_play} msg from server`);
 
-            // hide game setup controls in the first turns in which the player moves (can be either 1 or 3)
+            // hide game setup controls in the first turns in which the player moves (either 1 or 3)
             if (get_current_turn_no() <= 3) {
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_in_progress` }));
             };
@@ -225,7 +228,7 @@ async function server_actions_handler (event) {
             await replay_opponent_turn();
 
             // prepare data, objects, and canvas for next turn
-            prep_next_turn(event.detail.turn_no);
+            prep_next_turn(next_turn_no);
 
             // flag turn as in-progress
             turn_start(); 
@@ -266,7 +269,7 @@ async function server_actions_handler (event) {
 
         };
 
-    } else if (_next_action == CODE_action_wait) {
+    } else if (next_action_code == CODE_action_wait) {
 
         console.log(`LOG - ${CODE_action_wait} msg from server`);
 
@@ -276,7 +279,7 @@ async function server_actions_handler (event) {
         ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Wait for your opponent` }));
 
 
-    } else if (_next_action == CODE_action_end_game) { // handling case of winning/losing game
+    } else if (next_action_code == CODE_action_end_game) { // handling case of winning/losing game
 
         disableInteraction(); 
 
@@ -447,7 +450,7 @@ async function replay_opponent_turn(){
             // log replay done
             console.log(`LOG - Total replay time: ${_tot_time}ms`);
 
-            wipe_delta(); // clean up delta data to avoid weird replays at next turn, in case of last move - NOTE: should be prevented server-side
+            wipe_delta(); // clean up delta data to avoid weird replays at next turn, in case of last move - it's prevented server-side anyway
 
         // complete task
         complete_task('canvas_animation_task');
@@ -797,7 +800,6 @@ async function ringDrop_handler (event) {
     } else { 
 
         console.log("USER - Invalid drop location");
-        // NOTE: we could play specific sound 'err'
 
         ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `You can't drop the ring there` }));
 
@@ -1168,6 +1170,7 @@ function ring_sel_hover_handler (event) {
     };
 };
 
+
 async function text_exec_from_ui_handler(){
 
     /* 
@@ -1185,143 +1188,12 @@ async function text_exec_from_ui_handler(){
     */ 
 
     
+     /*
     //// TEST 2 - testing win game animation
+
+        await win_animation(); 
+    */ 
     
-        /*
-
-        console.log('LOG - Test triggered - Win game animation');
-
-        const win_anim_start_time = Date.now();
-
-        // init new game (just to have elements on the board)
-        // await init_game_fromServer(true);
-        
-        disableInteraction();
-
-        endGame_win_playSound();
-
-        await sleep(150);
-
-        // loop over every object (rings + markers)
-        // pick a different one every 50ms or so
-        // accelerate it downwards beyond 900 of height
-
-
-        // RINGS
-        // as we'll pick rings from last in array to the end (easier), we keep track of the virtual array length
-        let _rings_vir_len = yinsh.objs.rings.length;
-        let _syn_RINGS_moves_prom_array = [];
-
-        while (_rings_vir_len > 0) {
-
-            // pick last ring in array, no need to re-order it
-            const r_index_no = _rings_vir_len - 1 ; 
-            const r_loc = structuredClone(yinsh.objs.rings[r_index_no].loc); 
-
-            const _start = {x: r_loc.x, y:r_loc.y};
-            const _end = {x: r_loc.x, y:r_loc.y + canvas.height};
-
-            const syn_move_prom = syn_object_move(_start, _end, 30, 15, 'ring', r_index_no); // we trigger it but don't await for it to finish, we move onto other objects
-            _syn_RINGS_moves_prom_array.push(syn_move_prom);
-            await sleep(45);
-
-            _rings_vir_len -= 1; // decrement virtual len 
-
-        };
-
-        // MARKERS
-        let _markers_vir_len = yinsh.objs.markers.length;
-        let _syn_MARKERS_moves_prom_array = [];
-
-        while (_markers_vir_len > 0) {
-
-            // pick last marker in array
-            const mk_index_no = _markers_vir_len - 1 ; 
-            const mk_loc = structuredClone(yinsh.objs.markers[mk_index_no].loc); 
-
-            const _start = {x: mk_loc.x, y:mk_loc.y};
-            const _end = {x: mk_loc.x, y:mk_loc.y + canvas.height};
-
-            const syn_move_prom = syn_object_move(_start, _end, 30, 15, 'marker', mk_index_no); // we trigger it but don't await for it to finish, we move onto other objects
-            _syn_MARKERS_moves_prom_array.push(syn_move_prom);
-            await sleep(45);
-
-            _markers_vir_len -= 1; // decrement virtual len 
-
-        };
-
-        // to prevent weird things happening due to a resize, wipe objects data when all moves are done
-            // RINGS
-            await Promise.all(_syn_RINGS_moves_prom_array);
-            yinsh.objs.rings = [];
-            yinsh.local_server_data.rings = [];
-        
-            // MARKERS
-            await Promise.all(_syn_MARKERS_moves_prom_array);
-            yinsh.objs.markers = [];
-            yinsh.local_server_data.markers = [];
-
-        // handle scoring slots - draw them more transparent over time and then delete them
-            
-            const _f_alpha_array = Array(25).fill().map((_, i) => (i)/25).reverse(); // 0.96 -> 0 values
-            for (let i = 0; i < _f_alpha_array.length; i++) {
-                await sleep(5);
-                refresh_canvas_state(_f_alpha_array[i]);
-            };
-            yinsh.objs.scoring_slots = [];
-            yinsh.objs.player_score = 0;
-            yinsh.objs.opponent_score = 0;
-            
-
-        // BOARD -  fade out & zoom
-        await sleep(200);
-        let _scale = 1;
-        let _line = 1;
-        let _offset = {x:0, y:0};
-
-        for (let i = 0; i < _f_alpha_array.length; i++) {
-            
-            await sleep(30);
-
-            const _alpha = _f_alpha_array[i];
-            // increase scale over time
-            _line += 0.7;
-            _scale += 0.1;
-            
-            // move start drawing point up left as we zoom in - note: these values are okayish only for desktop
-            _offset.x += -canvas.width/33; 
-            _offset.y += -canvas.height/25;
-
-            refresh_canvas_state(_alpha, _scale, _line, _offset, true);
-
-        };
-        
-
-        // BOARD - fade-in
-        init_scoring_slots(); // regenerate empty scoring slots (scores set to zero)
-        
-        await sleep(400);
-        
-        _line = 1;
-        _scale = 1;
-        _offset.x = 0;
-        _offset.y = 0;
-
-        const _n_alpha_array = Array(25).fill().map((_, i) => (i)/25); // 0 -> 0.96 values
-        for (let i = 0; i < _n_alpha_array.length; i++) {
-            
-            await sleep(25);
-            const _alpha = _n_alpha_array[i];
-            
-            refresh_canvas_state(_alpha, _scale, _line, _offset, true);
-
-        };
-        refresh_canvas_state(); // calling refresh for last alpha step 0.96 -> 1
-
-        // win animation complete
-        console.log(`LOG - Test win animation time: ${Date.now() - win_anim_start_time}ms`);
-
-        */
     
 };
 

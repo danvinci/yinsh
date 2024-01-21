@@ -33,7 +33,7 @@ body, html {
 
         div.header_menu {
             display: grid;
-            grid-template-columns: auto auto;
+            grid-template-columns: auto auto auto;
             align-items: center;
         }
 
@@ -50,15 +50,27 @@ body, html {
                     height: 18px;
                     width: 18px;
                     margin-right: 4px;
-                    filter: opacity(65%);
+                    filter: opacity(55%);
                     transition: all .3s ease-in-out;
                 }
 
                     /* picking parent element but applying transformation only to matching child*/
                     a.header_link:hover .header_link_img {
-                        transform: rotate(10deg);
-                        filter: opacity(85%);
+                        /* transform: rotate(10deg); */
+                        transform: scale(1.05);
                     }
+                    
+                        a.header_link:hover .header_rules {
+                            filter: opacity(95%) invert(29%) sepia(85%) saturate(788%) hue-rotate(179deg) brightness(100%) contrast(87%);
+                        }
+
+                        a.header_link:hover .header_github {
+                            filter: opacity(75%);
+                        }
+
+                        a.header_link:hover .header_donate {
+                            filter: opacity(85%) invert(28%) sepia(72%) saturate(7499%) hue-rotate(5deg) ;
+                        }
 
                 .header_link_text {
                     color: rgba(40, 40, 40, 0.7);

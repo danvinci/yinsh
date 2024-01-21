@@ -33,7 +33,7 @@ function init_const_parameters(){
     // init temporary object
     const _params = {};
 
-    // note: these should come from the server as well (ids etc, so I can change them from one-side only)
+    // note: these should come from the server as well at some point (ids etc, so I can change them from one-side only)
     _params.ring_id =  "R";
     _params.marker_id =  "M";
     _params.player_black_id = "B";
@@ -191,8 +191,7 @@ export function init_empty_game_objects(){
         _game_objects.ring_highlights = []; // -> highlights for rings
 
         _game_objects.player_score = 0;
-        _game_objects.opponent_score = 0; 
-
+        _game_objects.opponent_score = 0;
 
     // save to global obj and log
     yinsh.objs = structuredClone(_game_objects);
@@ -260,10 +259,12 @@ export function save_server_response(srv_input){
     // inform core anytime we receive an "advance_game_OK" message - but not always overwrite
     if (f_next_event) {
 
-        // dispatch event for core game logic -> action handling 
-        // NOTE: what's the point of saving this if we're passing srv_input to the handler anyway, save/event firing should be smarter
-        core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: srv_input }));
-
+        // dispatch event for core game logic with action code from server | pass also data about game ending, if present
+        if ('won_by' in srv_input && 'outcome' in srv_input){
+            core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: { next_action_code: srv_input.next_action_code, next_turn_no: srv_input.turn_no, outcome: srv_input.outcome, won_by: srv_input.won_by}}));
+        } else {
+            core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: { next_action_code: srv_input.next_action_code, next_turn_no: srv_input.turn_no }}));
+        };
     };
     
  };
@@ -289,8 +290,7 @@ export function get_delta(){
     return structuredClone(yinsh.next_server_data.delta);
 };
 
-// to avoid weird replays at end of the game
-// NOTE -> server should send empty delta, and we should save/overwrite every time after 1st turn
+// to avoid weird replays at end of the game, we wipe every time after replay
 export function wipe_delta(){
     yinsh.next_server_data.delta = [];
 };
@@ -343,7 +343,7 @@ export function select_apply_scenarioTree(input_s_set, input_s_rings){
             // NOTE: JS sets need an ad-hoc fn (defined above) for equality comparison
             // here we're building two arrays of sets (for s_set and s_rings) and finding all matches with sets built from inputs
             // at the intersection of the two vector of indexes we have the 0-based index of the correct treepot in the tp array
-            // note: serializing/de-serializing turns sets into arrays 
+            // btw, serializing/de-serializing turns sets into arrays 
 
             // array to search in
             const _treepots = yinsh.server_data.scenario_trees.treepots;
@@ -620,9 +620,7 @@ export function get_game_id() {
 };
 
 
-
 // initialize drop zones -> used to propagate location data to rings, markers, and visual cues
-// NOTE: sensitive to canvas size
 function init_drop_zones(){
 
     // recovering constants
@@ -637,10 +635,6 @@ function init_drop_zones(){
     // recover offset values for starting to draw (centering board and zones)
     const _offset_x = yinsh.drawing_params.x_offset;
     const _offset_y = yinsh.drawing_params.y_offset;
-
-    // canvas parameters
-    const _width = canvas.width;
-    const _height = canvas.height;
 
     // init temp empty array for drop zones
     let _drop_zones = [];
