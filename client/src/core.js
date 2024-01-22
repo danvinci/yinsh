@@ -287,7 +287,6 @@ async function server_actions_handler (event) {
 
         // replay turn by opponent (if we have delta data)
         await replay_opponent_turn();
-        await sleep(300);
         refresh_canvas_state(); 
 
         const winning_player = event.detail.won_by;
@@ -312,6 +311,7 @@ async function server_actions_handler (event) {
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` })); // reset UI
 
                 // trigger sound & winning animation
+                await sleep(250);
                 endGame_win_playSound();
                 await win_animation(); 
 
@@ -321,7 +321,7 @@ async function server_actions_handler (event) {
                 ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt }));
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
-                await sleep(150); // draw animation is bit faster, adding extra pause post-replay/last-move
+                await sleep(400); // draw animation is bit faster, adding extra pause post-replay/last-move
                 endGame_draw_playSound();
                 await draw_animation();
 
@@ -340,6 +340,7 @@ async function server_actions_handler (event) {
                 ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt }));
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
+                await sleep(250);
                 endGame_lose_playSound(); // sound only
 
             };
