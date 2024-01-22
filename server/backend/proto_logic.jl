@@ -2028,7 +2028,7 @@ function get_resignedStatus_byID(game_id::String)::Dict{String, Bool}
 		join_player_status = games_log_dict[game_id][:players][:join_player_status]
 
 		orig_p_resigned = orig_player_status == :resigned ? true : false
-		join_p_resigned = orig_player_status == :resigned ? true : false
+		join_p_resigned = join_player_status == :resigned ? true : false
 
 		orig_player_id = games_log_dict[game_id][:identity][:orig_player_id]
 
@@ -3017,8 +3017,9 @@ try
 
 	# logging
 	_time_start::DateTime = now()
-	num_px_moves = 0 # num of possible moves
-	max_i = 0 # moves explored (if server moves)
+	num_px_moves::Int = 0 # num of possible moves (already excluding same start/end)
+	num_pruned_moves::Int = 0 # num non-explored moves/trees
+	max_i::Int = 0 # moves explored (if server moves)
 
 	# returning value
 	turn_recap = Dict()
@@ -3218,53 +3219,54 @@ try
 
 
 		# split all possible moves in groups
-		px_moves_sc::Vector{Dict} = [];  # candidate moves
-			best_sc::Vector{Dict} = []; # closer to score for us
-			neutral_sc::Vector{Dict} = []; # no close to score for us or opponent
-			risky_sc::Vector{Dict} = []; # closer for both
-			bad_sc::Vector{Dict} = []; # closer for opponent only
-			worst_sc::Vector{Dict} = []; # we score for the opponent
+		pruned_sc = Dict{Symbol, CartesianIndex}[]; # we score for other at step 1
+		px_moves_sc = Dict{Symbol, CartesianIndex}[];  # candidate moves
+			best_sc = Dict{Symbol, CartesianIndex}[]; # closer to score for us
+			neutral_sc = Dict{Symbol, CartesianIndex}[]; # no closer to score for both
+			risky_sc = Dict{Symbol, CartesianIndex}[]; # closer for both
+			bad_sc = Dict{Symbol, CartesianIndex}[]; # closer for opponent only
+		
 	
 
 		opp_player_id::String = srv_player_id == _W ? _B : _W
 		
 		# traverse the whole tree, all possible moves sc to be categorized later
 		@inbounds for start_k in eachindex(tree), end_k in eachindex(tree[start_k])
-			# exlude same-loc-drop moves
+			
+			# exlude same-start/end moves
 			if start_k != end_k
-				sc::Dict{Symbol, CartesianIndex} = Dict(:start => start_k,:end => end_k)
-				push!(px_moves_sc, sc)
-			end
 
-			# NOTE -> we could prune the tree from bad/worst moves before going on
-			# but ensure we at least got some options left
+				# prep dict
+				sc::Dict{Symbol, CartesianIndex} = Dict(:start => start_k,:end => end_k)
+
+				# prune moves that score for the opponent at step 1
+				if haskey(tree[start_k][end_k], :scores_avail_opp) 
+					push!(pruned_sc, sc) 
+					num_pruned_moves += 1
+				else
+					push!(px_moves_sc, sc) # keep for tree exploration
+				end
+
+			end
 		end
 
-		# categorize moves
-		num_px_moves::Int = px_moves_sc |> length
+		# play possible opponent's moves and categorize px-moves based on outcomes 
+		num_px_moves = px_moves_sc |> length
 		_last_scores = Dict(_W => 0, _B => 0) # TODO should reflect real vs potential 
-		for (i, sc) in enumerate(px_moves_sc) 
+		
+		for (i, sc) in enumerate(px_moves_sc) # parallelize?
 
-			max_i::Int = i # keep track of how many scenarios we explore
+			max_i = i # keep track of how many scenarios/trees we explore
 			
 			@inbounds new_gs::Matrix{String} = get_new_gs(tree, sc)
 			new_sim::Dict = sim_scenarioTrees(new_gs, opp_player_id, _last_scores) 
 			# any opp score is fine for now, as any potential score by other is bad
 			# but ideally we should use this to prune winning options for other player
 
-			# prevent states that can lead opponent to score next
-				# no scores_preMove_avail (root)
-				# no score_player_sc in (any tree) 
-
-			if haskey(new_sim, :scores_preMove_avail) # worst if score avail for opp
-				push!(worst_sc, sc) 
-				@goto skip_sc_inspection
-			end
-
 			# inspect possible scoring outcomes 
 			sim_check::Dict{Symbol, Bool} = inspect_trees_sums(new_sim[:treepots])
 
-			# in this case, the 'other' is the player
+			# swapped player/opp - 'other' is the server player at depth 2
 			server_score_px = sim_check[:opp_score_possible]
 			user_score_px = sim_check[:player_score_possible]
 
@@ -3281,19 +3283,16 @@ try
 			f_risky && push!(risky_sc, sc)
 			f_bad && push!(bad_sc, sc)
 
-			# break at first best choice (could be refined for double score)
 			if f_best
 				move_action = sc
 				__pick_txt = "best"
 				break
 			end
-			
-			@label skip_sc_inspection
 
 		end		
 
 
-		## NO BEST MOVE -> pick from: neutral > risky > bad > worst
+		## NO BEST MOVE -> pick from: neutral > risky > bad (> pruned)
 		if isempty(move_action)
 
 			if !isempty(neutral_sc) # NEUTRAL
@@ -3308,12 +3307,14 @@ try
 				move_action = rand(bad_sc)
 				__pick_txt = "bad"
 
-			elseif !isempty(worst_sc) # WORST
-				move_action = rand(worst_sc)
-				__pick_txt = "worst"
+			elseif !isempty(pruned_sc) # PRUNED (shouldn't happen, here for safety)
+				move_action = rand(pruned_sc)
+				__pick_txt = "pruned"
 
 			end
 		end
+
+		@label skip_trees_evaluation
 	
 	end
 
@@ -3328,7 +3329,7 @@ try
 	_runtime::Int = (now() - _time_start).value
 	_expl_rate::Int = (num_px_moves == max_i == 0) ? 0 : round(max_i/num_px_moves*100)
 
-	println("LOG - Server turn, $__pick_txt pick - runtime: $(_runtime)ms - expl.rate: $(_expl_rate)% [ $num_px_moves ]")
+	println("LOG - Server turn, $__pick_txt pick - runtime: $(_runtime)ms - expl.rate: $(_expl_rate)% [ $num_px_moves ] - pruned: $num_pruned_moves")
 	
 	return turn_recap
 
@@ -4398,10 +4399,10 @@ version = "17.4.0+2"
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
-# ╟─20a8fbe0-5840-4a70-be33-b4103df291a1
+# ╠═20a8fbe0-5840-4a70-be33-b4103df291a1
 # ╟─cb8ffb39-073d-4f2b-9df4-53febcf3ca99
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
-# ╟─fdb40907-1047-41e5-9d39-3f94b06b91c0
+# ╠═fdb40907-1047-41e5-9d39-3f94b06b91c0
 # ╟─fa924233-8ada-4289-9249-b6731edab371
 # ╟─eb3b3182-2e32-40f8-adf7-062691bf53c6
 # ╟─09c1e858-09ae-44b2-9de7-e73f1b4f188d

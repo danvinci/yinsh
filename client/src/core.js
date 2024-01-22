@@ -287,7 +287,7 @@ async function server_actions_handler (event) {
 
         // replay turn by opponent (if we have delta data)
         await replay_opponent_turn();
-        await sleep(600);
+        await sleep(300);
         refresh_canvas_state(); 
 
         const winning_player = event.detail.won_by;
