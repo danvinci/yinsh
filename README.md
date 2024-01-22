@@ -36,7 +36,7 @@ I built this version from scratch, using:
 - JavaScript and the Canvas API for the game interface
 - SolidJS for the navigation UI
 - Julia for everything that runs server-side, including the adversarial 'AI' (a minmax heuristic at depth-2)
-- Deployed using Docker, behind NGiNX and Cloudflare at [yinsh.net](https://yinsh.net/)
+- Deployed using Docker, behind Cloudflare, at [yinsh.net](https://yinsh.net/)
 
 &nbsp;
 
