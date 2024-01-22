@@ -3548,6 +3548,13 @@ function game_runner(msg)
 				# if game is over, both payloads are equal to END payload
 				_caller_pld = _caller_plays ? PLAY_payload : WAIT_payload
 				_other_pld = _caller_plays ? WAIT_payload : PLAY_payload 
+
+			# if one resigned they're not both available
+			elseif _msg_code == CODE_resign_game 
+			
+				# inform both players with same END payload (prepared above)
+				_caller_pld = END_payload
+				_other_pld = END_payload
 				
 			else # both players not ready, tell the caller to wait
 				_caller_pld = WAIT_payload
@@ -4380,7 +4387,7 @@ version = "17.4.0+2"
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╟─ca346015-b2c9-45da-8c1e-17493274aca2
-# ╟─88616e0f-6c85-4bb2-a856-ea7cee1b187d
+# ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
 # ╟─5d6e868b-50a9-420b-8533-5db4c5d8f72c

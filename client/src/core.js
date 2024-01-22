@@ -285,10 +285,18 @@ async function server_actions_handler (event) {
 
         close_ws(); // disconnect from server
 
-        // replay turn by opponent (if we have delta data)
+        // wait any potential animation task underway (eg. last move replay already underway while resign msg comes)
+        // necessary as if replay is underway, delta from next_server_data hasn't been wiped yet
+        // it will then be found on the 2nd call of the function, leading to a glitchy 2nd delta replay before the game ends
+        // by waiting, delta gets wiped
+        if (get_task_status('canvas_animation_task')) {
+            await task_completion('canvas_animation_task');
+        };
+
         await replay_opponent_turn();
         refresh_canvas_state(); 
 
+        // extract relevant info from msg
         const winning_player = event.detail.won_by;
         const outcome = event.detail.outcome;
         const _player_id = get_player_id();
@@ -451,7 +459,9 @@ async function replay_opponent_turn(){
             // log replay done
             console.log(`LOG - Total replay time: ${_tot_time}ms`);
 
-            wipe_delta(); // clean up delta data to avoid weird replays at next turn, in case of last move - it's prevented server-side anyway
+            // clean up delta data to avoid weird replays at next turn, in case of last move - it's prevented server-side anyway
+            // important that is done within the whole animation task, that can be waited knowing that also delta will be wiped by when it's done
+            wipe_delta(); 
 
         // complete task
         complete_task('canvas_animation_task');
@@ -745,7 +755,7 @@ async function ringDrop_handler (event) {
             // retrieve scenario as tree.index_start_move.index_end_move
             // THE tree was written in place by server_actions fn, among several possible if a preMove score was available
             const move_scenario = get_tree()[start_move_index][drop_loc_index];
-            console.log(`LOG - Move scenario: `, move_scenario);
+            //console.log(`LOG - Move scenario: `, move_scenario);
 
             // CASE: some markers must be flipped
             if ('mk_flip' in move_scenario){
@@ -864,15 +874,15 @@ function active_scoring_rows(s_rows, s_sets_obj, row_id) {
 
     let sets_vec = structuredClone(s_sets_obj.v); // working copy, before modifying vec in passed obj
 
-    console.log(`TEST - input w_s_sets: `, s_sets_obj.v);
-    console.log(`TEST - picked row_id: `, row_id);
+    //console.log(`TEST - input w_s_sets: `, s_sets_obj.v);
+    //console.log(`TEST - picked row_id: `, row_id);
     
     // keep only sets for which row_id is a possibility
     sets_vec = sets_vec.filter(s => s.includes(row_id));
     
     if (sets_vec.flat().length > 0) { // using flat() as we might get a bunch of empty arrays
 
-        console.log(`TEST - filtered w_s_sets: `, sets_vec);
+        //console.log(`TEST - filtered w_s_sets: `, sets_vec);
 
         // remove from surviving sets the row that was picked/removed
         sets_vec.map(s => remove_fromArray(s, row_id));
@@ -881,7 +891,7 @@ function active_scoring_rows(s_rows, s_sets_obj, row_id) {
         // https://stackoverflow.com/questions/21978392/modify-a-variable-inside-a-function -> modifying var by reference
         s_sets_obj.v = structuredClone(sets_vec);
 
-        console.log(`TEST - new w_s_sets: `, sets_vec);
+        //console.log(`TEST - new w_s_sets: `, sets_vec);
 
         // take unique rows ids across all valid sets, and get 0-based index of matching rows
         const rows_ids = [ ...new Set(sets_vec.flat()) ].map(k => k - 1); 
@@ -889,7 +899,7 @@ function active_scoring_rows(s_rows, s_sets_obj, row_id) {
         // retrieve scoring rows data by id
         const active_rows = s_rows.filter( (row, id) => rows_ids.includes(id) );
 
-        console.log(`TEST - new active_rows: `, active_rows);
+        //console.log(`TEST - new active_rows: `, active_rows);
 
         return active_rows;
 

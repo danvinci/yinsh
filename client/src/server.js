@@ -196,7 +196,7 @@ function onMessage_handler (event) {
     logInbound(msg_id, server_data);
     
     // print it
-    console.log(`TEST - Msg handler - Incoming data from server: `, server_data);
+    //console.log(`TEST - Msg handler - Incoming data from server: `, server_data);
 
 };
 

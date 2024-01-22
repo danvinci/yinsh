@@ -280,7 +280,10 @@ return yinsh.local_server_data;
 export function delta_replay_check(){
 
     if ('next_server_data' in yinsh){
-        return ('delta' in yinsh.next_server_data); // always true if we have next_server_data
+        return ('delta' in yinsh.next_server_data); 
+        // always true if we have next_server_data saved
+        // be aware the replay_opponent_turn wipes delta after each replay (by design)
+        // so it will be true but empty
     } else {
         return false;
     };
@@ -417,12 +420,12 @@ export function get_preMove_scoring_actions_done(){
     // return defaults if the array is empty
     if (yinsh.objs.preMove_scoring_actions.length > 0) {
        
-        console.log(`TEST - returning preMove: `, yinsh.objs.preMove_scoring_actions);
+        //console.log(`TEST - returning preMove: `, yinsh.objs.preMove_scoring_actions);
         return yinsh.objs.preMove_scoring_actions; 
 
     } else { // pass on default values if container is empty
  
-        console.log(`TEST - returning preMove: `, { mk_locs: [], ring_score: -1 });
+        //console.log(`TEST - returning preMove: `, { mk_locs: [], ring_score: -1 });
         return [{ mk_locs: [], ring_score: -1 }];
     };
 };
@@ -443,11 +446,11 @@ export function get_scoring_actions_done(){
 
     // return defaults if the array is empty
     if (yinsh.objs.scoring_actions.length > 0) {
-        console.log(`TEST - returning move: `, yinsh.objs.scoring_actions);
+        //console.log(`TEST - returning move: `, yinsh.objs.scoring_actions);
         return yinsh.objs.scoring_actions; 
 
     } else { // pass on default values if container is empty
-        console.log(`TEST - returning move: `, { mk_locs: [], ring_score: -1 });
+        //console.log(`TEST - returning move: `, { mk_locs: [], ring_score: -1 });
         return [{ mk_locs: [], ring_score: -1 }];
     };
 
@@ -1141,12 +1144,12 @@ export function get_move_action_done(){
 // retrieve indexes of legal moves/drops from saved server data
 function getIndexes_legal_drops(start_index){
 
-    console.log(`TEST - searching for legal drops starting at ${start_index}`);
+    //console.log(`TEST - searching for legal drops starting at ${start_index}`);
 
     // keys (possible moves) paare the first level of the branch for a ring loc
     const tree_branch = get_tree()[start_index];
 
-    console.log(`TEST - tree ${typeof tree_branch} found for ${start_index}`, tree_branch);
+    //console.log(`TEST - tree ${typeof tree_branch} found for ${start_index}`, tree_branch);
 
     // only keep keys that can be interpreted as numbers
     // javascript forces object keys to be strings, we need to parse them ¯\_(ツ)_/¯
