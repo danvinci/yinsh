@@ -22,16 +22,16 @@ using HTTP, JSON3
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
 
-# ╔═╡ 43f89626-8583-11ed-2b3d-b118ff996f37
-# ╠═╡ disabled = true
-#=╠═╡
-using PlutoUI
-  ╠═╡ =#
-
 # ╔═╡ 20bc797e-c99b-417d-8921-9b95c8e21679
 # ╠═╡ disabled = true
 #=╠═╡
 using BenchmarkTools
+  ╠═╡ =#
+
+# ╔═╡ 1df30830-1a44-49f5-bb9a-309a8e9f2274
+# ╠═╡ disabled = true
+#=╠═╡
+using JET
   ╠═╡ =#
 
 # ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
@@ -40,10 +40,10 @@ using BenchmarkTools
 # ╔═╡ f6dc2723-ab4a-42fc-855e-d74915b4dcbf
 # dev packages
 
-# ╔═╡ 1df30830-1a44-49f5-bb9a-309a8e9f2274
+# ╔═╡ 43f89626-8583-11ed-2b3d-b118ff996f37
 # ╠═╡ disabled = true
 #=╠═╡
-using JET
+using PlutoUI
   ╠═╡ =#
 
 # ╔═╡ 9505b0f0-91a2-46a8-90a5-d615c2acdbc1
@@ -796,12 +796,12 @@ end
 function search_markers_toFlip(gs::Matrix{String}, s_locs::Vector{CartesianIndex})
 	
 	# create array to be returned
-	mk_flip_locs::Vector{CartesianIndex} = []
+	mk_flip_locs::Vector{CartesianIndex} = CartesianIndex[]
 
 	for loc in s_locs
 		@inbounds z::String = gs[loc] # read game state
-		(z == _RW || z == _RB) && break # at the first ring (the one we moved)
-		(z == _MW || z == _MB) && push!(mk_flip_locs, loc) # save markers locs
+		(z == _RW || z == _RB)::Bool && break # at the first ring (the one we moved)
+		(z == _MW || z == _MB)::Bool && push!(mk_flip_locs, loc) # save markers locs
 	end
 
 	# returns true/false if markers flip (array non empty) and their locations 
@@ -1279,7 +1279,7 @@ Notes:
 end
 
 # ╔═╡ 69b9885f-96bd-4f8d-9bde-9ac09521f435
-function search_scores_gs(gs::Matrix{String}, max_sset_d=Dict{Symbol,Int}())::Dict{Symbol, Dict}
+function search_scores_gs(gs::Matrix{String}, max_sset_d=Dict{Symbol,Int}())
 # look at the game state as it is to check if there are scoring opportunities
 
 	# to be returned -> returns empty vector if nothing found for player
@@ -1296,14 +1296,14 @@ function search_scores_gs(gs::Matrix{String}, max_sset_d=Dict{Symbol,Int}())::Di
 	for mk_index in all_mks
 
 		# for each marker retrieve search space for scoring ops
-		@inbounds mk_search_locs::Vector{Vector{CartesianIndex}} = _locs_searchSpace_scoring[mk_index]
+		mk_search_locs::Vector{Vector{CartesianIndex}} = @inbounds _locs_searchSpace_scoring[mk_index]
 
 		for locs_vec in mk_search_locs
 
 			# reading states for all locs in search array
 			states_vec = String[]
 			for loc in locs_vec
-				@inbounds s::String = gs[loc]
+				s::String = @inbounds gs[loc]
 				contains(s, _M) ? push!(states_vec, s) : @goto skip_vec
 			end
 	
@@ -1318,7 +1318,7 @@ function search_scores_gs(gs::Matrix{String}, max_sset_d=Dict{Symbol,Int}())::Di
 
 				# save the row but check that scoring row wasn't saved already
 				if !(locs_vec in found_rows[player_key])
-					@inbounds push!(found_rows[player_key], locs_vec)
+					push!(found_rows[player_key], locs_vec)
 				end					
 			end	
 
@@ -1326,16 +1326,17 @@ function search_scores_gs(gs::Matrix{String}, max_sset_d=Dict{Symbol,Int}())::Di
 		end
 	end
 
+	
 	# add extra info on scoring sets and mk_sel for each row
 	for player_k in keys(found_rows)
 
 		# extract rows
-		@inbounds rows::Vector{Vector{CartesianIndex}} = found_rows[player_k]
+		rows::Vector{Vector{CartesianIndex}} = @inbounds found_rows[player_k]
 
 		# check if we have data on how far player is from winning score
-		max_set_size = 0
+		max_set_size::Int = 0
 		if !isempty(max_sset_d)
-			max_set_size = max_sset_d[player_k]
+			max_set_size = @inbounds max_sset_d[player_k]
 		end
 
 		# identify scoring sets among rows and save them in container
@@ -1360,19 +1361,20 @@ function search_scores_gs(gs::Matrix{String}, max_sset_d=Dict{Symbol,Int}())::Di
 
 			# find marker with min frequency and save it
 			_, id::Int = findmin(i -> mk_freq[i], mk_sel_avail)
-			@inbounds mk_sel::CartesianIndex = mk_sel_avail[id]
+			mk_sel::CartesianIndex = @inbounds mk_sel_avail[id]
+			
 			push!(mk_sel_taken, mk_sel)
 
 			# package score information
 			score_row_info = Dict{Symbol,Union{CartesianIndex, Vector{CartesianIndex}}}(:mk_sel => mk_sel, :mk_locs => r)
 
 			# save prepared scoring row
-			@inbounds push!(s_rows, score_row_info)
+			push!(s_rows, score_row_info)
 
 		end
 
 		# save player's data
-		@inbounds setindex!(scores_info, s_player, player_k)
+		setindex!(scores_info, s_player, player_k)
 	end
 
 
@@ -2204,7 +2206,7 @@ function setindex_container!(d::Dict, val, key, use_set = false)
 end
 
 # ╔═╡ a27e0adf-aa09-42ee-97f5-ede084a9edc3
-function sim_new_gameState(ex_game_state::Matrix, sc::Dict, fn_mode::Symbol)::Dict
+function sim_new_gameState(ex_game_state::Matrix{String}, sc::Dict, fn_mode::Symbol)::Dict
 	
 #=
 This function has three modes of use:
@@ -2257,16 +2259,16 @@ Making sense of move/flip data depends on the mode the function was called in.
 	f_scores_act::Bool = haskey(sc, :score_actions)
 
 	# extract player_id (B/W)
-	@inbounds _player_id::String = sc[:id][:player_id]
+	_player_id::String = sc[:id][:player_id]::String
 	_opp_id::String = _player_id == _W ? _B : _W
 
 	# baseline game state that we'll modify and return later
-	new_gs::Matrix{String} = deepcopy(ex_game_state)
-	new_player_score::Int = deepcopy(sc[:id][:players_scores][_player_id]) # updated 
-	new_opp_score::Int = deepcopy(sc[:id][:players_scores][_opp_id])
+	new_gs::Matrix{String} = deepcopy(ex_game_state)::Matrix{String}
+	new_player_score::Int = deepcopy(sc[:id][:players_scores][_player_id])::Int  
+	new_opp_score::Int = deepcopy(sc[:id][:players_scores][_opp_id])::Int
 
 	# dict to return w/ game state delta - used for replay or add leaves to the tree
-	_ret::Dict{Symbol, Union{Dict, Array, Matrix, Int, Symbol}} = Dict()
+	_ret::Dict{Symbol, Union{Dict, Array, Matrix, Int, Symbol}} = Dict{Symbol, Union{Dict, Array, Matrix, Int, Symbol}}()
 
 	#= OUTPUT structure - fields are added only if valued
 
@@ -2297,15 +2299,16 @@ Making sense of move/flip data depends on the mode the function was called in.
 		for score in sc[:score_actions_preMove]
 			
 			# remove markers from game state
-			pms_mks_locs::Vector{CartesianIndex} = score[:mk_locs]
+			pms_mks_locs::Vector{CartesianIndex} = @inbounds score[:mk_locs]::Vector{CartesianIndex}
+			
 			foreach(mk_id -> new_gs[mk_id] = "", pms_mks_locs)
 	
 			# remove ring
-			pms_ring_loc = score[:ring_score]
+			pms_ring_loc = @inbounds score[:ring_score]::CartesianIndex
 			new_gs[pms_ring_loc] = ""
 	
 			# update player score
-			new_player_score += 1 # NOTE -> HANDLE END GAME
+			new_player_score += 1 
 	
 			# update global dict
 			pms = Dict(:mk_locs => pms_mks_locs, :ring_score => pms_ring_loc)
@@ -2316,11 +2319,11 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 	function move_do!() # ring moved -> mk placement -> flipping
 		
-		start_loc::CartesianIndex = sc[:move_action][:start]
-		end_loc::CartesianIndex = sc[:move_action][:end]
+		start_loc::CartesianIndex = @inbounds sc[:move_action][:start]::CartesianIndex
+		end_loc::CartesianIndex = @inbounds sc[:move_action][:end]::CartesianIndex
 		
 		# marker placed in start_move (same color as picked ring / player_id)
-		@inbounds new_gs[start_loc] = _player_id == _B ? _MB : _MW
+		@inbounds new_gs[start_loc] = (_player_id == _B ? _MB : _MW)::String
 		
 		# ring placed in end_move 
 		@inbounds new_gs[end_loc] = ex_game_state[start_loc]
@@ -2328,26 +2331,31 @@ Making sense of move/flip data depends on the mode the function was called in.
 		### flip markers in the moving direction
 
 		# retrieve search space for the starting point, ie. ring directions
-		@inbounds r_dirs::Vector{Vector{CartesianIndex}} = _locs_searchSpace[start_loc]
+		r_dirs::Vector{Vector{CartesianIndex}} = @inbounds _locs_searchSpace[start_loc]
 
 		# spot direction/array that contains the ring 
-		n::Int = findfirst(rd -> (end_loc in rd), r_dirs)
+		n = findfirst(rd -> (end_loc in rd), r_dirs)
 	
 		# return flag + ids of markers to flip in direction of movement
-		f_flip::Bool, mks_toFlip = search_markers_toFlip(new_gs, r_dirs[n])
+		f_flip::Bool = false; mks_toFlip = CartesianIndex[];
+		if !isnothing(n)
+			f_flip, mks_toFlip = search_markers_toFlip(new_gs, r_dirs[n])
+		end
 
 		# flip markers in game state
-		f_flip && for m_id in mks_toFlip
-			@inbounds s::String = new_gs[m_id]
-			if (s == _MB || s == _MW)
-				@inbounds new_gs[m_id] = (s == _MW) ? _MB : _MW
+		if f_flip
+			for m_id in mks_toFlip
+				@inbounds s::String = new_gs[m_id]
+				if (s == _MB || s == _MW)
+					@inbounds new_gs[m_id] = (s == _MW) ? _MB : _MW
+				end
 			end
 		end
 
 		### update global dict
 		
-		mk_add = Dict(:loc => start_loc, :player_id => _player_id)
-		ring_move = Dict(:start => start_loc, 
+		mk_add::Dict{Symbol, Union{CartesianIndex, String}} = Dict{Symbol, Union{CartesianIndex, String}}(:loc => start_loc, :player_id => _player_id)
+		ring_move::Dict{Symbol, Union{CartesianIndex, String}} = Dict{Symbol, Union{CartesianIndex, String}}(:start => start_loc, 
 						 :end => end_loc, 						
 						 :player_id => _player_id)
 		
@@ -2363,7 +2371,6 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 		for score in sc[:score_actions]
 
-
 			# remove markers from game state
 			sd_mks_locs::Vector{CartesianIndex} = score[:mk_locs]
 			foreach(mk_id -> new_gs[mk_id] = "", sd_mks_locs)
@@ -2373,10 +2380,10 @@ Making sense of move/flip data depends on the mode the function was called in.
 			new_gs[sd_ring_loc] = ""
 	
 			# update player score
-			new_player_score += 1 # NOTE -> HANDLE END GAME
+			new_player_score += 1 
 	
 			# update global dict
-			sd = Dict(:mk_locs => sd_mks_locs, :ring_score => sd_ring_loc)
+			sd::Dict{Symbol, Union{CartesianIndex, Vector{CartesianIndex}}} = Dict(:mk_locs => sd_mks_locs, :ring_score => sd_ring_loc)
 			setindex_container!(_ret, sd, :scores_done)
 		
 		end
@@ -2385,23 +2392,21 @@ Making sense of move/flip data depends on the mode the function was called in.
 	
 	function score_check!() # post-move scoring
 
-		f_last_score = mks_limit_hit(new_gs)::Bool
-
 		# distance from winning -> max_sset for player/opp
 		# only using black/white keys here
 		W_score_val::Int = _player_id == "W" ? new_player_score : new_opp_score
 		B_score_val::Int = _opp_id == "B" ? new_opp_score : new_player_score
 		
-		W_max_sset = winning_score - W_score_val
-		B_max_sset = winning_score - B_score_val
-		max_sset_d = Dict(_W_key => W_max_sset, _B_key => B_max_sset)
+		W_max_sset::Int = winning_score - W_score_val
+		B_max_sset::Int = winning_score - B_score_val
+		max_sset_d = Dict{Symbol, Int}(_W_key => W_max_sset, _B_key => B_max_sset)
 		
 		# search for possible scoring options
-		scores::Dict{Symbol, Dict} = search_scores_gs(new_gs, max_sset_d)
+		scores::Dict{Symbol, Dict} = search_scores_gs(new_gs, max_sset_d)::Dict{Symbol, Dict}
 
 		# save scores information for each player
-		sinfo_player = scores[Symbol(_player_id)]
-		sinfo_opp = scores[Symbol(_opp_id)]
+		sinfo_player = @inbounds scores[Symbol(_player_id)]
+		sinfo_opp = @inbounds scores[Symbol(_opp_id)]
 
 		# update global dict -> is there a score available for either player or opp?
 		!(isempty(sinfo_player[:s_rows])) && setindex!(_ret, sinfo_player, :scores_avail_player)
@@ -2448,7 +2453,7 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, players_scores::
 # computes results for all possible moves of next moving player
 
 	# to be returned
-	scenario_trees::Dict{Symbol, Union{Dict, Array}} = Dict()
+	scenario_trees::Dict{Symbol, Union{Dict, Vector}} = Dict{Symbol, Union{Dict, Vector}}()
 
 		#= return structure
 		
@@ -2465,16 +2470,16 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, players_scores::
 	_ring_id::String = nx_player_id == _W ? _RW : _RB
 
 	# retrieve player/opp scores
-	opp_id = nx_player_id == _W ? _B : _W
+	opp_id::String = nx_player_id == _W ? _B : _W
 	
-	nx_player_score::Int = deepcopy(players_scores[nx_player_id])
-	opp_score::Int = deepcopy(players_scores[opp_id])
+	nx_player_score::Int = deepcopy(players_scores[nx_player_id])::Int
+	opp_score::Int = deepcopy(players_scores[opp_id])::Int
 
 	# lower functions take in scores as white/black, not player/opp
 	# the dict will be referenced later on, values directly written in it
-	last_W_score = nx_player_id == _W ? nx_player_score : opp_score
-	last_B_score = opp_id == _B ? opp_score : nx_player_score 
-	last_scores = Dict(_W => last_W_score, _B => last_B_score)
+	last_W_score::Int = nx_player_id == _W ? nx_player_score : opp_score
+	last_B_score::Int = opp_id == _B ? opp_score : nx_player_score 
+	last_scores::Dict{String, Int} = Dict(_W => last_W_score, _B => last_B_score)
 
 	# identify any pre-move score to be acted on - ie. left by previous player
 	pms_sc_id = Dict( :id => Dict( 	:player_id => nx_player_id, 
@@ -2494,14 +2499,14 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, players_scores::
 		@inbounds pms_options::Dict = pm_scores_inspect[:scores_avail_player]
 
 		# save choices in tree to be returned 
-		@inbounds setindex!(scenario_trees, pms_options, :scores_preMove_avail)
+		setindex!(scenario_trees, pms_options, :scores_preMove_avail)
 
 		# retrieve rings locations 
 		_rings::Vector{CartesianIndex} = findall(==(_ring_id), ex_gs)
 
 		# here we simulate possible combination sequences of scoring choices
 		# retrieved from info[:s_sets] -> [ (1,2,4), (2,3,1), (4,5), ... ]
-		@inbounds scoring_sets = pms_options[:s_sets]
+		@inbounds scoring_sets::Set{Set{Int}} = pms_options[:s_sets]
 
 		for sset in scoring_sets
 
@@ -2593,39 +2598,44 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, players_scores::
 			for r in rings
 			 	@inbounds setindex!(nx_legal_moves, search_legal_moves(gs, r), r)
 			end
+
 		
 		# for each start
 		for move_start in rings # rings = keys of nx_legal_moves dict
-			@inbounds for move_end in nx_legal_moves[move_start]
+			
+			 for move_end in @inbounds nx_legal_moves[move_start]
+				
 				if move_start != move_end # -> if ring not dropped in-place
 					
-					sc_id::Dict{Symbol, CartesianIndex} = Dict(:start => move_start, :end => move_end)
+					sc_id::Dict{Symbol, CartesianIndex} = Dict{Symbol, CartesianIndex}(:start => move_start, :end => move_end)
 
 					# simulate new game state for start/end combination
 					move = Dict(:id => Dict(:player_id => nx_player_id, 
-											:players_scores => last_scores),
-											:move_action => sc_id)
+												:players_scores => last_scores),
+												:move_action => sc_id)
 
-					### NOTE: PLAYER SCORE NEEDS HANDLING
+					### we can flag end leaves if handling player's scores
 
 					# simulate move and check for scoring opportunities
 					sim_res = sim_new_gameState(gs, move, :move)
 
-					# save scenario sim results in tree (start -> end -> scenario)
-					set_nested!(tree, sim_res, move_start, move_end)
-
 					# Tree summary -> scenarios for scoring opportunities
 					f_score_player::Bool = haskey(sim_res, :scores_avail_player)
 					f_score_opp::Bool = haskey(sim_res, :scores_avail_opp)
-	
+					
+
+					# save scenario sim results (start -> end -> scenario)
+					set_nested!(tree, sim_res, move_start, move_end)
+
 					# save the id of each scenario accordingly
 					f_score_player && push!(tree_sum[:score_player_sc], sc_id)
 					f_score_opp && push!(tree_sum[:score_opp_sc], sc_id)
 
 				else
-					# save empty dict so same-loc drop is available in the tree -> !! rings with only such move available won't be in tree otherwise
-					# impact on available legal moves in the client
+					# save empty dict so same-loc drop is available in the tree -> !! rings with only such move available won't be in tree otherwise, impacts available legal moves in client
+					
 					set_nested!(tree, Dict(), move_start, move_end)
+					
 				end
 			end
 		end
@@ -3072,7 +3082,6 @@ try
 
 	=#
 
-
 	### PRE-MOVE
 	# take any preMove scores if available
 	# set discovery function has found only scores set = max distance from score
@@ -3225,7 +3234,6 @@ try
 			neutral_sc = Dict{Symbol, CartesianIndex}[]; # no closer to score for both
 			risky_sc = Dict{Symbol, CartesianIndex}[]; # closer for both
 			bad_sc = Dict{Symbol, CartesianIndex}[]; # closer for opponent only
-		
 	
 
 		opp_player_id::String = srv_player_id == _W ? _B : _W
@@ -3253,42 +3261,54 @@ try
 		# play possible opponent's moves and categorize px-moves based on outcomes 
 		num_px_moves = px_moves_sc |> length
 		_last_scores = Dict(_W => 0, _B => 0) # TODO should reflect real vs potential 
-		
-		for (i, sc) in enumerate(px_moves_sc) # parallelize?
 
-			max_i = i # keep track of how many scenarios/trees we explore
-			
-			@inbounds new_gs::Matrix{String} = get_new_gs(tree, sc)
-			new_sim::Dict = sim_scenarioTrees(new_gs, opp_player_id, _last_scores) 
-			# any opp score is fine for now, as any potential score by other is bad
-			# but ideally we should use this to prune winning options for other player
+		w_lock = ReentrantLock() # lock for writing to the sc arrays above
+		best_found_yet = false # check if best option was already found 
 
-			# inspect possible scoring outcomes 
-			sim_check::Dict{Symbol, Bool} = inspect_trees_sums(new_sim[:treepots])
+		@sync for (i, sc) in enumerate(px_moves_sc) 
 
-			# swapped player/opp - 'other' is the server player at depth 2
-			server_score_px = sim_check[:opp_score_possible]
-			user_score_px = sim_check[:player_score_possible]
+			if !best_found_yet 
+				Threads.@spawn begin	
+				
+				new_gs::Matrix{String} = get_new_gs(tree, sc)::Matrix{String}
+				new_sim::Dict = sim_scenarioTrees(new_gs, opp_player_id, _last_scores) 
+	
+				# inspect possible scoring outcomes 
+				sim_check::Dict{Symbol, Bool} = inspect_trees_sums(new_sim[:treepots])
+	
+				# swapped player/opp - 'other' is the server player at depth 2
+				server_score_px::Bool = sim_check[:opp_score_possible]
+				user_score_px::Bool = sim_check[:player_score_possible]
+	
+				# replace below with a simpler scoring system for each outcome
+				# 2x2 possible outcomes: best > neutral > risky > bad 
+				f_best::Bool = server_score_px == true && user_score_px == false
+				f_neutral::Bool = server_score_px == false && user_score_px == false
+				f_risky::Bool = server_score_px == true && user_score_px == true
+				f_bad::Bool = server_score_px == false && user_score_px == true
+	
+				# categorize sc, log when first best choice found
+				lock(w_lock)
 
-			# replace below with a simpler scoring system for each outcome
-			# 2x2 possible outcomes: best > neutral > risky > bad 
-			f_best::Bool = server_score_px == true && user_score_px == false
-			f_neutral::Bool = server_score_px == false && user_score_px == false
-			f_risky::Bool = server_score_px == true && user_score_px == true
-			f_bad::Bool = server_score_px == false && user_score_px == true
+					max_i += 1 # keep track of how many generated & inspected trees
+				
+					f_best && push!(best_sc, sc) 
+					f_neutral && push!(neutral_sc, sc)
+					f_risky && push!(risky_sc, sc)
+					f_bad && push!(bad_sc, sc)
+	
+					if f_best
+						move_action = sc
+						ft_best_found = true # flag best found
+						__pick_txt = "best"
+					end
 
-			# categorize sc, break at first best choice
-			f_best && push!(best_sc, sc) 
-			f_neutral && push!(neutral_sc, sc)
-			f_risky && push!(risky_sc, sc)
-			f_bad && push!(bad_sc, sc)
+				unlock(w_lock)
 
-			if f_best
-				move_action = sc
-				__pick_txt = "best"
-				break
+				GC.safepoint()
+
+				end
 			end
-
 		end		
 
 
@@ -3313,8 +3333,6 @@ try
 
 			end
 		end
-
-		@label skip_trees_evaluation
 	
 	end
 
@@ -3828,8 +3846,8 @@ BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
@@ -3837,8 +3855,8 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 BenchmarkTools = "~1.4.0"
 Combinatorics = "~1.0.2"
 HTTP = "~1.10.1"
+JET = "~0.8.25"
 JSON3 = "~1.14.0"
-PlutoUI = "~0.7.55"
 StatsBase = "~0.33.21"
 """
 
@@ -3848,13 +3866,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "ba8cb9cf2cab3de99eac778bdf22d3af2998ac8b"
-
-[[deps.AbstractPlutoDingetjes]]
-deps = ["Pkg"]
-git-tree-sha1 = "c278dfab760520b8bb7e9511b968bf4ba38b7acc"
-uuid = "6e696c72-6542-2067-7265-42206c756150"
-version = "1.2.3"
+project_hash = "030e8833887829c37f479adb7d5482062579f13b"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -3877,17 +3889,17 @@ git-tree-sha1 = "2dc09997850d68179b69dafb58ae806167a32b1b"
 uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
 version = "0.1.8"
 
+[[deps.CodeTracking]]
+deps = ["InteractiveUtils", "UUIDs"]
+git-tree-sha1 = "c0216e792f518b39b22212127d4a84dc31e4e386"
+uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
+version = "1.3.5"
+
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
 git-tree-sha1 = "cd67fc487743b2f0fd4380d4cbd3a24660d0eec8"
 uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
 version = "0.7.3"
-
-[[deps.ColorTypes]]
-deps = ["FixedPointNumbers", "Random"]
-git-tree-sha1 = "eb7f0f8307f71fac7c606984ea5fb2817275d6e4"
-uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
-version = "0.11.4"
 
 [[deps.Combinatorics]]
 git-tree-sha1 = "08c8b6831dc00bfea825826be0bc8336fc369860"
@@ -3930,6 +3942,10 @@ version = "0.18.16"
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 
+[[deps.Distributed]]
+deps = ["Random", "Serialization", "Sockets"]
+uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
 git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
@@ -3950,35 +3966,11 @@ version = "0.1.10"
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
-[[deps.FixedPointNumbers]]
-deps = ["Statistics"]
-git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
-uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
-version = "0.8.4"
-
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
 git-tree-sha1 = "abbbb9ec3afd783a7cbd82ef01dcd088ea051398"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 version = "1.10.1"
-
-[[deps.Hyperscript]]
-deps = ["Test"]
-git-tree-sha1 = "179267cfa5e712760cd43dcae385d7ea90cc25a4"
-uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
-version = "0.0.5"
-
-[[deps.HypertextLiteral]]
-deps = ["Tricks"]
-git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
-uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
-version = "0.9.5"
-
-[[deps.IOCapture]]
-deps = ["Logging", "Random"]
-git-tree-sha1 = "8b72179abc660bfab5e28472e019392b97d0985c"
-uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
-version = "0.2.4"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -3988,6 +3980,12 @@ uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.2.2"
+
+[[deps.JET]]
+deps = ["InteractiveUtils", "JuliaInterpreter", "LoweredCodeUtils", "MacroTools", "Pkg", "PrecompileTools", "Preferences", "Revise", "Test"]
+git-tree-sha1 = "5a271ff6f12b34cf173c97bb8a6cdd8db6aa3f96"
+uuid = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+version = "0.8.25"
 
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
@@ -4012,6 +4010,12 @@ version = "1.14.0"
 
     [deps.JSON3.weakdeps]
     ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
+
+[[deps.JuliaInterpreter]]
+deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
+git-tree-sha1 = "04663b9e1eb0d0eabf76a6d0752e0dac83d53b36"
+uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
+version = "0.9.28"
 
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
@@ -4069,10 +4073,17 @@ git-tree-sha1 = "c1dd6d7978c12545b4179fb6153b9250c96b0075"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.0.3"
 
-[[deps.MIMEs]]
-git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
-uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
-version = "0.1.4"
+[[deps.LoweredCodeUtils]]
+deps = ["JuliaInterpreter"]
+git-tree-sha1 = "0b8cf121228f7dae022700c1c11ac1f04122f384"
+uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
+version = "2.3.2"
+
+[[deps.MacroTools]]
+deps = ["Markdown", "Random"]
+git-tree-sha1 = "2fa9ee3e63fd3a4f7a9a4f4744a52f4856de82df"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.13"
 
 [[deps.Markdown]]
 deps = ["Base64"]
@@ -4139,12 +4150,6 @@ deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.10.0"
 
-[[deps.PlutoUI]]
-deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
-git-tree-sha1 = "68723afdb616445c6caaef6255067a8339f91325"
-uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.55"
-
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
 git-tree-sha1 = "03b4c25b43cb84cee5c90aa9b5ea0a78fd848d2f"
@@ -4173,10 +4178,17 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
-[[deps.Reexport]]
-git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
-uuid = "189a3867-3050-52da-a836-e630ba90ab69"
-version = "1.2.2"
+[[deps.Requires]]
+deps = ["UUIDs"]
+git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
+uuid = "ae029012-a4dd-5104-9daa-d747884805df"
+version = "1.3.0"
+
+[[deps.Revise]]
+deps = ["CodeTracking", "Distributed", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Pkg", "REPL", "Requires", "UUIDs", "Unicode"]
+git-tree-sha1 = "3fe4e5b9cdbb9bbc851c57b149e516acc07f8f72"
+uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
+version = "3.5.13"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -4254,11 +4266,6 @@ weakdeps = ["Random", "Test"]
 
     [deps.TranscodingStreams.extensions]
     TestExt = ["Test", "Random"]
-
-[[deps.Tricks]]
-git-tree-sha1 = "eae1bb484cd63b36999ee58be2de6c178105112f"
-uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
-version = "0.1.8"
 
 [[deps.URIs]]
 git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
@@ -4387,7 +4394,7 @@ version = "17.4.0+2"
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╟─ca346015-b2c9-45da-8c1e-17493274aca2
-# ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
+# ╟─88616e0f-6c85-4bb2-a856-ea7cee1b187d
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
 # ╟─5d6e868b-50a9-420b-8533-5db4c5d8f72c
@@ -4406,10 +4413,10 @@ version = "17.4.0+2"
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
-# ╠═20a8fbe0-5840-4a70-be33-b4103df291a1
+# ╟─20a8fbe0-5840-4a70-be33-b4103df291a1
 # ╟─cb8ffb39-073d-4f2b-9df4-53febcf3ca99
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
-# ╠═fdb40907-1047-41e5-9d39-3f94b06b91c0
+# ╟─fdb40907-1047-41e5-9d39-3f94b06b91c0
 # ╟─fa924233-8ada-4289-9249-b6731edab371
 # ╟─eb3b3182-2e32-40f8-adf7-062691bf53c6
 # ╟─09c1e858-09ae-44b2-9de7-e73f1b4f188d
