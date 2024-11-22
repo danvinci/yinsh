@@ -22,7 +22,7 @@ import { ringDrop_playSound, markersRemoved_player_playSound, markersRemoved_opp
 //////////// GLOBAL DEFINITIONS
 
     // redefining console log function to avoid logs in production
-    // console.log = function() {};
+    console.log = function() {};
 
     // inits global event target for core logic
     globalThis.core_et = new EventTarget(); // <- this semicolon is very important
