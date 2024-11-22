@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.36
+# v0.19.37
 
 using Markdown
 using InteractiveUtils
@@ -22,6 +22,12 @@ using HTTP, JSON3
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
 
+# ╔═╡ 43f89626-8583-11ed-2b3d-b118ff996f37
+# ╠═╡ disabled = true
+#=╠═╡
+using PlutoUI
+  ╠═╡ =#
+
 # ╔═╡ 20bc797e-c99b-417d-8921-9b95c8e21679
 # ╠═╡ disabled = true
 #=╠═╡
@@ -34,23 +40,17 @@ using BenchmarkTools
 using JET
   ╠═╡ =#
 
-# ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
-# prod packages
-
-# ╔═╡ f6dc2723-ab4a-42fc-855e-d74915b4dcbf
-# dev packages
-
-# ╔═╡ 43f89626-8583-11ed-2b3d-b118ff996f37
-# ╠═╡ disabled = true
-#=╠═╡
-using PlutoUI
-  ╠═╡ =#
-
 # ╔═╡ 9505b0f0-91a2-46a8-90a5-d615c2acdbc1
 # ╠═╡ disabled = true
 #=╠═╡
 using Plots, PlotThemes;  plotly() ; theme(:default)
   ╠═╡ =#
+
+# ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
+# prod packages
+
+# ╔═╡ f6dc2723-ab4a-42fc-855e-d74915b4dcbf
+# dev packages
 
 # ╔═╡ cd36abda-0f4e-431a-a4d1-bd5366c83b9b
 begin
@@ -147,12 +147,6 @@ end
 # ╔═╡ c96e1ee9-6d78-42d2-bfd6-2e8f88913b37
 mm_yinsh = prep_base_matrix();
 
-# ╔═╡ b6292e1f-a3a8-46d7-be15-05a74a5736de
-# ╠═╡ disabled = true
-#=╠═╡
-draw_board()
-  ╠═╡ =#
-
 # ╔═╡ 55987f3e-aaf7-4d85-a6cf-11eda59cd066
 function draw_board()
 
@@ -181,6 +175,12 @@ end
 
 return ps
 end
+
+# ╔═╡ b6292e1f-a3a8-46d7-be15-05a74a5736de
+# ╠═╡ disabled = true
+#=╠═╡
+draw_board()
+  ╠═╡ =#
 
 # ╔═╡ d996152e-e9e6-412f-b4db-3eacf5b7a5a6
 function printable_base_m()
@@ -316,12 +316,6 @@ row_start = locz[locz_index][1]
 col_start = locz[locz_index][2]
   ╠═╡ =#
 
-# ╔═╡ abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
-# ╠═╡ disabled = true
-#=╠═╡
-search_loc_graph(draw_board(), row_start, col_start, search_loc(mm_states, reshape_out(CartesianIndex(row_start,col_start))))
-  ╠═╡ =#
-
 # ╔═╡ 387eeec5-f483-48af-a27c-468683fe497b
 # helper function to place how_many elem_type we need in free spots
 function place_elem!(input_board, elem_type::String, how_many::Int)
@@ -371,12 +365,6 @@ end
 mm_setup = random_states_setup();
   ╠═╡ =#
 
-# ╔═╡ 49ff65f9-8ead-448f-8a44-1a741c20bbc5
-# ╠═╡ disabled = true
-#=╠═╡
-setup_graph = rings_marks_graph();
-  ╠═╡ =#
-
 # ╔═╡ 6e7ab4f4-7c52-45bc-a503-6bf9cb0d7932
 #=╠═╡
 function rings_marks_graph()
@@ -417,6 +405,12 @@ return new_board
 end
   ╠═╡ =#
 
+# ╔═╡ 49ff65f9-8ead-448f-8a44-1a741c20bbc5
+# ╠═╡ disabled = true
+#=╠═╡
+setup_graph = rings_marks_graph();
+  ╠═╡ =#
+
 # ╔═╡ e767b0a7-282f-46c4-b2e7-1f737807a3cb
 # ╠═╡ disabled = true
 #=╠═╡
@@ -427,12 +421,6 @@ end
 # ╠═╡ disabled = true
 #=╠═╡
 row_start_n = locz[locz_index_n][1]; col_start_n = locz[locz_index_n][2];
-  ╠═╡ =#
-
-# ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
-# ╠═╡ disabled = true
-#=╠═╡
-search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, reshape_out(CartesianIndex(row_start_n,col_start_n))))
   ╠═╡ =#
 
 # ╔═╡ a3ae2bfe-41ea-4fe1-870b-2ac35153da5d
@@ -973,6 +961,18 @@ end
 
 return input_board
 end
+
+# ╔═╡ abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
+# ╠═╡ disabled = true
+#=╠═╡
+search_loc_graph(draw_board(), row_start, col_start, search_loc(mm_states, reshape_out(CartesianIndex(row_start,col_start))))
+  ╠═╡ =#
+
+# ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
+# ╠═╡ disabled = true
+#=╠═╡
+search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, reshape_out(CartesianIndex(row_start_n,col_start_n))))
+  ╠═╡ =#
 
 # ╔═╡ c334b67e-594f-49fc-8c11-be4ea11c33b5
 function gen_random_gameState(near_score_rows = 0, num_mks = 0)
