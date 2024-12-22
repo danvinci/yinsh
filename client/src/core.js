@@ -22,7 +22,7 @@ import { ringDrop_playSound, markersRemoved_player_playSound, markersRemoved_opp
 //////////// GLOBAL DEFINITIONS
 
     // redefining console log function to avoid logs in production
-    console.log = function() {};
+    // console.log = function() {};
 
     // inits global event target for core logic
     globalThis.core_et = new EventTarget(); // <- this semicolon is very important
@@ -121,7 +121,8 @@ function window_resize_handler() {
 
 
 // retrieve data from server (as originator or joiner) and init new game
-export async function init_game_fromServer(originator = false, joiner = false, game_code = '', ai_game = false){
+// NOTE: might need to refactor to cram all parameters into a single object
+export async function init_game_fromServer(originator = false, joiner = false, game_code = '', ai_game = false, random_rings = true){
 
     // input could be changed to a more general purpose object, also to save/send game setup settings
     //_setup = {originator: false, joiner: false, game_code: undefined, ai_game: false}
@@ -155,7 +156,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
             await server_ws_send(CODE_new_game_human); // requests new game vs a friend
 
         } else if (ai_game) {
-            await server_ws_send(CODE_new_game_server); // requests new game vs server/AI
+            await server_ws_send(CODE_new_game_server, {random_rings: random_rings}); // requests new game vs server/AI
         };
         
         // Bind canvas
@@ -306,13 +307,13 @@ async function server_actions_handler (event) {
             if (winning_player == _player_id){ // local player wins 
 
                 if (outcome == 'resign') { // winning as the other player resigns
-                    user_comm_txt = `Your opponent resigned. You win! :)`;
+                    user_comm_txt = `Your opponent resigned. You won! :)`;
 
                 } else if (outcome == 'score') { // winning by score
-                    user_comm_txt = `You win! :)`;
+                    user_comm_txt = `You won! :)`;
 
                 } else if (outcome == 'mk_limit_score') {
-                    user_comm_txt = `All markers placed. You win! :)`;
+                    user_comm_txt = `All markers placed. You won! :)`;
                 };
 
                 ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt })); // inform user
@@ -339,10 +340,10 @@ async function server_actions_handler (event) {
                     user_comm_txt = `You resigned and lost! :(`;
 
                 } else if (outcome == 'score') { // winning by score
-                    user_comm_txt = `You lose! :(`;
+                    user_comm_txt = `You lost! :(`;
 
                 } else if (outcome == 'mk_limit_score') {
-                    user_comm_txt = `All markers placed. You lose! :(`;
+                    user_comm_txt = `All markers placed. You lost! :(`;
                 };
 
                 ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt }));

@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.37
+# v0.20.4
 
 using Markdown
 using InteractiveUtils
@@ -21,6 +21,12 @@ using HTTP, JSON3
 
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
+
+# ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
+# prod packages
+
+# ╔═╡ f6dc2723-ab4a-42fc-855e-d74915b4dcbf
+# dev packages
 
 # ╔═╡ 43f89626-8583-11ed-2b3d-b118ff996f37
 # ╠═╡ disabled = true
@@ -45,12 +51,6 @@ using JET
 #=╠═╡
 using Plots, PlotThemes;  plotly() ; theme(:default)
   ╠═╡ =#
-
-# ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
-# prod packages
-
-# ╔═╡ f6dc2723-ab4a-42fc-855e-d74915b4dcbf
-# dev packages
 
 # ╔═╡ cd36abda-0f4e-431a-a4d1-bd5366c83b9b
 begin
@@ -147,6 +147,12 @@ end
 # ╔═╡ c96e1ee9-6d78-42d2-bfd6-2e8f88913b37
 mm_yinsh = prep_base_matrix();
 
+# ╔═╡ b6292e1f-a3a8-46d7-be15-05a74a5736de
+# ╠═╡ disabled = true
+#=╠═╡
+draw_board()
+  ╠═╡ =#
+
 # ╔═╡ 55987f3e-aaf7-4d85-a6cf-11eda59cd066
 function draw_board()
 
@@ -175,12 +181,6 @@ end
 
 return ps
 end
-
-# ╔═╡ b6292e1f-a3a8-46d7-be15-05a74a5736de
-# ╠═╡ disabled = true
-#=╠═╡
-draw_board()
-  ╠═╡ =#
 
 # ╔═╡ d996152e-e9e6-412f-b4db-3eacf5b7a5a6
 function printable_base_m()
@@ -316,6 +316,12 @@ row_start = locz[locz_index][1]
 col_start = locz[locz_index][2]
   ╠═╡ =#
 
+# ╔═╡ abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
+# ╠═╡ disabled = true
+#=╠═╡
+search_loc_graph(draw_board(), row_start, col_start, search_loc(mm_states, reshape_out(CartesianIndex(row_start,col_start))))
+  ╠═╡ =#
+
 # ╔═╡ 387eeec5-f483-48af-a27c-468683fe497b
 # helper function to place how_many elem_type we need in free spots
 function place_elem!(input_board, elem_type::String, how_many::Int)
@@ -365,6 +371,12 @@ end
 mm_setup = random_states_setup();
   ╠═╡ =#
 
+# ╔═╡ 49ff65f9-8ead-448f-8a44-1a741c20bbc5
+# ╠═╡ disabled = true
+#=╠═╡
+setup_graph = rings_marks_graph();
+  ╠═╡ =#
+
 # ╔═╡ 6e7ab4f4-7c52-45bc-a503-6bf9cb0d7932
 #=╠═╡
 function rings_marks_graph()
@@ -405,12 +417,6 @@ return new_board
 end
   ╠═╡ =#
 
-# ╔═╡ 49ff65f9-8ead-448f-8a44-1a741c20bbc5
-# ╠═╡ disabled = true
-#=╠═╡
-setup_graph = rings_marks_graph();
-  ╠═╡ =#
-
 # ╔═╡ e767b0a7-282f-46c4-b2e7-1f737807a3cb
 # ╠═╡ disabled = true
 #=╠═╡
@@ -421,6 +427,12 @@ setup_graph = rings_marks_graph();
 # ╠═╡ disabled = true
 #=╠═╡
 row_start_n = locz[locz_index_n][1]; col_start_n = locz[locz_index_n][2];
+  ╠═╡ =#
+
+# ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
+# ╠═╡ disabled = true
+#=╠═╡
+search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, reshape_out(CartesianIndex(row_start_n,col_start_n))))
   ╠═╡ =#
 
 # ╔═╡ a3ae2bfe-41ea-4fe1-870b-2ac35153da5d
@@ -962,30 +974,22 @@ end
 return input_board
 end
 
-# ╔═╡ abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
-# ╠═╡ disabled = true
-#=╠═╡
-search_loc_graph(draw_board(), row_start, col_start, search_loc(mm_states, reshape_out(CartesianIndex(row_start,col_start))))
-  ╠═╡ =#
-
-# ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
-# ╠═╡ disabled = true
-#=╠═╡
-search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, reshape_out(CartesianIndex(row_start_n,col_start_n))))
-  ╠═╡ =#
-
 # ╔═╡ c334b67e-594f-49fc-8c11-be4ea11c33b5
-function gen_random_gameState(near_score_rows = 0, num_mks = 0)
+function gen_random_gameState(near_score_rows = 0, num_mks = 0, random_rings = true)
 # generate a new random game state (server format)
-
-	spots = [l for l in _board_locs] # sample doesn't work on sets, only arrays
-
-	## pick 10 random starting locations from board(without replacement)
-	ring_locs = sample(spots, 10, replace = false)
 
 	# empty state (server format)
 	server_game_state = fill("",19,11)
 
+	# early return of empty state for manual rings placement option (ie. non-random)
+	!random_rings && @goto _return
+
+	# else, generate a random initial game state
+	spots = [l for l in _board_locs] # sample doesn't work on sets, only arrays
+
+	## pick 10 random starting locations from board(without replacement)
+	ring_locs = sample(spots, 10, replace = false)
+	
 	# write down rings in those locations
 	for (i, loc) in enumerate(ring_locs)
 
@@ -1060,12 +1064,18 @@ function gen_random_gameState(near_score_rows = 0, num_mks = 0)
 
 	end
 	
-
+	@label _return
 	return server_game_state
 end
 
 # ╔═╡ bc19e42a-fc82-4191-bca5-09622198d102
 const games_log_dict = Dict()
+
+# ╔═╡ 571e5c2c-8c07-489a-a87b-75638b783286
+const ref_game_status = Set([:not_started, :progress_rings, :progress_game, :completed])
+
+# ╔═╡ c9f6f735-4296-4126-babb-1bd0395a65e9
+games_log_dict
 
 # ╔═╡ 57153574-e5ca-4167-814e-2d176baa0de9
 function save_newGame!(games_log_ref, new_game_details)
@@ -1594,6 +1604,9 @@ begin
 	const ws_messages_log_OG = []; # log for all received messages (only parsing)
 end
 
+# ╔═╡ 91bf32db-766c-4cd8-a2ac-75cd67738ecd
+ws_messages_log
+
 # ╔═╡ 0bb77295-be29-4b50-bff8-f712ebe08197
 begin
 	
@@ -1631,9 +1644,7 @@ begin
 
 	# keys to access specific values
 	key_nextActionCode = :next_action_code
-
 	
-
 end
 
 # ╔═╡ ca522939-422f-482a-8658-452790c463f6
@@ -1874,6 +1885,18 @@ function is_game_vs_ai(game_id::String)::Bool
 
 end
 
+# ╔═╡ f7fe7ff7-0fff-4740-9aec-56354fdca9a3
+function is_rings_placement_random(game_id::String)::Bool
+# checks if ring placement mode is random, if not (or if error) returns false
+	
+	try
+		return games_log_dict[game_id][:identity][:random_rings] # true/false
+	catch
+		error("ERROR in is_game_vs_ai check: game code $game_id not found") |> throw
+	end
+
+end
+
 # ╔═╡ ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 function whos_player(game_code::String, player_id::String)::Symbol
 
@@ -2020,6 +2043,59 @@ function get_last_moving_player(game_code)
 
 end
 
+# ╔═╡ 59efcc6c-7ec7-4ac7-8510-ae9257d0ff23
+function set_gameStatus!(game_id::String, status::Symbol)
+
+	if status in ref_game_status
+		games_log_dict[game_id][:identity][:status] = status
+		println("Game $game_id -> $(status)")
+	else
+		"Attempt to set invalid game status" |> error |> throw
+	end
+
+end
+
+# ╔═╡ d4e9c5b2-4eb5-44a5-a221-399d77b50db3
+get_gameStatus(game_id::String) = games_log_dict[game_id][:identity][:status]
+
+# ╔═╡ b2b31d4e-75c7-4232-b486-a4515d01408b
+function infer_set_game_transitions!(game_id)
+
+#= OVERVIEW
+- the possible game states are defined in ref_game_status
+- not_started -> (:progress_rings) -> :progress_game -> :completed
+- not started is given at game creation
+- :progress_rings & :progress_game are inferred and set by this function
+- this function is called by play_turn_server ( place rings vs make a move ) and update_serverStates post-move
+- :completed is instead set by another function, check_update_game_end, and it handles evaluating scores/outcomes as well as handling player resignation
+- might be better to condense functions into a better architected events handling layer
+=#
+
+	# unless game is already completed
+	_game_status = get_gameStatus(game_id)
+	if _game_status == :completed
+		"Attempt to infer progress on game already completed" |> error 
+	else
+
+		if _game_status != :progress_game # prevent state regressions
+			
+			gs = get_last_srv_gameState(game_id)
+			_num_rings = findall(contains(_R), gs) |> length
+			_num_markers = findall(contains(_M), gs) |> length
+
+			if _num_rings < 10 && _num_markers == 0
+				_game_status = :progress_rings
+			end
+		else
+			_game_status = :progress_game
+		end
+
+		set_gameStatus!(game_id, _game_status)
+		return _game_status
+	end
+
+end
+
 # ╔═╡ cb8ffb39-073d-4f2b-9df4-53febcf3ca99
 function get_resignedStatus_byID(game_id::String)::Dict{String, Bool}
 # returns {"B" => false/true, "W" => false/true}
@@ -2052,6 +2128,16 @@ function check_update_game_end!(game_id::String)::Dict
 # marks reason in game log - who won/lost (or if it's a draw), reason score vs resign vs markers, and the game end time 
 # outcome can be valued to one of [ score, mk_limit_score, mk_limit_draw, resign ]
 # won_by is B/W unless mk_limit_draw, in which case is left empty
+
+#=
+UPDATE
+
+this function was extended to also handle the rings placement phase
+while the game previously had either a 'not-started' or 'completed' status
+now it can go from ns -> (progress_rings) -> progress_play -> completed
+() is optional and depends on randomRings flag set at game creation
+
+=#
 
 	winning_score = 3 # hardcoded, can be tied to game_id (-> game mode)
 	ret = Dict(:end_flag => false, :outcome => "", :won_by => "")
@@ -2108,7 +2194,11 @@ function check_update_game_end!(game_id::String)::Dict
 		games_log_dict[game_id][:identity][:won_by] = ret[:won_by]
 		games_log_dict[game_id][:identity][:outcome] = ret[:outcome]
 		games_log_dict[game_id][:identity][:end_dateTime] = now()
-		games_log_dict[game_id][:identity][:status] = :completed
+
+		# update game status
+		# using dedicated function just to handle status
+		# might need to evolve it into whole-identity setter later
+		set_gameStatus!(game_id, :completed)
 		
 	end
 	
@@ -2224,6 +2314,7 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 =# 
 #= > INPUT format for SC (Scenario)
+	() means optional field
 
 	! id
 		! player_id -> B/W
@@ -2235,11 +2326,14 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 	turn recap data:
 
+	() ring_place_action ci
+			ring_loc
+
 	() score_actions_preMove [] 
 			mk_locs
 			ring_score
 	
-	() move_action  
+	() move_action  (ci, ci)
 	  		start 
 			end
 
@@ -2254,6 +2348,7 @@ Making sense of move/flip data depends on the mode the function was called in.
 	winning_score::Int = 3; # game_mode == quick ? 1 : 3
 
 	## extract relevant flags from input (given by presence of keys in dict)
+	f_ring_place_act::Bool = haskey(sc, :ring_place_action)
 	f_scores_act_preMove::Bool = haskey(sc, :score_actions_preMove)
 	f_move_act::Bool = haskey(sc, :move_action)
 	f_scores_act::Bool = haskey(sc, :score_actions)
@@ -2272,27 +2367,41 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 	#= OUTPUT structure - fields are added only if valued
 
-	> delta
+	# delta
+		:ring_place_done => (loc, player)
 		:scores_preMove_done => [ (:mk_locs => CI[], :ring_score => CI) ]
 		:move_done => (:mk_add => (loc, player), :ring_move = (start, end, player))
-		:mk_flip => CI[] (to be flipped) | used only by client, server recomputes them
+		:mk_flip => CI[] (to be flipped) | used only by CLI, SRV re-checks on the fly
 		:scores_done => [ (:mk_locs => CI[], :ring_score => CI) ]
 
-	> new state post-delta 
+	# new state post-delta 
 		:new_game_state => Matrix
 		:new_player_score => Int
 		:new_opp_score => Int 
 		
-	> inspect results
+	# inspect results
 		:scores_avail_opp => { :s_rows => Dict[], :s_sets => { (1,2,4), (3,5) } 
 		:scores_avail_player => { :s_rows => Dict[], :s_sets => { (1,2,4), (3,5) }
 
-	> log/debug value
+	# log/debug value
 		:mode => Symbol (how this fn was called)
 
 	=#
 	
-	################## EDITING unctions
+	################## EDITING functions for board state
+
+	function ring_place_do!() # place ring (manual rings placement mode)
+
+		# ring placed in ring_loc (same color as player_id)
+		ring_loc::CartesianIndex = @inbounds sc[:ring_place_action]
+		@inbounds new_gs[ring_loc] = (_player_id == _B ? _RB : _RW)::String
+
+		# update global dict
+		ring_place = Dict{Symbol, Union{CartesianIndex, String}}(:loc => ring_loc, :player_id => _player_id)
+		setindex_container!(_ret, ring_place, :ring_place_done)
+
+	end
+	
 
 	function scores_preMove_do!() # pre-move scoring - ie. opp scored for player
 
@@ -2417,7 +2526,8 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 	################## ACTING on input mode
 	if fn_mode == :replay # whole turn
-		
+
+		f_ring_place_act && ring_place_do!()
 		f_scores_act_preMove && scores_preMove_do!() # -> win check
 		f_move_act && move_do!() # -> mks check you can move only if limit not hit
 		f_scores_act && scores_do!()
@@ -2656,9 +2766,9 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, players_scores::
 end
 
 # ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
-function gen_newGame(vs_server = false)
+function gen_newGame(vs_server = false, random_rings = true)
 # initializes new game, saves data server-side and returns object for client
-
+	
 	# generate random game identifier (only uppercase letters)
 	game_id = randstring(['A':'Z'; '0':'9'], 6)
 
@@ -2671,7 +2781,7 @@ function gen_newGame(vs_server = false)
 
 	# generate random initial game state (server format)
 	# true param => GENERATING STATES w/ 4MKS in a row for a randomly picked player
-	gs = gen_random_gameState(0, 0)
+	gs = gen_random_gameState(0, 0, random_rings)
 
 	# RINGS
 		# retrieves location ids in client format 
@@ -2707,6 +2817,7 @@ function gen_newGame(vs_server = false)
 		# game identity
 		_identity = Dict(:game_id => game_id,
 						:game_type => (vs_server ? :h_vs_ai : :h_vs_h),
+						:random_rings => (random_rings ? true : false),
 						:orig_player_id => ORIG_player_id,
 						:join_player_id => JOIN_player_id,
 						:init_dateTime => now(),
@@ -2730,6 +2841,7 @@ function gen_newGame(vs_server = false)
 		_cli_pkg = Dict(:game_id => game_id,
 						:orig_player_id => ORIG_player_id,
 						:join_player_id => JOIN_player_id,
+						:rings_mode => (random_rings ? :random : :manual),
 						:rings => _rings,
 						:markers => _markers, 
 						:scenario_trees => _scenario_trees,
@@ -2786,9 +2898,11 @@ end
 function fn_new_game_vs_server(ws, msg)
 # human client (originator) wants new game to play against server/AI
 	
-
+	# handle game settings/preferences in msg payload
+	_random_rings = msg[:payload][:random_rings] # true (random) | false (manual)
+	
 	# generate and store new game data
-	_new_game_id = gen_newGame(true) 
+	_new_game_id = gen_newGame(true, _random_rings) 
 
 	# save ws handler for originating player
 	update_ws_handler!(_new_game_id, ws, true)
@@ -2898,6 +3012,7 @@ function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = fals
 	#= 
 		TURN RECAP data format (same used internally by sim_game_state)
 
+		ring_place_action : -1
 		score_actions_preMove : [ { mk_sel: -1, mk_locs: [], ring_score: -1 } ],
 		move_action: { start: start_move_index, end: drop_loc_index },
 		score_actions: [ { mk_sel: -1, mk_locs: [], ring_score: -1 } ], 
@@ -2922,7 +3037,7 @@ function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = fals
 	_sc_id = Dict( 	:player_id => _player_id, 
 				  	:players_scores => get_scores_byID(_game_code))
 
-	# add pre-move/move/score info from client
+	# add ring_place/pre-move/move/score info from client
 	_sc_info = setindex!(srv_turn_recap, _sc_id, :id)
 	
 	#@info _sc_info
@@ -2932,8 +3047,11 @@ function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = fals
 	# update player score
 	edit_player_score!(_game_code, _player_id, new_gs_sim[:new_player_score])
 
-	# save new game state to log
+	# save new board state to log
 	push!(games_log_dict[_game_code][:server_states], new_gs_sim[:new_game_state])
+
+	# infer & set new game state
+	infer_set_game_transitions!(_game_code)
 
 	# save delta for client (w/ client loc coordinates)
 	push!(games_log_dict[_game_code][:client_delta], reshape_out_fields(new_gs_sim))
@@ -3030,6 +3148,8 @@ try
 	num_px_moves::Int = 0 # num of possible moves (already excluding same start/end)
 	num_pruned_moves::Int = 0 # num non-explored moves/trees
 	max_i::Int = 0 # moves explored (if server moves)
+	__pick_txt::String = "no_move" 
+
 
 	# returning value
 	turn_recap = Dict()
@@ -3037,7 +3157,8 @@ try
 	#= output format for _turn_recap:
 	
 		note: fields only added if valued/done/non-default
-		
+
+		ring_place_action : ring_loc
 		score_actions_preMove : [ { mk_sel: -1, mk_locs: [], ring_score: -1 } ],
 		move_action: { start: start_move_index, end: drop_loc_index },
 		score_actions: [ { mk_sel: -1, mk_locs: [], ring_score: -1 } ], 
@@ -3049,6 +3170,25 @@ try
 
 	# last game state in srv format
 	ex_gs::Matrix{String} = deepcopy(get_last_srv_gameState(game_code, prev))
+
+	### INFER GAME STATE
+	## :progress_rings -> PLACE RING
+	_game_progress_state = infer_set_game_transitions!(game_code)
+	if _game_progress_state == :progress_rings
+
+		# pick random spot for ring
+		ring_place_loc = Dict(loc .=> ex_gs[loc] for loc in _board_locs) |> d -> filter(kv -> last(kv) == "", d) |> keys |> rand
+
+		# prep response turn recap 
+		setindex!(turn_recap, ring_place_loc, :ring_place_action)
+
+		# early return
+		__pick_txt = "ring_place_action"
+		@goto complete_turn
+	end
+
+	
+	## :progress_game -> PLAY GAME 
 	
 	# scenarios
 	players_scores = get_scores_byID(game_code)::Dict{String, Int}
@@ -3061,7 +3201,7 @@ try
 	_ring_id::String = srv_player_id == _W ? _RW : _RB
 
 	
-	# heuristic
+	# PLAY heuristic
 	#=
 	- if you have a score opportunity pre-move, do it
 	- at every step, exclude from possible choices any that could result in scoring for the opponent - unless it will be the winning move
@@ -3126,7 +3266,6 @@ try
 	end
 
 
-	__pick_txt::String = "no_move" 
 
 	#= NOTE: check if game is over by score or max num of markers
 
@@ -3341,6 +3480,9 @@ try
 	# skipped only when a pre-move score wins the game, as of label below
 	setindex!(turn_recap, move_action, :move_action)
 
+
+	##### LOGGING & RETURN
+
 	@label complete_turn 
 
 	# logging
@@ -3401,15 +3543,14 @@ function game_runner(msg)
 	_game_code = msg[:payload][:game_id]
 	_player_id = msg[:payload][:player_id]
 	_who = whos_player(_game_code, _player_id) # :originator || :joiner
+	_game_status = get_gameStatus(_game_code)
 	_game_vs_ai_flag = is_game_vs_ai(_game_code)
+	_random_rings = is_rings_placement_random(_game_code)
 	_turn_recap = msg[:payload][:turn_recap] 
-	
+
+	# turn recap structure
 	# false || { :move_action {}, :score_actions [{}], :preMove_score_actions [{}] }
 	
-
-	# default variable, is overwritten later
-	end_check = Dict(:end_flag => false)
-
 
 	## RESPONSE TEMPLATES
 	
@@ -3428,7 +3569,11 @@ function game_runner(msg)
 		_other_pld = Dict()
 
 
-	# update player status 
+	# need this var in outer-scope
+	end_check = Dict(:end_flag => false) 
+
+
+	# UPDATE player status & handle resignations
 		if _msg_code == CODE_advance_game # player ready
 			mark_player_ready!(_game_code, _who)
 		
@@ -3449,7 +3594,7 @@ function game_runner(msg)
 		end
 
 	
-	## REFLECT TURN DATA
+	## REFLECT TURN DATA 
 		if _turn_recap != false
 		
 			# update server state & generates delta for move replay
@@ -3842,64 +3987,52 @@ wait(Condition())
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
-BenchmarkTools = "~1.4.0"
 Combinatorics = "~1.0.2"
-HTTP = "~1.10.1"
-JET = "~0.8.25"
-JSON3 = "~1.14.0"
-StatsBase = "~0.33.21"
+HTTP = "~1.10.14"
+JSON3 = "~1.14.1"
+StatsBase = "~0.34.4"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.0"
+julia_version = "1.11.1"
 manifest_format = "2.0"
-project_hash = "030e8833887829c37f479adb7d5482062579f13b"
+project_hash = "3409c0c845e61e57e56a79f2b2f1c7349bf5a6ca"
 
-[[deps.ArgTools]]
-uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
-version = "1.1.1"
+[[deps.AliasTables]]
+deps = ["PtrArrays", "Random"]
+git-tree-sha1 = "9876e1e164b144ca45e9e3198d0b689cadfed9ff"
+uuid = "66dad0bd-aa9a-41b7-9441-69ab47430ed8"
+version = "1.1.3"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+version = "1.11.0"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
-
-[[deps.BenchmarkTools]]
-deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
-git-tree-sha1 = "f1f03a9fa24271160ed7e73051fba3c1a759b53f"
-uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
-version = "1.4.0"
+version = "1.11.0"
 
 [[deps.BitFlags]]
-git-tree-sha1 = "2dc09997850d68179b69dafb58ae806167a32b1b"
+git-tree-sha1 = "0691e34b3bb8be9307330f88d1a3c3f25466c24d"
 uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
-version = "0.1.8"
-
-[[deps.CodeTracking]]
-deps = ["InteractiveUtils", "UUIDs"]
-git-tree-sha1 = "c0216e792f518b39b22212127d4a84dc31e4e386"
-uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
-version = "1.3.5"
+version = "0.1.9"
 
 [[deps.CodecZlib]]
 deps = ["TranscodingStreams", "Zlib_jll"]
-git-tree-sha1 = "cd67fc487743b2f0fd4380d4cbd3a24660d0eec8"
+git-tree-sha1 = "bce6804e5e6044c6daab27bb533d1295e4a2e759"
 uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
-version = "0.7.3"
+version = "0.7.6"
 
 [[deps.Combinatorics]]
 git-tree-sha1 = "08c8b6831dc00bfea825826be0bc8336fc369860"
@@ -3907,10 +4040,10 @@ uuid = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 version = "1.0.2"
 
 [[deps.Compat]]
-deps = ["UUIDs"]
-git-tree-sha1 = "886826d76ea9e72b35fcd000e535588f7b60f21d"
+deps = ["TOML", "UUIDs"]
+git-tree-sha1 = "8ae8d32e09f0dcf42a36b90d4e17f5dd2e4c4215"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.10.1"
+version = "4.16.0"
 weakdeps = ["Dates", "LinearAlgebra"]
 
     [deps.Compat.extensions]
@@ -3919,32 +4052,29 @@ weakdeps = ["Dates", "LinearAlgebra"]
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.0.5+1"
+version = "1.1.1+0"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
-git-tree-sha1 = "8cfa272e8bdedfa88b6aefbbca7c19f1befac519"
+git-tree-sha1 = "f36e5e8fdffcb5646ea5da81495a5a7566005127"
 uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
-version = "2.3.0"
+version = "2.4.3"
 
 [[deps.DataAPI]]
-git-tree-sha1 = "8da84edb865b0b5b0100c0666a9bc9a0b71c553c"
+git-tree-sha1 = "abe83f3a2f1b857aac70ef8b269080af17764bbe"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
-version = "1.15.0"
+version = "1.16.0"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
-git-tree-sha1 = "ac67408d9ddf207de5cfa9a97e114352430f01ed"
+git-tree-sha1 = "1d0a14036acb104d9e89698bd408f63ab58cdc82"
 uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-version = "0.18.16"
+version = "0.18.20"
 
 [[deps.Dates]]
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
-
-[[deps.Distributed]]
-deps = ["Random", "Serialization", "Sockets"]
-uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+version = "1.11.0"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -3952,58 +4082,39 @@ git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.9.3"
 
-[[deps.Downloads]]
-deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
-uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
-version = "1.6.0"
-
 [[deps.ExceptionUnwrapping]]
 deps = ["Test"]
-git-tree-sha1 = "dcb08a0d93ec0b1cdc4af184b26b591e9695423a"
+git-tree-sha1 = "d36f682e590a83d63d1c7dbd287573764682d12a"
 uuid = "460bff9d-24e4-43bc-9d9f-a8973cb893f4"
-version = "0.1.10"
-
-[[deps.FileWatching]]
-uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
+version = "0.1.11"
 
 [[deps.HTTP]]
-deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "abbbb9ec3afd783a7cbd82ef01dcd088ea051398"
+deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "PrecompileTools", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
+git-tree-sha1 = "627fcacdb7cb51dc67f557e1598cdffe4dda386d"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.10.1"
+version = "1.10.14"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+version = "1.11.0"
 
 [[deps.IrrationalConstants]]
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.2.2"
 
-[[deps.JET]]
-deps = ["InteractiveUtils", "JuliaInterpreter", "LoweredCodeUtils", "MacroTools", "Pkg", "PrecompileTools", "Preferences", "Revise", "Test"]
-git-tree-sha1 = "5a271ff6f12b34cf173c97bb8a6cdd8db6aa3f96"
-uuid = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
-version = "0.8.25"
-
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
-git-tree-sha1 = "7e5d6779a1e09a36db2a7b6cff50942a0a7d0fca"
+git-tree-sha1 = "be3dc50a92e5a386872a493a10050136d4703f9b"
 uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
-version = "1.5.0"
-
-[[deps.JSON]]
-deps = ["Dates", "Mmap", "Parsers", "Unicode"]
-git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
-uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-version = "0.21.4"
+version = "1.6.1"
 
 [[deps.JSON3]]
 deps = ["Dates", "Mmap", "Parsers", "PrecompileTools", "StructTypes", "UUIDs"]
-git-tree-sha1 = "eb3edce0ed4fa32f75a0a11217433c31d56bd48b"
+git-tree-sha1 = "1d322381ef7b087548321d3f878cb4c9bd8f8f9b"
 uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-version = "1.14.0"
+version = "1.14.1"
 
     [deps.JSON3.extensions]
     JSON3ArrowExt = ["ArrowTypes"]
@@ -4011,30 +4122,15 @@ version = "1.14.0"
     [deps.JSON3.weakdeps]
     ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
 
-[[deps.JuliaInterpreter]]
-deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "04663b9e1eb0d0eabf76a6d0752e0dac83d53b36"
-uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
-version = "0.9.28"
-
-[[deps.LibCURL]]
-deps = ["LibCURL_jll", "MozillaCACerts_jll"]
-uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
-version = "0.6.4"
-
-[[deps.LibCURL_jll]]
-deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
-uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "8.4.0+0"
-
 [[deps.LibGit2]]
 deps = ["Base64", "LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
+version = "1.11.0"
 
 [[deps.LibGit2_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll"]
 uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
-version = "1.6.4+0"
+version = "1.7.2+0"
 
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
@@ -4043,16 +4139,18 @@ version = "1.11.0+1"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+version = "1.11.0"
 
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+version = "1.11.0"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "7d6dd4e9212aebaeed356de34ccf262a3cd415aa"
+git-tree-sha1 = "13ca9e2586b89836fd20cccf56e57e2b9ae7f38f"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.26"
+version = "0.3.29"
 
     [deps.LogExpFunctions.extensions]
     LogExpFunctionsChainRulesCoreExt = "ChainRulesCore"
@@ -4066,28 +4164,18 @@ version = "0.3.26"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+version = "1.11.0"
 
 [[deps.LoggingExtras]]
 deps = ["Dates", "Logging"]
-git-tree-sha1 = "c1dd6d7978c12545b4179fb6153b9250c96b0075"
+git-tree-sha1 = "f02b56007b064fbfddb4c9cd60161b6dd0f40df3"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
-version = "1.0.3"
-
-[[deps.LoweredCodeUtils]]
-deps = ["JuliaInterpreter"]
-git-tree-sha1 = "0b8cf121228f7dae022700c1c11ac1f04122f384"
-uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
-version = "2.3.2"
-
-[[deps.MacroTools]]
-deps = ["Markdown", "Random"]
-git-tree-sha1 = "2fa9ee3e63fd3a4f7a9a4f4744a52f4856de82df"
-uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-version = "0.5.13"
+version = "1.1.0"
 
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+version = "1.11.0"
 
 [[deps.MbedTLS]]
 deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "NetworkOptions", "Random", "Sockets"]
@@ -4098,20 +4186,21 @@ version = "1.1.9"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.28.2+1"
+version = "2.28.6+0"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
-git-tree-sha1 = "f66bdc5de519e8f8ae43bdc598782d35a25b1272"
+git-tree-sha1 = "ec4f7fbeab05d7747bdf98eb74d130a2a2ed298d"
 uuid = "e1d29d7a-bbdc-5cf2-9ac0-f12de2c33e28"
-version = "1.1.0"
+version = "1.2.0"
 
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+version = "1.11.0"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2023.1.10"
+version = "2023.12.12"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
@@ -4120,24 +4209,24 @@ version = "1.2.0"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.23+2"
+version = "0.3.27+1"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
-git-tree-sha1 = "51901a49222b09e3743c65b8847687ae5fc78eb2"
+git-tree-sha1 = "38cb508d080d21dc1128f7fb04f20387ed4c0af4"
 uuid = "4d8831e6-92b7-49fb-bdf8-b643e874388c"
-version = "1.4.1"
+version = "1.4.3"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "cc6e1927ac521b659af340e0ca45828a3ffc748f"
+git-tree-sha1 = "7493f61f55a6cce7325f197443aa80d32554ba10"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.0.12+0"
+version = "3.0.15+1"
 
 [[deps.OrderedCollections]]
-git-tree-sha1 = "dfdf5519f235516220579f949664f1bf44e741c5"
+git-tree-sha1 = "12f1439c4f986bb868acda6ea33ebc78e19b95ad"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-version = "1.6.3"
+version = "1.7.0"
 
 [[deps.Parsers]]
 deps = ["Dates", "PrecompileTools", "UUIDs"]
@@ -4145,50 +4234,32 @@ git-tree-sha1 = "8489905bcdbcfac64d1daa51ca07c0d8f0283821"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.8.1"
 
-[[deps.Pkg]]
-deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
-uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.10.0"
-
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
-git-tree-sha1 = "03b4c25b43cb84cee5c90aa9b5ea0a78fd848d2f"
+git-tree-sha1 = "5aa36f7049a63a1528fe8f7c3f2113413ffd4e1f"
 uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
-version = "1.2.0"
+version = "1.2.1"
 
 [[deps.Preferences]]
 deps = ["TOML"]
-git-tree-sha1 = "00805cd429dcb4870060ff49ef443486c262e38e"
+git-tree-sha1 = "9306f6085165d270f7e3db02af26a400d580f5c6"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
-version = "1.4.1"
+version = "1.4.3"
 
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+version = "1.11.0"
 
-[[deps.Profile]]
-deps = ["Printf"]
-uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
-
-[[deps.REPL]]
-deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
-uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
+[[deps.PtrArrays]]
+git-tree-sha1 = "77a42d78b6a92df47ab37e177b2deac405e1c88f"
+uuid = "43287f4e-b6f4-7ad1-bb20-aadabca52c3d"
+version = "1.2.1"
 
 [[deps.Random]]
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-
-[[deps.Requires]]
-deps = ["UUIDs"]
-git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
-uuid = "ae029012-a4dd-5104-9daa-d747884805df"
-version = "1.3.0"
-
-[[deps.Revise]]
-deps = ["CodeTracking", "Distributed", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Pkg", "REPL", "Requires", "UUIDs", "Unicode"]
-git-tree-sha1 = "3fe4e5b9cdbb9bbc851c57b149e516acc07f8f72"
-uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
-version = "3.5.13"
+version = "1.11.0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -4196,14 +4267,16 @@ version = "0.7.0"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+version = "1.11.0"
 
 [[deps.SimpleBufferStream]]
-git-tree-sha1 = "874e8867b33a00e784c8a7e4b60afe9e037b74e1"
+git-tree-sha1 = "f305871d2f381d21527c770d4788c06c097c9bc1"
 uuid = "777ac1f9-54b0-4bf8-805c-2214025038e7"
-version = "1.1.0"
+version = "1.2.0"
 
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
+version = "1.11.0"
 
 [[deps.SortingAlgorithms]]
 deps = ["DataStructures"]
@@ -4214,12 +4287,17 @@ version = "1.2.1"
 [[deps.SparseArrays]]
 deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-version = "1.10.0"
+version = "1.11.0"
 
 [[deps.Statistics]]
-deps = ["LinearAlgebra", "SparseArrays"]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "ae3bb1eb3bba077cd276bc5cfc337cc65c3075c0"
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-version = "1.10.0"
+version = "1.11.1"
+weakdeps = ["SparseArrays"]
+
+    [deps.Statistics.extensions]
+    SparseArraysExt = ["SparseArrays"]
 
 [[deps.StatsAPI]]
 deps = ["LinearAlgebra"]
@@ -4228,44 +4306,36 @@ uuid = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
 version = "1.7.0"
 
 [[deps.StatsBase]]
-deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "d1bf48bfcc554a3761a133fe3a9bb01488e06916"
+deps = ["AliasTables", "DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
+git-tree-sha1 = "29321314c920c26684834965ec2ce0dacc9cf8e5"
 uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-version = "0.33.21"
+version = "0.34.4"
 
 [[deps.StructTypes]]
 deps = ["Dates", "UUIDs"]
-git-tree-sha1 = "ca4bccb03acf9faaf4137a9abc1881ed1841aa70"
+git-tree-sha1 = "159331b30e94d7b11379037feeb9b690950cace8"
 uuid = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
-version = "1.10.0"
+version = "1.11.0"
 
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "7.2.1+1"
+version = "7.7.0+0"
 
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 version = "1.0.3"
 
-[[deps.Tar]]
-deps = ["ArgTools", "SHA"]
-uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.0"
-
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+version = "1.11.0"
 
 [[deps.TranscodingStreams]]
-git-tree-sha1 = "1fbeaaca45801b4ba17c251dd8603ef24801dd84"
+git-tree-sha1 = "0c45878dcfdcfa8480052b6ab162cdd138781742"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.10.2"
-weakdeps = ["Random", "Test"]
-
-    [deps.TranscodingStreams.extensions]
-    TestExt = ["Test", "Random"]
+version = "0.11.3"
 
 [[deps.URIs]]
 git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
@@ -4275,9 +4345,11 @@ version = "1.5.1"
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+version = "1.11.0"
 
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+version = "1.11.0"
 
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
@@ -4287,17 +4359,7 @@ version = "1.2.13+1"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.8.0+1"
-
-[[deps.nghttp2_jll]]
-deps = ["Artifacts", "Libdl"]
-uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.52.0+1"
-
-[[deps.p7zip_jll]]
-deps = ["Artifacts", "Libdl"]
-uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.4.0+2"
+version = "5.11.0+0"
 """
 
 # ╔═╡ Cell order:
@@ -4357,10 +4419,12 @@ version = "17.4.0+2"
 # ╟─b56084e8-7286-404b-9088-094070331afe
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
-# ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
-# ╟─f1949d12-86eb-4236-b887-b750916d3493
+# ╠═c334b67e-594f-49fc-8c11-be4ea11c33b5
+# ╠═f1949d12-86eb-4236-b887-b750916d3493
 # ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
-# ╠═bc19e42a-fc82-4191-bca5-09622198d102
+# ╟─bc19e42a-fc82-4191-bca5-09622198d102
+# ╟─571e5c2c-8c07-489a-a87b-75638b783286
+# ╠═c9f6f735-4296-4126-babb-1bd0395a65e9
 # ╟─57153574-e5ca-4167-814e-2d176baa0de9
 # ╟─1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╟─156c508f-2026-4619-9632-d679ca2cae50
@@ -4378,6 +4442,7 @@ version = "17.4.0+2"
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╟─466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
+# ╠═91bf32db-766c-4cd8-a2ac-75cd67738ecd
 # ╠═c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
 # ╟─91c35ba0-729e-4ea9-8848-3887936a8a21
 # ╟─1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
@@ -4403,17 +4468,21 @@ version = "17.4.0+2"
 # ╟─92a20829-9f0a-4ed2-9fd3-2d6560514e03
 # ╟─13eb72c7-ac24-4b93-8fd9-260b49940370
 # ╟─8929062f-0d97-41f9-99dd-99d51f01b664
+# ╟─f7fe7ff7-0fff-4740-9aec-56354fdca9a3
 # ╟─ebd8e962-2150-4ada-8ebd-3eba6e29c12e
 # ╟─af5a7cbf-8f9c-42e0-9f8f-6d3561635c40
 # ╟─5ae493f4-346d-40ce-830f-909ec40de8d0
 # ╟─276dd93c-05f9-46b1-909c-1d449c07e2b5
 # ╟─8797a304-aa98-4ce0-ab0b-759df0256fa7
 # ╟─0193d14a-9e55-42c2-97d6-2a0bef50da1e
-# ╟─f55bb88f-ecce-4c14-b9ac-4fc975c3592e
+# ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
+# ╟─b2b31d4e-75c7-4232-b486-a4515d01408b
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
 # ╟─20a8fbe0-5840-4a70-be33-b4103df291a1
+# ╟─59efcc6c-7ec7-4ac7-8510-ae9257d0ff23
+# ╟─d4e9c5b2-4eb5-44a5-a221-399d77b50db3
 # ╟─cb8ffb39-073d-4f2b-9df4-53febcf3ca99
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
 # ╟─fdb40907-1047-41e5-9d39-3f94b06b91c0

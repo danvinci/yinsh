@@ -86,6 +86,10 @@ export function GameSetup() {
       set_game_inProgress(false);
       set_exitGame(false);
 
+      set_joinnewgmsettings(false);
+      set_new_gm_ai_settings(false);
+
+
     }; 
   };
 
@@ -110,7 +114,7 @@ export function GameSetup() {
       const [req_new_VSfriend, set_reqTrig_newVSfriend] = createSignal(false); 
 
       // function wrapper for requesting new game as originator
-      const fn_req_newVSfriend = async () => (await init_game_fromServer(true));
+      const fn_req_newVSfriend = async () => (await init_game_fromServer(true, false, undefined, false, randomRings()));
       
       // resource handler for new games
       const [res_handler_newVSfriend] = createResource(req_new_VSfriend, fn_req_newVSfriend);
@@ -122,9 +126,17 @@ export function GameSetup() {
 
   ////\\\\ JOIN GAME vs FRIEND OPTION
     
-    // show/display "text field for entering code"
-    const [joinClick, set_joinClick] = createSignal(false); 
-    const toggle_joinClick = () => set_joinClick(!joinClick());
+        // show/display "text field for entering code"
+        const [joinClick, set_joinClick] = createSignal(false); 
+        const toggle_joinClick = () => set_joinClick(!joinClick());
+
+        // NOTE => REPLACE WITH LEVELS show/display
+        const [newGameVSHuman_settings, set_joinnewgmsettings] = createSignal(false); 
+        const toggle_newgm_settings = () => set_joinnewgmsettings(!newGameVSHuman_settings());
+
+        // NOTE => REPLACE WITH LEVELS show/display
+        const [new_gm_ai_setttings, set_new_gm_ai_settings] = createSignal(false); 
+        const toggle_newai_settings = () => set_new_gm_ai_settings(!new_gm_ai_setttings());
 
     // signal for join/request button interaction
     const [req_join_VSfriend, set_reqTrig_joinVSfriend] = createSignal(false); 
@@ -148,7 +160,7 @@ export function GameSetup() {
     const [req_join_VS_AI, set_req_join_VS_AI] = createSignal(false); 
 
     // function wrapper for requesting new game
-    const fn_req_newGame_AI = async () => (await init_game_fromServer(false, false, undefined, true));
+    const fn_req_newGame_AI = async () => (await init_game_fromServer(false, false, undefined, true, randomRings()));
     
     // resource handler for new games
     const [res_handler_joinVS_AI] = createResource(req_join_VS_AI, fn_req_newGame_AI);
@@ -156,53 +168,112 @@ export function GameSetup() {
     // handling interaction and resource fetching
     const triggerRequest_joinVS_AI = () => doubleSwitch(set_req_join_VS_AI, req_join_VS_AI);
 
-    function trigger_test_fn(){
-      core_et.dispatchEvent(new CustomEvent('test_triggered'));
-    };
+
+  /// just to trigger one-off tests
+  function trigger_test_fn(){
+    core_et.dispatchEvent(new CustomEvent('test_triggered'));
+  };
 
 
+  //// NEW: need to turn Show into an IF so that I can handle multiple cases
+  // create new component for settings 
+  // create toggle for joinVS_AI -> triggerRequest used a level down
+  // checkbox/toggle to start with random ring placements or manual in UI
+  // find new icon, similar to sound settings
+  // pass value to triggerRequest fn wrapper -> how?
   return (
     <div class="game_controls">
-      <Show 
-        when={game_inProgress()}
-        fallback={
-          <Show
-          when={play()}
-          fallback={<button type = "button" class="play_btn" onClick={toggle_Play}>PLAY</button>}>
-          <Show
-            when={joinClick()}
-            fallback={
-              <>
-                <button type="button" class="back_nav_btn" onClick={toggle_Play}>&#9665;</button>
-                <hr class="menu_line"></hr>
-                <button type="button" onClick={triggerRequest_newVSfriend}>Invite a Friend</button>
-                <button type="button" onClick={toggle_joinClick}>Join a Friend</button> 
-                <button type="button" onClick={triggerRequest_joinVS_AI}>Play vs AI</button> 
-                {/* <button type="button" onClick={trigger_test_fn}>- test button -</button> -- */}
-              </>}>
 
-              <>
-                <button type="button" class="back_nav_btn" onClick={toggle_joinClick}>&#9665;</button>
-                <hr class="menu_line"></hr>
-                <div class="join_input_div">
-                  <input size="10" type="text" class="join_input_txt_class" ref={code_input_field} placeholder="Code here..."></input>
-                  <button type="button" class="join_input_button_class" onClick={triggerRequest_joinVSfriend}>JOIN</button>
-                </div>
-              </>
-          </Show>
-        </Show>}
-      >
-        <Show
-          when={exitGame()}
-          fallback={<button type="button" class="exit_button" onClick={toggle_exitGame}>Resign</button>}>
+      <Show 
+        when={!game_inProgress()}
+        fallback={
+          <Show 
+            when={exitGame()}
+            fallback={<button type="button" class="exit_button" onClick={toggle_exitGame}>Resign</button>}
+          >
             <span class="exit_game_txt">Are you sure?</span>
             <hr></hr>
             <div class="exit_game_div">
               <button type="button" class="exit_button_back" onClick={toggle_exitGame}>No</button>
               <button type="button" class="exit_button_confirm" onClick={fn_game_exited_by_user}>Yes</button>
             </div>
-        </Show>
+          </Show>}
+      >
+        <Show
+          when={play()}
+          fallback={<button type = "button" class="play_btn" onClick={toggle_Play}>PLAY</button>}
+        >
+          <Switch
+            fallback={
+              <>
+                <button type="button" class="back_nav_btn" onClick={toggle_Play}>&#9665;</button>
+                <hr class="menu_line"></hr>
+                <button type="button" onClick={toggle_newgm_settings}>Invite a Friend</button>
+                <button type="button" onClick={toggle_joinClick}>Join a Friend</button> 
+                <button type="button" onClick={toggle_newai_settings}>Play vs AI</button>
+                {/* <button type="button" onClick={trigger_test_fn}>- test button -</button> -- */}
+              </>
+            }
+          >
+            <Match when={newGameVSHuman_settings()}>
+              <>
+                <button type="button" class="back_nav_btn" onClick={toggle_newgm_settings}>&#9665;</button>
+                <hr class="menu_line"></hr>
+                <div class="join_input_div">
+                  <input size="10" type="text" class="join_input_txt_class" ref={code_input_field} placeholder="Code here..."></input>
+                  <button type="button" class="join_input_button_class" onClick={triggerRequest_newVSfriend}>PLAY</button>
+                </div>
+              </>
+            </Match>
+            <Match when={joinClick()}>
+              <>
+                <button type="button" class="back_nav_btn" onClick={toggle_joinClick}>&#9665;</button>
+                <hr class="menu_line"></hr>
+                <div class="join_input_div">
+                  <input size="10" type="text" class="join_input_txt_class" ref={code_input_field} placeholder="Code here..."></input>
+                  <button type="button" onClick={triggerRequest_joinVSfriend}>JOIN</button>
+                </div>
+              </>
+            </Match>
+            <Match when={new_gm_ai_setttings()}>
+              <>
+                <button type="button" class="back_nav_btn" onClick={toggle_newai_settings}>&#9665;</button>
+                <hr class="menu_line"></hr>
+                <p>Game settings</p>
+                <RingsMode_Settings></RingsMode_Settings>
+                <hr class="menu_line"></hr>
+                <button type="button" onClick={triggerRequest_joinVS_AI}>PLAY</button>
+              </>
+            </Match>
+          </Switch>
+        </Show>        
       </Show>
+    </div>
+  );
+}
+
+// signal definition needs to be outside of fn scope, so I can call value elsewhere 
+const [randomRings, set_randomRings] = createSignal(true); 
+const toggle_randomRings = () => set_randomRings(!randomRings());
+
+// component for ring settings on/off
+function RingsMode_Settings() {
+
+  return (
+    <div class="">
+      <Show
+      when={randomRings()}
+      fallback={
+        <div onClick={toggle_randomRings}>
+          <img src={svg_sound_OFF} height="24px" width="24px"></img>
+          <span>Manual rings</span>
+        </div>
+      }>
+        <div onClick={toggle_randomRings}>
+          <img src={svg_sound_ON} height="24px" width="24px"></img>
+          <span>Random rings</span>
+        </div>
+      </Show>  
     </div>
   );
 }
@@ -247,6 +318,7 @@ export function SoundSettings() {
 
 // used to retrigger resource-wrapped fetch: if on -> off and then on again
 function doubleSwitch(setter, value){
+
   if (value() == false) {
     // if NOT triggered 
     setter(!value()); // -> set to true -> triggers refetch

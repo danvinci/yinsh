@@ -7,9 +7,9 @@
 import { save_server_response } from './data.js'
 
 // API endpoint address
-// const ws_complete_address = `ws://localhost:6091`; // local test address (pluto)
+const ws_complete_address = `ws://localhost:6091`; // local test address (pluto)
 // const ws_complete_address = `ws://localhost:80/api`; // local test address (docker)
-const ws_complete_address = "wss://yinsh.net/api" // prod deployment
+// const ws_complete_address = "wss://yinsh.net/api" // prod deployment
 
 
 ///// COMMUNICATION CODES
