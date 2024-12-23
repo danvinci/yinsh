@@ -2056,7 +2056,17 @@ function set_gameStatus!(game_id::String, status::Symbol)
 end
 
 # ╔═╡ d4e9c5b2-4eb5-44a5-a221-399d77b50db3
-get_gameStatus(game_id::String) = games_log_dict[game_id][:identity][:status]
+function get_gameStatus(game_id::String, return_dict = false)
+
+	game_status = games_log_dict[game_id][:identity][:status]
+
+	if !return_dict
+		return game_status
+	else # return dict, used by game_runner to add game status information to payload
+		return Dict(:game_status => game_status)
+	end
+		
+end
 
 # ╔═╡ b2b31d4e-75c7-4232-b486-a4515d01408b
 function infer_set_game_transitions!(game_id)
@@ -2071,28 +2081,28 @@ function infer_set_game_transitions!(game_id)
 - might be better to condense functions into a better architected events handling layer
 =#
 
-	# unless game is already completed
 	_game_status = get_gameStatus(game_id)
-	if _game_status == :completed
-		"Attempt to infer progress on game already completed" |> error 
-	else
-
-		if _game_status != :progress_game # prevent state regressions
+	
+	if _game_status != :completed # unless game is already completed
+		if _game_status in [:not_started, :progress_rings] 
 			
 			gs = get_last_srv_gameState(game_id)
 			_num_rings = findall(contains(_R), gs) |> length
 			_num_markers = findall(contains(_M), gs) |> length
 
-			if _num_rings < 10 && _num_markers == 0
+			if _num_rings < 10 && _num_markers == 0 # set progress_rings
 				_game_status = :progress_rings
+			else
+				_game_status = :progress_game 
 			end
-		else
-			_game_status = :progress_game
+
 		end
 
 		set_gameStatus!(game_id, _game_status)
-		return _game_status
 	end
+
+	# when status is :completed or :progress_game, it's propagated as-is
+	return _game_status
 
 end
 
@@ -3543,13 +3553,11 @@ function game_runner(msg)
 	_game_code = msg[:payload][:game_id]
 	_player_id = msg[:payload][:player_id]
 	_who = whos_player(_game_code, _player_id) # :originator || :joiner
-	_game_status = get_gameStatus(_game_code)
 	_game_vs_ai_flag = is_game_vs_ai(_game_code)
-	_random_rings = is_rings_placement_random(_game_code)
 	_turn_recap = msg[:payload][:turn_recap] 
 
 	# turn recap structure
-	# false || { :move_action {}, :score_actions [{}], :preMove_score_actions [{}] }
+	# false || { :ring_place_action , :move_action {}, :score_actions [{}], :preMove_score_actions [{}] }
 	
 
 	## RESPONSE TEMPLATES
@@ -3569,7 +3577,7 @@ function game_runner(msg)
 		_other_pld = Dict()
 
 
-	# need this var in outer-scope
+	# need this var in outer-scope, is overwritten/reused later
 	end_check = Dict(:end_flag => false) 
 
 
@@ -3692,6 +3700,7 @@ function game_runner(msg)
 
 					# prepare payload for client (delta information)
 					merge!(PLAY_payload, fn_nextPlaying_payload(_game_code))
+					
 
 					# alter called payload
 					_caller_pld = PLAY_payload
@@ -3726,6 +3735,12 @@ function game_runner(msg)
 
 		end		
 
+	# assess & add last game status to payloads
+	# info used by client, as server will infer & set status each time
+	infer_set_game_transitions!(_game_code)
+	game_status = get_gameStatus(_game_code, true)
+	merge!(_caller_pld, game_status)
+	merge!(_other_pld, game_status)
 
 	# return CALLER and OTHER payload
 	return _caller_pld, _other_pld
@@ -4475,7 +4490,7 @@ version = "5.11.0+0"
 # ╟─276dd93c-05f9-46b1-909c-1d449c07e2b5
 # ╟─8797a304-aa98-4ce0-ab0b-759df0256fa7
 # ╟─0193d14a-9e55-42c2-97d6-2a0bef50da1e
-# ╠═f55bb88f-ecce-4c14-b9ac-4fc975c3592e
+# ╟─f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 # ╟─b2b31d4e-75c7-4232-b486-a4515d01408b
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9

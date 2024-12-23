@@ -261,9 +261,9 @@ export function save_server_response(srv_input){
 
         // dispatch event for core game logic with action code from server | pass also data about game ending, if present
         if ('won_by' in srv_input && 'outcome' in srv_input){
-            core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: { next_action_code: srv_input.next_action_code, next_turn_no: srv_input.turn_no, outcome: srv_input.outcome, won_by: srv_input.won_by}}));
+            core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: { next_action_code: srv_input.next_action_code, game_status: srv_input.game_status, next_turn_no: srv_input.turn_no, outcome: srv_input.outcome, won_by: srv_input.won_by}}));
         } else {
-            core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: { next_action_code: srv_input.next_action_code, next_turn_no: srv_input.turn_no }}));
+            core_et.dispatchEvent(new CustomEvent('srv_next_action', { detail: { next_action_code: srv_input.next_action_code, game_status: srv_input.game_status, next_turn_no: srv_input.turn_no }}));
         };
     };
     

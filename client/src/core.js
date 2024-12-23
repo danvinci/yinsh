@@ -52,6 +52,10 @@ import { ringDrop_playSound, markersRemoved_player_playSound, markersRemoved_opp
     const CODE_action_wait = 'wait'
     const CODE_action_end_game = 'end_game'
 
+    // playable game statuses
+    const GS_progress_rings = 'progress_rings' // rings placement
+    const GS_progress_game = 'progress_game' // play game
+
     // window resizing -> canvas and object adjustments
     window.addEventListener("resize", window_resize_handler);
 
@@ -212,9 +216,10 @@ async function server_actions_handler (event) {
     // triggered by data function, assumes next turn data has been saved by calling function
 
     const next_action_code = event.detail.next_action_code;
+    const game_status = event.detail.game_status;
     const next_turn_no = event.detail.next_turn_no;
 
-    if (next_action_code == CODE_action_play) {
+    if (next_action_code == CODE_action_play && game_status == GS_progress_game) {
 
         disableInteraction(); // a bit redundant, should be off from end of prev. turn
 
