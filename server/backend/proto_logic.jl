@@ -1071,12 +1071,6 @@ end
 # ╔═╡ bc19e42a-fc82-4191-bca5-09622198d102
 const games_log_dict = Dict()
 
-# ╔═╡ 571e5c2c-8c07-489a-a87b-75638b783286
-const ref_game_status = Set([:not_started, :progress_rings, :progress_game, :completed])
-
-# ╔═╡ c9f6f735-4296-4126-babb-1bd0395a65e9
-games_log_dict
-
 # ╔═╡ 57153574-e5ca-4167-814e-2d176baa0de9
 function save_newGame!(games_log_ref, new_game_details)
 # handles writing to dict (redis in the future?)
@@ -1195,7 +1189,7 @@ Notes:
 		- iterate through all ids/rows pair-wise, log matches
 		- on each pair, check which matches are possible (disjoint rows)
 		- if is a match, update log for both rows involved in comparison
-		- prune set, take our a set, and try extending it by-1
+		- remove subsets, take out a set, and try extending it by-1
 		- transfer to the final return_value that sets that can't be extended further
 		- repeat until empty until there are no more sets to evaluate
 		- strip the final array of subsets 
@@ -1611,8 +1605,8 @@ ws_messages_log
 begin
 	
 	# ip and port to use for the server
-	ws_ip = "0.0.0.0" # listen on every ip / host ip
-	ws_port = 6091
+	const ws_ip = "0.0.0.0" # listen on every ip / host ip
+	const ws_port = 6091
 
 end
 
@@ -1624,26 +1618,31 @@ begin
 	
 	# client codes codes - used for different requests
 	# server responds with these + _OK or _ERROR
-	CODE_new_game_human = "new_game_vs_human"
-	CODE_new_game_server = "new_game_vs_server"
-	CODE_join_game = "join_game"
- 	CODE_advance_game = "advance_game" # clients asking to progress the game
-	CODE_resign_game = "resign_game" # clients asking to resign
-
+	const CODE_new_game_human = "new_game_vs_human"
+	const CODE_new_game_server = "new_game_vs_server"
+	const CODE_join_game = "join_game"
+ 	const CODE_advance_game = "advance_game" # clients asking to progress the game
+	const CODE_resign_game = "resign_game" # clients asking to resign
 	
 	# server codes (only the server can use these)
 	# client responds with these + _OK or _ERROR
-	CODE_play = "play" # the other player has joined -> move
-	CODE_wait = "wait" # the other player has yet to join -> wait 
-	CODE_end_game = "end_game" # someone won
+	const CODE_play = "play" # the other player has joined -> move
+	const CODE_wait = "wait" # the other player has yet to join -> wait 
+	const CODE_end_game = "end_game" # someone won
 
-
+	# game states
+	const GS_not_started = :not_started
+	const GS_progress_rings = :progress_rings
+	const GS_progress_game = :progress_game
+	const GS_completed = :completed
+	const ref_game_status = Set([GS_not_started, GS_progress_rings, GS_progress_game, GS_completed])
+	
 	# suffixes for code response type
-	sfx_CODE_OK = "_OK"
-	sfx_CODE_ERR = "_ERROR"
+	const sfx_CODE_OK = "_OK"
+	const sfx_CODE_ERR = "_ERROR"
 
 	# keys to access specific values
-	key_nextActionCode = :next_action_code
+	const key_nextActionCode = :next_action_code
 	
 end
 
@@ -1922,6 +1921,7 @@ function strip_reshape_in_recap(recap::Dict)
 	
 #= 	# CLIENT - expected input 
 
+	ring_place_action: -1
 	score_actions_preMove : [ { mk_locs: [], ring_score: -1 } ],
 	move_action: { start: -1, end: -1 },
 	score_actions: [ { mk_locs: [], ring_score: -1 } ], 
@@ -1930,9 +1930,10 @@ function strip_reshape_in_recap(recap::Dict)
 	-1 is the default value sent by the client when the given action is not done,
 	this function strips the input dict of dict / dict[] that contain it before reshaping in client coordinates to cart_indexes
 
+	NOTE: this fn could be made cleaner
 =#
 
-	keys_to_keep = Set([:score_actions_preMove, :move_action, :score_actions])
+	keys_to_keep = Set([:ring_place_action, :score_actions_preMove, :move_action, :score_actions])
 	
 	srv_recap = Dict()
 
@@ -1941,15 +1942,17 @@ function strip_reshape_in_recap(recap::Dict)
 
 		if k in keys_to_keep
 			
-			if k == :move_action 
-				
-				v[:start] == -1 && @goto skip_default_value # no move took place
+			if k == :move_action && v[:start] == -1
+				@goto skip_default_value # no move took place
 
-			elseif v[begin][:ring_score] == -1 # no preMove_score/move_score 
-				@goto skip_default_value
+			elseif k in [:score_actions_preMove, :score_actions]&& v[begin][:ring_score] == -1 
+				@goto skip_default_value # no scoring during pre-move/move
+			
+			elseif k == :ring_place_action && v == -1
+				@goto skip_default_value # no manual ring placement
 			end
 
-			setindex!(srv_recap, v, k) # write only if not skipped
+			setindex!(srv_recap, v, k) # save only if not skipped
 		end
 
 		@label skip_default_value
@@ -2077,23 +2080,23 @@ function infer_set_game_transitions!(game_id)
 - not started is given at game creation
 - :progress_rings & :progress_game are inferred and set by this function
 - this function is called by play_turn_server ( place rings vs make a move ) and update_serverStates post-move
-- :completed is instead set by another function, check_update_game_end, and it handles evaluating scores/outcomes as well as handling player resignation
-- might be better to condense functions into a better architected events handling layer
+- :completed is instead set by another function, check_update_game_end!, and it handles evaluating scores/outcomes as well as handling player resignation
+- might be better to condense both functions into a better architected events handling layer
 =#
 
 	_game_status = get_gameStatus(game_id)
 	
-	if _game_status != :completed # unless game is already completed
-		if _game_status in [:not_started, :progress_rings] 
+	if _game_status != GS_completed # unless game is already completed
+		if _game_status in [GS_not_started, GS_progress_rings] 
 			
 			gs = get_last_srv_gameState(game_id)
 			_num_rings = findall(contains(_R), gs) |> length
 			_num_markers = findall(contains(_M), gs) |> length
 
 			if _num_rings < 10 && _num_markers == 0 # set progress_rings
-				_game_status = :progress_rings
+				_game_status = GS_progress_rings
 			else
-				_game_status = :progress_game 
+				_game_status = GS_progress_game
 			end
 
 		end
@@ -2227,6 +2230,13 @@ function get_last_turn_details(game_code::String)
 
 end
 
+# ╔═╡ de5356b7-1c9d-4065-9ef2-4db1575249c4
+function valid_empty_locs(gs::Matrix{String})
+
+	return Dict(loc .=> gs[loc] for loc in _board_locs) |> d -> filter(kv -> last(kv) == "", d) |> keys |> collect
+
+end
+
 # ╔═╡ eb3b3182-2e32-40f8-adf7-062691bf53c6
 function get_first_maxL(set::Set)
 # return first element in set of maximum length 
@@ -2336,7 +2346,7 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 	turn recap data:
 
-	() ring_place_action ci
+	() ring_place_action (ci)
 			ring_loc
 
 	() score_actions_preMove [] 
@@ -2408,7 +2418,7 @@ Making sense of move/flip data depends on the mode the function was called in.
 
 		# update global dict
 		ring_place = Dict{Symbol, Union{CartesianIndex, String}}(:loc => ring_loc, :player_id => _player_id)
-		setindex_container!(_ret, ring_place, :ring_place_done)
+		setindex!(_ret, ring_place, :ring_place_done)
 
 	end
 	
@@ -2816,13 +2826,17 @@ function gen_newGame(vs_server = false, random_rings = true)
 		_markers = union(white_mks, black_mks)
 		
 	players_scores = Dict(_W => 0, _B => 0) # starting scores for both
-	# pre possible moves and scoring/flipping outcomes for each -> in client's format
-	_scenario_trees = sim_scenarioTrees(gs, first_moving, players_scores) |> reshape_out_fields
+	
+	# precompute possible moves and scoring/flipping outcomes for each -> in client's format - compute trees only if necessary
+	# same for ring drop spots (1st mover will use them)
+	
+	_scenario_trees = random_rings ? (sim_scenarioTrees(gs, first_moving, players_scores) |> reshape_out_fields) : Dict() 
+
+	_ring_placement_spots = random_rings ? [] : (valid_empty_locs(gs) |> reshape_out)
+	
 	
 	
 	### package data for server storage
-
-		game_status = :not_started
 
 		# game identity
 		_identity = Dict(:game_id => game_id,
@@ -2831,7 +2845,7 @@ function gen_newGame(vs_server = false, random_rings = true)
 						:orig_player_id => ORIG_player_id,
 						:join_player_id => JOIN_player_id,
 						:init_dateTime => now(),
-						:status => game_status,
+						:status => GS_not_started,
 						:end_dateTime => now(),
 						:won_by => "",
 						:outcome => "")
@@ -2845,7 +2859,6 @@ function gen_newGame(vs_server = false, random_rings = true)
 		# first game state (server format)
 		_srv_states = [gs]
 
-
 		
 		### package data for client
 		_cli_pkg = Dict(:game_id => game_id,
@@ -2855,6 +2868,7 @@ function gen_newGame(vs_server = false, random_rings = true)
 						:rings => _rings,
 						:markers => _markers, 
 						:scenario_trees => _scenario_trees,
+						:ring_placement_spots => _ring_placement_spots,
 						:turn_no => 1) # first game turn
 
 		_first_turn = Dict( :turn_no => 1,
@@ -2871,7 +2885,6 @@ function gen_newGame(vs_server = false, random_rings = true)
 							:client_pkgs => [_cli_pkg],
 							:ws_connections => Dict())
 
-	
 		
 		# saves game to general log (DB?)
 		save_newGame!(games_log_dict, new_game_data)
@@ -2957,19 +2970,34 @@ function gen_new_clientPkg(game_id::String, nx_player_id::String)
 
 		# prepare markers array to be sent to client
 		_markers = union(white_mks, black_mks)
+
 	
+	# assess & add last game status to payloads
+	# info used by client, as server will infer & set status each time
+	infer_set_game_transitions!(game_id)
+	_game_status = get_gameStatus(game_id)
 
 	# simulates possible moves and outcomes for each -> in client's format
-	#ex_score = get_player_score(game_id, nx_player_id)
-	players_scores = get_scores_byID(game_id)
+	# as well as finding valid locs for manual ring placement
+	# do each depending on game status
+	_scenario_trees = Dict()
+	_ring_placement_spots = []
 	
-	_scenario_trees = sim_scenarioTrees(gs, nx_player_id, players_scores) |> reshape_out_fields
+	if _game_status == :progress_game
+		#ex_score = get_player_score(game_id, nx_player_id)
+		players_scores = get_scores_byID(game_id)
+		_scenario_trees = sim_scenarioTrees(gs, nx_player_id, players_scores) |> reshape_out_fields
+	elseif _game_status == :progress_rings
+		_ring_placement_spots = valid_empty_locs(gs) |> reshape_out
+	end
 		
 	### package data for client
 	_cli_pkg = Dict(:game_id => game_id,
+					:game_status => _game_status,
 					:rings => _rings,
 					:markers => _markers,
-					:scenario_trees => _scenario_trees)
+					:scenario_trees => _scenario_trees,
+					:ring_placement_spots => _ring_placement_spots)
 	
 	
 	# saves game to general log (DB?)
@@ -3184,10 +3212,10 @@ try
 	### INFER GAME STATE
 	## :progress_rings -> PLACE RING
 	_game_progress_state = infer_set_game_transitions!(game_code)
-	if _game_progress_state == :progress_rings
+	if _game_progress_state == GS_progress_rings
 
 		# pick random spot for ring
-		ring_place_loc = Dict(loc .=> ex_gs[loc] for loc in _board_locs) |> d -> filter(kv -> last(kv) == "", d) |> keys |> rand
+		ring_place_loc = valid_empty_locs(ex_gs) |> rand
 
 		# prep response turn recap 
 		setindex!(turn_recap, ring_place_loc, :ring_place_action)
@@ -3649,6 +3677,8 @@ function game_runner(msg)
 				# add turn information
 				setindex!(PLAY_payload, get_last_turn_details(_game_code)[:turn_no], :turn_no)
 
+				
+
 				# inform human it's their turn
 				_caller_pld = PLAY_payload
 				
@@ -3708,7 +3738,7 @@ function game_runner(msg)
 				end
 			end
 
-		else # vs HUMAN, just handle payload swap - payload generated before
+		else # vs HUMAN, just handle payload swap - setup payload generated before
 
 			# if both players ready 
 			if check_both_players_ready(_game_code) 
@@ -3735,12 +3765,16 @@ function game_runner(msg)
 
 		end		
 
-	# assess & add last game status to payloads
-	# info used by client, as server will infer & set status each time
-	infer_set_game_transitions!(_game_code)
-	game_status = get_gameStatus(_game_code, true)
-	merge!(_caller_pld, game_status)
-	merge!(_other_pld, game_status)
+
+	# formally start the game and update game_status
+	# this should be triggered only on first turn after setup
+	# ideally need to cleanup pkg gen / runner pipeline
+	_not_started_yet = get_gameStatus(_game_code) == GS_not_started
+	if _not_started_yet
+		_gstatus = infer_set_game_transitions!(_game_code)
+		setindex!(_caller_pld, _gstatus, :game_status)
+		setindex!(_other_pld, _gstatus, :game_status)
+	end
 
 	# return CALLER and OTHER payload
 	return _caller_pld, _other_pld
@@ -4011,7 +4045,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 Combinatorics = "~1.0.2"
-HTTP = "~1.10.14"
+HTTP = "~1.10.15"
 JSON3 = "~1.14.1"
 StatsBase = "~0.34.4"
 """
@@ -4022,7 +4056,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.1"
 manifest_format = "2.0"
-project_hash = "3409c0c845e61e57e56a79f2b2f1c7349bf5a6ca"
+project_hash = "a83dd56650c9f3967f1c72a6471bffdc425a53fd"
 
 [[deps.AliasTables]]
 deps = ["PtrArrays", "Random"]
@@ -4105,9 +4139,9 @@ version = "0.1.11"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "PrecompileTools", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "627fcacdb7cb51dc67f557e1598cdffe4dda386d"
+git-tree-sha1 = "c67b33b085f6e2faf8bf79a61962e7339a81129c"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.10.14"
+version = "1.10.15"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -4121,9 +4155,9 @@ version = "0.2.2"
 
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
-git-tree-sha1 = "be3dc50a92e5a386872a493a10050136d4703f9b"
+git-tree-sha1 = "a007feb38b422fbdab534406aeca1b86823cb4d6"
 uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
-version = "1.6.1"
+version = "1.7.0"
 
 [[deps.JSON3]]
 deps = ["Dates", "Mmap", "Parsers", "PrecompileTools", "StructTypes", "UUIDs"]
@@ -4234,9 +4268,9 @@ version = "1.4.3"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "7493f61f55a6cce7325f197443aa80d32554ba10"
+git-tree-sha1 = "f58782a883ecbf9fb48dcd363f9ccd65f36c23a8"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.0.15+1"
+version = "3.0.15+2"
 
 [[deps.OrderedCollections]]
 git-tree-sha1 = "12f1439c4f986bb868acda6ea33ebc78e19b95ad"
@@ -4434,12 +4468,10 @@ version = "5.11.0+0"
 # ╟─b56084e8-7286-404b-9088-094070331afe
 # ╟─2c1c4182-5654-46ad-b4fb-2c79727aba3d
 # ╠═8e400909-8cfd-4c46-b782-c73ffac03712
-# ╠═c334b67e-594f-49fc-8c11-be4ea11c33b5
-# ╠═f1949d12-86eb-4236-b887-b750916d3493
-# ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
+# ╟─c334b67e-594f-49fc-8c11-be4ea11c33b5
+# ╟─f1949d12-86eb-4236-b887-b750916d3493
 # ╟─bc19e42a-fc82-4191-bca5-09622198d102
-# ╟─571e5c2c-8c07-489a-a87b-75638b783286
-# ╠═c9f6f735-4296-4126-babb-1bd0395a65e9
+# ╠═e0368e81-fb5a-4dc4-aebb-130c7fd0a123
 # ╟─57153574-e5ca-4167-814e-2d176baa0de9
 # ╟─1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╟─156c508f-2026-4619-9632-d679ca2cae50
@@ -4492,6 +4524,7 @@ version = "5.11.0+0"
 # ╟─0193d14a-9e55-42c2-97d6-2a0bef50da1e
 # ╟─f55bb88f-ecce-4c14-b9ac-4fc975c3592e
 # ╟─b2b31d4e-75c7-4232-b486-a4515d01408b
+# ╟─fdb40907-1047-41e5-9d39-3f94b06b91c0
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
@@ -4500,7 +4533,7 @@ version = "5.11.0+0"
 # ╟─d4e9c5b2-4eb5-44a5-a221-399d77b50db3
 # ╟─cb8ffb39-073d-4f2b-9df4-53febcf3ca99
 # ╟─8b830eee-ae0a-4c9f-a16b-34045b4bef6f
-# ╟─fdb40907-1047-41e5-9d39-3f94b06b91c0
+# ╟─de5356b7-1c9d-4065-9ef2-4db1575249c4
 # ╟─fa924233-8ada-4289-9249-b6731edab371
 # ╟─eb3b3182-2e32-40f8-adf7-062691bf53c6
 # ╟─09c1e858-09ae-44b2-9de7-e73f1b4f188d

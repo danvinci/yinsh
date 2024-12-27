@@ -2,6 +2,7 @@
 // data objects + functions operating on them + data utils (like reshape_index)
 
 import { setup_ok_codes, next_ok_codes, joiner_ok_code} from './server.js'
+import { GS_progress_rings, GS_progress_game } from './core.js'
 
 // UTILITY FUNCTIONS
 
@@ -176,12 +177,15 @@ export function init_empty_game_objects(){
 
         // turns, moves, score handling
         _game_objects.current_turn = {in_progress: false}; // to track if this is the client's turn 
+        _game_objects.game_status = ""; // updated by core with new server events
 
+        //_game_objects.ring_place_action = -1 // -> WE USE THE SAME move_action VAR FOR TRACKING THIS TOO, USE CASE SET BY GAME STATUS
         _game_objects.preMove_scoring_actions = []; // save details in case pre-move scoring took place
-        _game_objects.move_action = {in_progress: false, start_index: -1, end_index: -1, legal_drops: []}; // -> details for move in progress or just done
+        _game_objects.move_action = {in_progress: false, start_index: -1, end_index: -1, legal_drops: []}; // -> details for move in progress/done, both for gameplay or manual ring placement 
         _game_objects.scoring_actions = []; // save details in case scoring took place
        
         _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal drops ids)
+        _game_objects.ring_placement_spots = []; // -> array of valid ring drops for manual placement 
         
         _game_objects.current_mk_scoring = {in_progress: false, task_ref: {}}; // referencing task of general score handling
         _game_objects.current_ring_scoring = {in_progress: false, task_ref: {}}; // referencing task of ring picking within score handling
@@ -198,6 +202,13 @@ export function init_empty_game_objects(){
     console.log('LOG - Empty game objects initialized');
 
 };
+export function set_game_status(gs){
+    yinsh.objs.game_status = gs;
+};
+
+export function get_game_status(){
+    return structuredClone(yinsh.objs.game_status);
+};
 
 
 // saving server response data - internally handles if it's setup or next move data
@@ -207,7 +218,7 @@ export function save_server_response(srv_input){
     // check if it's SETUP or NEXT MOVE data
     const f_setup = setup_ok_codes.includes(srv_input.msg_code);
     const f_next_event = next_ok_codes.includes(srv_input.msg_code);
-    const f_next_save = next_ok_codes.includes(srv_input.msg_code) && ('delta' in srv_input); // save/overwrite next data only if we have a delta
+    const f_next_save = f_next_event && ('delta' in srv_input); // save/overwrite next data only if we have a delta
 
     // init temporary object
     let _srv_response = {};
@@ -218,6 +229,7 @@ export function save_server_response(srv_input){
             _srv_response.rings = srv_input.rings; // rings
             _srv_response.markers = srv_input.markers; // markers
             _srv_response.scenario_trees = srv_input.scenario_trees; // scenario tree
+            _srv_response.ring_placement_spots = srv_input.ring_placement_spots; // ring placement spots (for manual ring placement)
             _srv_response.turn_no = srv_input.turn_no; // turn number
             _srv_response.delta = srv_input.delta; // delta data for replaying opponent's move
 
@@ -236,6 +248,7 @@ export function save_server_response(srv_input){
             _srv_response.rings = srv_input.rings; // rings
             _srv_response.markers = srv_input.markers; // markers (empty array on setup, unless testing otherwise)
             _srv_response.scenario_trees = srv_input.scenario_trees; // pre-computed scenario trees, for each possible move
+            _srv_response.ring_placement_spots = srv_input.ring_placement_spots; // ring placement spots (for manual ring placement)
             _srv_response.turn_no = srv_input.turn_no; // turn number
 
             // determine if we're originator or joiner -> assign color to client (player_black_id / player_white_id)
@@ -271,9 +284,7 @@ export function save_server_response(srv_input){
 
 
 export function get_local_server_data(){
-
-return yinsh.local_server_data;
-
+    return yinsh.local_server_data;
 };
 
 // do we have delta data to replay? -> expected to return false only on setup for white player
@@ -304,6 +315,7 @@ export function swap_data_next_turn() {
         yinsh.server_data.rings = structuredClone(yinsh.next_server_data.rings);  // rings
         yinsh.server_data.markers = structuredClone(yinsh.next_server_data.markers); // markers
         yinsh.server_data.scenario_trees = structuredClone(yinsh.next_server_data.scenario_trees); // trees
+        yinsh.server_data.ring_placement_spots = structuredClone(yinsh.next_server_data.ring_placement_spots); // ring spots
         yinsh.server_data.turn_no = yinsh.next_server_data.turn_no; // turn number
 
     // make local working copy
@@ -392,7 +404,15 @@ export function select_apply_scenarioTree(input_s_set, input_s_rings){
 };
 
 export function get_tree(){
+    // here we write the tree that gets selected depending on the scenario
+    // next_server_data -> server_data -> local_server_data (-> objs) 
+    // issue: next_server_data & server_data are mostly to handle next & current inputs
+    // but data is mixed in usage between the local copy and active objects (objs)
     return structuredClone(yinsh.objs.tree);
+};
+
+export function get_ring_placement_spots(){
+    return yinsh.local_server_data.ring_placement_spots;
 };
 
 
@@ -403,9 +423,7 @@ export function get_move_status(){
 
 
 export function reset_preMove_scoring_actions(){
-
     yinsh.objs.preMove_scoring_actions = [];
-
 };
 
 
@@ -454,12 +472,6 @@ export function get_scoring_actions_done(){
         return [{ mk_locs: [], ring_score: -1 }];
     };
 
-};
-
-// returns scoring options in the task (should be for current player only)
-export function get_scoring_options_fromTask(){
-
-    return structuredClone(yinsh.objs.current_mk_scoring.task_ref.data);
 };
 
 export function get_player_score(){
@@ -525,6 +537,13 @@ export function activate_task(task){
         yinsh.objs.current_animation.in_progress = true;
         yinsh.objs.current_animation.task_ref = task;
     };
+};
+
+
+// returns scoring options in the task (should be for current player only)
+export function get_scoring_options_fromTask(){
+
+    return structuredClone(yinsh.objs.current_mk_scoring.task_ref.data);
 };
 
 // function that allows caller to await for task completion
@@ -1000,6 +1019,57 @@ export function remove_markers(mk_indexes_array){
     
 };
 
+
+// adds ring -> called when ring is manually placed
+// 0 && false (outside right to board) - 0 && true (outside up to board)
+// if opponent true, adds marker of the opponent's color (used for replaying moves)
+export function add_ring(loc_index = 0, as_opponent = false){ 
+
+    // retrieve current player and id for markers
+    const _player_id = structuredClone(yinsh.server_data.client_player_id);
+    const _opponent_id = structuredClone(yinsh.server_data.opponent_player_id);
+    const _ring_id = structuredClone(yinsh.constant_params.ring_id);
+
+    // retrieve array of rings (to be modified) 
+    let _rings = yinsh.objs.rings;
+
+    // retrieve drop zones
+    const _drop_zones = yinsh.objs.drop_zones;
+
+    // set initial ring location (loc_index -> known, 0 -> place at preset spot)
+    // for ring placement replay, placed outside/above board
+    // for manual ring placement, ring is snapped outside/right board
+    const _init_player_loc = {  x: canvas.width - yinsh.drawing_params.S*2, 
+                                y: canvas.height/2*1.5, 
+                                index:0 };
+
+    const _init_opp_loc = { x: canvas.width/2, 
+                            y: 0 - yinsh.drawing_params.S,
+                            index:0 };
+    
+    // match init location to preset or find matching drop zone
+    let _init_loc = as_opponent ? _init_opp_loc : _init_player_loc; 
+    
+    // instate new ring object 
+    const r = { path: {}, // <- to be filled in at drawing time
+                loc: _init_loc, 
+                type: _ring_id, 
+                player: as_opponent ? _opponent_id : _player_id 
+            }; 
+          
+    // add to temp array and to global object
+    _rings.push(r);  
+    yinsh.objs.rings = _rings;
+
+    // update local server data ref copy
+    const _new_r = {id: structuredClone(r.loc.index), player: structuredClone(r.player)};
+    yinsh.local_server_data.rings.push(_new_r);
+
+    // log change
+    console.log(`LOG - Ring ${r.player} added at index ${r.loc.index}`);
+        
+};
+
 // removes ring -> called when scoring and picking ring to be removed
 export function remove_ring(ring_loc_index){
 
@@ -1132,30 +1202,55 @@ export function end_move_action(end_index){
 
 };
 
+
+// both functions read from the same underlying move_action variable
+// need to ensure that defaults are returned when only one action was done
+export function get_ring_placement_action_done(){
+
+    if (get_game_status() == GS_progress_rings) { // manual ring placement
+        return structuredClone(yinsh.objs.move_action.end_index);
+    } else { // normal gameplay
+        return -1; // default
+    };
+};
+
 export function get_move_action_done(){
 
-    const _return_obj = structuredClone({start: yinsh.objs.move_action.start_index, end: yinsh.objs.move_action.end_index});
-     
-    return _return_obj;
+    if (get_game_status() == GS_progress_game) { // normal gameplay
+        return structuredClone({start: yinsh.objs.move_action.start_index, end: yinsh.objs.move_action.end_index});
+    } else {
+        return {start: -1, end: -1};
+    };
 };
 
 
 
 // retrieve indexes of legal moves/drops from saved server data
+// depending on game state, these might be ring drop locations for manual ring placement or a normal gameplay move
 function getIndexes_legal_drops(start_index){
 
-    //console.log(`TEST - searching for legal drops starting at ${start_index}`);
+    let _gs = get_game_status()
 
-    // keys (possible moves) paare the first level of the branch for a ring loc
-    const tree_branch = get_tree()[start_index];
+    if (_gs == GS_progress_game){
 
-    //console.log(`TEST - tree ${typeof tree_branch} found for ${start_index}`, tree_branch);
+        //console.log(`TEST - searching for legal drops starting at ${start_index}`);
 
-    // only keep keys that can be interpreted as numbers
-    // javascript forces object keys to be strings, we need to parse them ¯\_(ツ)_/¯
-    let _legal_drops = Object.keys(tree_branch).filter(Number).map(k => parseInt(k));
-    
-    return structuredClone(_legal_drops);
+        // keys (possible moves) are the first level of the branch for a ring loc
+        const tree_branch = get_tree()[start_index];
+
+        //console.log(`TEST - tree ${typeof tree_branch} found for ${start_index}`, tree_branch);
+
+        // only keep keys that can be interpreted as numbers
+        // javascript forces object keys to be strings, we need to parse them ¯\_(ツ)_/¯
+        let _legal_drops = Object.keys(tree_branch).filter(Number).map(k => parseInt(k));
+        
+        return structuredClone(_legal_drops);
+
+    } else if (_gs == GS_progress_rings) {
+
+        return get_ring_placement_spots();
+
+    };
 };
 
 

@@ -3,6 +3,8 @@
 // https://bencentra.com/code/2014/12/05/html5-canvas-touch-events.html
 
 import { get_player_id, get_move_status, get_task_status, get_scoring_options_fromTask } from './data.js'
+import { GS_progress_rings, GS_progress_game } from './core.js'
+
 
 
 //////////////////////////////////////// ADD EVENT LISTENERS TO CANVAS
@@ -178,7 +180,7 @@ function mouseMove_handler (event) {
 //////////////////////////////////////// HELPER FUNCTIONS 
 
 // Get the position of the mouse relative to the canvas
-function getMousePos(canvasBinding, mouseEvent) {
+export function getMousePos(canvasBinding, mouseEvent) {
     
     const canvasRect = canvasBinding.getBoundingClientRect();
     

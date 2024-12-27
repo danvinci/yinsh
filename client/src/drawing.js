@@ -427,7 +427,7 @@ function draw_rings(ring_spec = {}){
         // starts painting - special flow using ring specification from scoring slot function
         ctx.save();
 
-            // rings in scoring slots should look not look available for interaction - playing w/ transparency, not sure if it's good
+            // rings in scoring slots should look look NOT available for interaction -> different transparency
             ctx.globalAlpha = _ring_alpha;
 
             // draw black ring
