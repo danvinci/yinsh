@@ -41,15 +41,30 @@ function mouseDown_handler (event) {
         const ring_scoring_in_progress = get_task_status('ring_scoring_task'); 
             const mk_or_ring_scoring_in_progress = mk_scoring_in_progress || ring_scoring_in_progress;
 
-        // check if move currently underway, and mk or ring_scoring not underway
-        // if okay -> check which ring is being picked and send event to core_et
+        // check if move currently underway, and mk or ring_scoring NOT underway
+        // if move not started yet -> check which ring is being picked and send event to core_et
         if (move_in_progress == false && mk_or_ring_scoring_in_progress == false){
 
-            // retrieve array of rings
+            // retrieve array of rings & game status
             const _rings = yinsh.objs.rings;
+            const _gstatus = get_game_status();
+            let picked_ring_index_inArray = -1;
 
-            // check all the rings and dispatch event to core logic if match found for local player
-            const picked_ring_index_inArray = _rings.findIndex((ring) => (ring.player == player_id && ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)));
+            // CASE: normal game play, any user ring can be picked up
+            if (_gstatus == GS_progress_game) {
+
+                // find index of picked player ring
+                picked_ring_index_inArray = _rings.findIndex((ring) => (ring.player == player_id && ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)));
+
+            // CASE: manual rings placement, only setup ring can be picked up
+            } else if (_gstatus == GS_progress_rings) {
+
+                 // find index of picked player (setup) ring
+                const _ring_setup_id = 0 
+                picked_ring_index_inArray = _rings.findIndex((ring) => (ring.player == player_id && ring.loc.index === _ring_setup_id && ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)));
+            };
+
+            // dispatch event if matching rings
             if (picked_ring_index_inArray != -1) {
                 core_et.dispatchEvent(new CustomEvent('ring_picked', { detail: picked_ring_index_inArray }));
             };
