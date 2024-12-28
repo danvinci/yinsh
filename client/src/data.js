@@ -1308,7 +1308,7 @@ export function update_mk_halos(mk_ids = [], hot_flag = false){
 };
 
 
-// creates and destroys highlight inside rings for cueing/selection in scoring or manual rings setup
+// creates and destroys highlight inside rings for cueing/selection in scoring, manual rings setup, or normal gameplay
 // assumes that we either have all cold or all cold with 1 hot highlight
 export function update_ring_highlights(rings_ids = [], sel_ring = -1){
 

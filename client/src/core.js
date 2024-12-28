@@ -293,6 +293,11 @@ async function server_actions_handler (event) {
             // inform user that they should still move
             ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Make your move` }));
 
+            // light up users' rings
+            await sleep(500);
+            update_ring_highlights(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
+            refresh_canvas_state();
+
         };
 
     // PLAY - MANUAL RINGS SETUP
@@ -744,6 +749,9 @@ async function replay_ring_move_drop(moved_ring_details) {
 // listens to ring picks and updates game state
 function ringPicked_handler (event) {
 
+    // turn off all rings highlight cues
+    update_ring_highlights();
+
     // detail contains index in rings array of picked ring
     const index_picked_ring_in_array = event.detail;
     
@@ -891,7 +899,11 @@ async function ringDrop_handler (event) {
 
                 // remove marker
                 remove_markers([drop_loc_index]);
-                refresh_canvas_state(); 
+
+                // light up users' rings (again)
+                sleep(500);
+                update_ring_highlights(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
+                refresh_canvas_state();
 
                 // log
                 console.log(`LOG - Ring dropped in-place. Turn is still on.`)
