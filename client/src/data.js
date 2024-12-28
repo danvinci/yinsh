@@ -798,19 +798,15 @@ function init_legal_moves_cues(){
 
     // retrieve drop_zones & S parameter
     const _drop_zones = yinsh.objs.drop_zones;
-    const S = yinsh.drawing_params.S;
-
+    
     // init empty array
     let _legal_moves_cues = [];
             
         // init a cue for each drop zone
         for(const d_zone of _drop_zones){
 
-            // create shape + coordinates and push to array
-            let cue_path = new Path2D()
-                cue_path.arc(d_zone.loc.x, d_zone.loc.y, S*0.08, 0, 2*Math.PI);
-            
-            _legal_moves_cues.push({path: cue_path, loc: structuredClone(d_zone.loc), on: false});
+            // init cue object, shape will be drawn by drawing fn (also to handle hover state change)
+            _legal_moves_cues.push({path: {}, loc: structuredClone(d_zone.loc), on: false, hover: false});
         
         };
 
@@ -949,7 +945,7 @@ function init_markers(){
 
 // keeps up to date the array of visual cues for legal moves, turning them on or off
 // if move is NOT in progress, this function will turn them off
-export function update_legal_cues(){
+export function update_legal_cues(hover_cue_index = -1){
 
     // retrieves info on active move
     const move_in_progress = yinsh.objs.move_action.in_progress; // -> true/false
@@ -960,15 +956,23 @@ export function update_legal_cues(){
 
     // turn matching cues on if a move was started
     if (move_in_progress) {
-
         for (let cue of _legal_cues) {
-    
-            if (_legal_moves_ids.includes(cue.loc.index)) { cue.on = true };      
+            if (_legal_moves_ids.includes(cue.loc.index)) { 
+                
+                cue.on = true 
+                
+                // mark hover state for specific cue (loc.index given in fn input)
+                if (hover_cue_index != -1 && hover_cue_index == cue.loc.index) {
+                    cue.hover = true;
+                } else {
+                    cue.hover = false; 
+                };
+            };      
         };
         
     // otherwise turn everything off
     } else {
-        for (let cue of _legal_cues) { cue.on = false };
+        for (let cue of _legal_cues) { cue.on = false, cue.hover = false };
     };
    
     // saves/overwrites updated array of visual cues
@@ -1331,7 +1335,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
                     let h_path = new Path2D()
 
                     const hot_flag = (r_id == sel_ring) ? true : false;
-                    const shape_diam = (r_id == sel_ring) ? S*0.2 : S*0.14;
+                    const shape_diam = (r_id == sel_ring) ? S*0.18 : S*0.12;
 
                     h_path.arc(d_zone.loc.x, d_zone.loc.y, shape_diam, 0, 2*Math.PI);
 

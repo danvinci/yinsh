@@ -47,6 +47,10 @@ import { ringDrop_playSound, markersRemoved_player_playSound, markersRemoved_opp
     core_et.addEventListener('ring_sel_hover_ON', ring_sel_hover_handler, false);
     core_et.addEventListener('ring_sel_hover_OFF', ring_sel_hover_handler, false);
 
+    // hover state for visual cues
+    core_et.addEventListener('hover_dropzone_ON', dropzone_hover_handler, false);
+    core_et.addEventListener('hover_dropzone_OFF', dropzone_hover_handler, false);
+
     // action codes
     const CODE_action_play = 'play'
     const CODE_action_wait = 'wait'
@@ -98,23 +102,17 @@ function window_resize_handler() {
 
         if (_gstatus == GS_progress_game) {
 
-        // drop ring in-place and remove marker
-        const start_move_index = get_move_action_done().start;
-        end_move_action(start_move_index); 
-        remove_markers([start_move_index]);
+            // drop ring from where picked up in-place and remove marker
+            const start_move_index = get_move_action_done().start;
+            end_move_action(start_move_index); 
+            remove_markers([start_move_index]);
 
-        // turns off cues
+        }; // else if (_gstatus == GS_progress_rings) -> ring will be placed back to setup starting point by init_game_objects fn below 
+
+        // reset move data & turns off cues (valid for both gs_ progress cases)
         reset_move_action(); 
         update_legal_cues();
-
         refresh_canvas_state();
-
-        } else if (_gstatus == GS_progress_rings) {
-
-            // re-initialize move ( init_game_objects below will get setup_ring back to its starting point )
-            reset_move_action(); 
-            refresh_canvas_state();
-        };
 
         enableInteraction();
     };
@@ -328,7 +326,7 @@ async function server_actions_handler (event) {
         // handle manual ring setup
         /*
         - create ring
-        - turn on visual cues
+        - turn on visual cue
         - move/drop ring handled by extending existing handlers
         - extra info on legal spots coming from server
         - turn wrap up using dedicated getter
@@ -448,6 +446,26 @@ class Task {
             this.task_failure = () => reject(new Error(`ERROR - ${name} - Task failure`))
         })
     }
+};
+
+function dropzone_hover_handler(event) {
+// event triggered by interaction code
+// case: user is making a move and we want to update visual cues so that hovered is drawn differently
+// assumes interaction only triggers this when a move is in progress and gives only 1 loc_index 
+// update_legal_cues() fn has built-in safeguards anyway, and will set them off if called when move is not in progress
+
+    if (event.type === 'hover_dropzone_ON') {
+
+        update_legal_cues(event.detail);
+        refresh_canvas_state();
+
+    } else if (event.type === 'hover_dropzone_OFF') {
+
+        update_legal_cues();
+        refresh_canvas_state();
+
+    };
+
 };
 
 // replays opponent's turn using DELTA data from server
@@ -758,6 +776,9 @@ function ringPicked_handler (event) {
 
         // empty array of rings highlights (on from hovering)
         update_ring_highlights(); 
+
+        // turn visual cues on
+        update_legal_cues();
     };
 
     // draw changes

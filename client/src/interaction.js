@@ -59,7 +59,7 @@ function mouseDown_handler (event) {
             // CASE: manual rings placement, only setup ring can be picked up
             } else if (_gstatus == GS_progress_rings) {
 
-                 // find index of picked player (setup) ring
+                // find index of picked player (setup) ring
                 const _ring_setup_id = 0 
                 picked_ring_index_inArray = _rings.findIndex((ring) => (ring.player == player_id && ring.loc.index === _ring_setup_id && ctx.isPointInPath(ring.path, mousePos.x, mousePos.y)));
             };
@@ -143,7 +143,18 @@ function mouseMove_handler (event) {
 
             // create and dispatch event for mouse moving while move is active
             core_et.dispatchEvent(new CustomEvent('ring_moved', {detail: {coord: mousePos} }));
-            
+
+            // if we're hovering on a drop zone -> dispatch event for hover state sending loc_index
+            // in core, this will trigger update_legal_cues(loc_index) -> fn will take care of only setting hover true for matching active cues
+            // not checking legality here, avoiding double-checks and separating concerns
+            // note: cues might be configurable/optional by the user, we might be want sending events when not used
+            const _hover_zone = yinsh.objs.drop_zones.find((dz) => (ctx.isPointInPath(dz.path, mousePos.x, mousePos.y)))
+
+            if (typeof _hover_zone !== 'undefined') {
+                core_et.dispatchEvent(new CustomEvent('hover_dropzone_ON', {detail: _hover_zone.loc.index}));
+            } else {
+                core_et.dispatchEvent(new CustomEvent('hover_dropzone_OFF'));
+            };
         };
 
         // if a mk scoring action is in progress, check on markers and dispatch events to turn on/off highlighting if hovering on the right one(s)
@@ -163,7 +174,6 @@ function mouseMove_handler (event) {
             if (typeof hovered_marker !== 'undefined') {
                 core_et.dispatchEvent(new CustomEvent('mk_sel_hover_ON', { detail: hovered_marker.loc.index }));
             } else {
-
                 core_et.dispatchEvent(new CustomEvent('mk_sel_hover_OFF'));
             };
 

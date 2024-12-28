@@ -638,24 +638,33 @@ function draw_legal_moves_cues(){
 
     // const painting_start_time = Date.now()
 
+    const S = yinsh.drawing_params.S;
+
     // retrieve mk halos data (local copy)
     const _legal_moves_cues = yinsh.objs.legal_moves_cues;
     
     // drawing
     ctx.save();
 
-
         ctx.globalAlpha = 0.8; 
-        ctx.fillStyle = "#80b3ce";
+        const on_hover_color ="#5286ba"
+        const on_color = "#80b3ce";
         ctx.lineWidth = 0.5;
 
-        for(const cue of _legal_moves_cues){
+        for(let cue of _legal_moves_cues){
 
             // draw only cues turned on
             if (cue.on == true) {
-
-                ctx.fill(cue.path); 
-
+                cue.path = new Path2D()
+                if (cue.hover == true) {
+                    cue.path.arc(cue.loc.x, cue.loc.y, S*0.1, 0, 2*Math.PI);
+                    ctx.fillStyle = on_hover_color;
+                    ctx.fill(cue.path); 
+                } else {
+                    cue.path.arc(cue.loc.x, cue.loc.y, S*0.07, 0, 2*Math.PI);
+                    ctx.fillStyle = on_color;
+                    ctx.fill(cue.path); 
+                };
             };
         };        
     
