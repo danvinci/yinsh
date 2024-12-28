@@ -13,7 +13,7 @@ import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, ge
 import { activate_task, get_scoring_options_fromTask, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
 import { preMove_score_op_check, get_preMove_score_op_data, select_apply_scenarioTree  } from './data.js'
 import { delta_replay_check, get_delta, wipe_delta, get_preMove_scoring_actions_done, reset_preMove_scoring_actions, pushTo_preMove_scoring_actions, get_tree } from './data.js'
-import { reset_scoring_actions, pushTo_scoring_actions, get_scoring_actions_done, get_task_status, task_completion, set_game_status, get_game_status, get_ring_placement_action_done } from './data.js'
+import { reset_scoring_actions, pushTo_scoring_actions, get_scoring_actions_done, get_task_status, task_completion, set_game_status, get_game_status, get_ring_setup_action_done } from './data.js'
 
 import { refresh_canvas_state } from './drawing.js'
 import { init_interaction, enableInteraction, disableInteraction } from './interaction.js'
@@ -54,11 +54,11 @@ import { ringDrop_playSound, markersRemoved_player_playSound, markersRemoved_opp
 
     // playable game statuses
     // not_started (temp at creation) -> :progress_rings (optional) -> :progress_game -> :completed
-    export const GS_progress_rings = 'progress_rings' // initial (manual) rings placement
+    export const GS_progress_rings = 'progress_rings' // initial (manual) rings setup
     export const GS_progress_game = 'progress_game' // normal gameplay
 
     // window resizing -> canvas and object adjustments
-    window.addEventListener("resize", window_resize_handler);
+    window.addEventListener('resize', window_resize_handler);
 
     // game termination by user (via UI)
     core_et.addEventListener('game_exited', game_exit_handler, false);
@@ -89,7 +89,14 @@ function window_resize_handler() {
 
     // if move is in-progress -> drop ring in place, to avoid weird stuff, due to rings re-ordering in array while last should be the one moving
     // important to be called before objects are re-initialized
-    if (get_move_status()) {
+    const _gstatus = get_game_status();
+    const _move_in_progress = get_move_status();
+
+    if (_move_in_progress){
+
+        disableInteraction();
+
+        if (_gstatus == GS_progress_game) {
 
         // drop ring in-place and remove marker
         const start_move_index = get_move_action_done().start;
@@ -101,21 +108,31 @@ function window_resize_handler() {
         update_legal_cues();
 
         refresh_canvas_state();
+
+        } else if (_gstatus == GS_progress_rings) {
+
+            // re-initialize move ( init_game_objects below will get setup_ring back to its starting point )
+            reset_move_action(); 
+            refresh_canvas_state();
+        };
+
+        enableInteraction();
     };
 
     // bind and make canvas size match its parent
     bind_adapt_canvas();
         
     // initialize other objects as well drop zones, rings, markers, scoring slots, cues - using new S/H constants
+    update_ring_highlights(); 
     init_game_objs(); 
 
-    // if scoring tasks are in progress -> re-emit events so that options are regenerated
+    // if scoring tasks are in progress -> re-emit events so that options are regenerated & stay on
     if (get_task_status('mk_scoring_task')) {
         core_et.dispatchEvent(new CustomEvent('mk_score_handling_on'));
     };
 
     if (get_task_status('ring_scoring_task')) {
-        core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF'));
+        core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', { detail: {player_rings: [] }}));
     };
 
     refresh_canvas_state();
@@ -280,7 +297,7 @@ async function server_actions_handler (event) {
 
         };
 
-    // PLAY - MANUAL RINGS PLACEMENT
+    // PLAY - MANUAL RINGS SETUP
     } else if (next_action_code == CODE_action_play && game_status == GS_progress_rings) {
 
         disableInteraction();
@@ -301,30 +318,28 @@ async function server_actions_handler (event) {
             // flag turn as in-progress
             turn_start(); 
 
-        enableInteraction(); 
 
         // wait a bit after move_replay is complete
         await sleep(300);
 
-         // inform user, manual ring placement
+         // inform user, manual ring setup
          ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Place your ring` }));
 
-        // handle manual ring placement
-                /*
+        // handle manual ring setup
+        /*
         - create ring
-        - move ring (manual ring placement in progress)
-        - drop ring (no weird shit, manual ring placement)
-        - can place on any free spot -> how to get free spots?
-        - once placed, write results through setter
-        - later getter will use it to update turn data
+        - turn on visual cues
+        - move/drop ring handled by extending existing handlers
+        - extra info on legal spots coming from server
+        - turn wrap up using dedicated getter
         */
 
-        // add/create new ring (create from nothing, snap to right -> write into to obj.rings)
-        add_ring(0);
+        // add/create new ring with index 0 (create from nothing, snap to right -> write into to obj.rings)
+        const _ring_setup_id = 0;
+        add_ring(_ring_setup_id);
         refresh_canvas_state();
-
-        // handle mouse move events
         
+        enableInteraction(); 
 
     // WAIT
     } else if (next_action_code == CODE_action_wait) {
@@ -470,12 +485,12 @@ async function replay_opponent_turn(){
 
             // any part of the turn is replayed only if we have data about it (server includes data only if actionable)
 
-             // replay manual ring placement
-             if('ring_place_done' in delta) {
+             // replay manual ring setup
+             if('ring_setup_done' in delta) {
 
                 // replay move
                 await sleep(400);
-                await replay_opponent_ring_placement(delta.ring_place_done);
+                await replay_opponent_ring_setup(delta.ring_setup_done);
                 ringDrop_playSound(); 
             };
 
@@ -560,14 +575,14 @@ async function replay_opponent_turn(){
 };
 
 
-// called by replay_opponent_turn, used just for manual ring placement replay animation
-async function replay_opponent_ring_placement(ring_placed_info){
+// called by replay_opponent_turn, used just for manual ring setup replay animation
+async function replay_opponent_ring_setup(ring_setup_info){
 
-    const ring_place_loc = ring_placed_info.loc;
-    const ring_player = ring_placed_info.player_id;
+    const ring_place_loc = ring_setup_info.loc;
+    const ring_player = ring_setup_info.player_id;
 
     // add/create new ring as opponent (from delta -> to obj.rings)
-    add_ring(0, true);
+    add_ring(ring_place_loc, true);
     
     // move ring on top (need for animation)
     const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == ring_place_loc);
@@ -725,12 +740,12 @@ function ringPicked_handler (event) {
     // we could also move ring to dedicated structure that is drawn last and then put back in, but roughly same copying work
     reorder_rings(index_picked_ring_in_array);
 
-     // write start of the currently active move to a global variable
-     start_move_action(picked_ring_loc_index);
+    // write start of the currently active move to a global variable
+    start_move_action(picked_ring_loc_index);
 
-    // distinguish between move for gameplay vs manual ring placement
-    const _gs = get_game_status();
-    if (_gs == GS_progress_game) {
+    // distinguish between move for gameplay vs manual ring setup
+    const _gstatus = get_game_status();
+    if (_gstatus == GS_progress_game) {
 
         // place marker in same location (it's assumed current player)
         add_marker(picked_ring_loc_index);
@@ -739,6 +754,10 @@ function ringPicked_handler (event) {
         // will read from current move to see which moves to consider, only used for visual display
         update_legal_cues();
 
+    } else if (_gstatus == GS_progress_rings)  {
+
+        // empty array of rings highlights (on from hovering)
+        update_ring_highlights(); 
     };
 
     // draw changes
@@ -840,9 +859,9 @@ async function ringDrop_handler (event) {
         // logging
         console.log(`LOG - Ring ${dropping_ring.player} moved to index ${drop_loc_index}`);
 
-        // distinguish between move for gameplay vs manual ring placement
-        const _gstatus = get_game_status();
-        if (_gstatus == GS_progress_game) {
+        // distinguish between move for gameplay vs manual ring setup
+        let _turn_completed = false; 
+        if (get_game_status() == GS_progress_game) {
           
             // CASE: same location drop, nothing to flip, remove added marker
             if (drop_loc_index == start_move_index){
@@ -908,12 +927,23 @@ async function ringDrop_handler (event) {
                     await scoring_handler(_player_scores);
 
                 };
+
+                // need to separate cases as during normal gameplay
+                // you drop ring in-place and not complete turn, so we handle that explicitly
+                _turn_completed = true;
             };
+        
+        } else { // CASE: manual ring setup
+
+            // if drop is valid, ring setup is done -> turn completed
+            _turn_completed = true;
         };
 
-        // TURN COMPLETED -> notify server with info on what happened in the turn
-        await end_turn_wait_opponent();
-
+        // TURN COMPLETED -> notify server with info on what happened
+        if (_turn_completed) {
+            await end_turn_wait_opponent();
+        };
+       
     // CASE: invalid location for drop attempt
     } else { 
 
@@ -927,8 +957,10 @@ async function ringDrop_handler (event) {
 // can be called from different points to terminate turn
 async function end_turn_wait_opponent() {
 
+    disableInteraction();
+
     // turn completed -> wrap up info to send back on actions taken by player
-    const turn_recap_info = {   ring_place_action : get_ring_placement_action_done(),
+    const turn_recap_info = {   ring_setup_action : get_ring_setup_action_done(),
                                 score_actions_preMove : get_preMove_scoring_actions_done(), 
                                 move_action: get_move_action_done(),
                                 score_actions: get_scoring_actions_done(), 
@@ -1087,7 +1119,7 @@ async function scoring_handler(player_scoring_ops, pre_move = false){
 
             // highlight rings - need to pass player own rings ids to the function
             await sleep(300);
-            core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF'));
+            core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF',{ detail: {player_rings: [] }}));
 
             // user communications
             console.log("USER - Pick a ring to be removed from the board!");
@@ -1259,7 +1291,7 @@ async function ring_scoring_handler (event) {
 
 };
 
-// listens to hovering event over rings when having to pick a ring for scoring -> handle highlighting
+// listens to hovering event over rings when having to pick a ring for scoring OR manual rings setup -> handle highlighting
 function ring_sel_hover_handler (event) {
 
     // CASE: ring sel hovered on -> get darker
@@ -1277,7 +1309,7 @@ function ring_sel_hover_handler (event) {
     } else if (event.type === 'ring_sel_hover_OFF') {
 
         // retrieve indexes of rings for player
-        const player_rings_ids = yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map(r => r.loc.index);
+        const player_rings_ids = event.detail.player_rings;
 
         // prepare ring cores objects and refresh canvas
         update_ring_highlights(player_rings_ids);

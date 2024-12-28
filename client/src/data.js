@@ -181,11 +181,11 @@ export function init_empty_game_objects(){
 
         //_game_objects.ring_place_action = -1 // -> WE USE THE SAME move_action VAR FOR TRACKING THIS TOO, USE CASE SET BY GAME STATUS
         _game_objects.preMove_scoring_actions = []; // save details in case pre-move scoring took place
-        _game_objects.move_action = {in_progress: false, start_index: -1, end_index: -1, legal_drops: []}; // -> details for move in progress/done, both for gameplay or manual ring placement 
+        _game_objects.move_action = {in_progress: false, start_index: -1, end_index: -1, legal_drops: []}; // -> details for move in progress/done, both for gameplay or manual rings setup 
         _game_objects.scoring_actions = []; // save details in case scoring took place
        
         _game_objects.legal_moves_cues = []; // -> array for cues paths (drawn on/off based on legal drops ids)
-        _game_objects.ring_placement_spots = []; // -> array of valid ring drops for manual placement 
+        _game_objects.ring_setup_spots = []; // -> array of valid ring drops for manual placement 
         
         _game_objects.current_mk_scoring = {in_progress: false, task_ref: {}}; // referencing task of general score handling
         _game_objects.current_ring_scoring = {in_progress: false, task_ref: {}}; // referencing task of ring picking within score handling
@@ -229,7 +229,7 @@ export function save_server_response(srv_input){
             _srv_response.rings = srv_input.rings; // rings
             _srv_response.markers = srv_input.markers; // markers
             _srv_response.scenario_trees = srv_input.scenario_trees; // scenario tree
-            _srv_response.ring_placement_spots = srv_input.ring_placement_spots; // ring placement spots (for manual ring placement)
+            _srv_response.ring_setup_spots = srv_input.ring_setup_spots; // ring setup spots (for manual ring placement)
             _srv_response.turn_no = srv_input.turn_no; // turn number
             _srv_response.delta = srv_input.delta; // delta data for replaying opponent's move
 
@@ -248,7 +248,7 @@ export function save_server_response(srv_input){
             _srv_response.rings = srv_input.rings; // rings
             _srv_response.markers = srv_input.markers; // markers (empty array on setup, unless testing otherwise)
             _srv_response.scenario_trees = srv_input.scenario_trees; // pre-computed scenario trees, for each possible move
-            _srv_response.ring_placement_spots = srv_input.ring_placement_spots; // ring placement spots (for manual ring placement)
+            _srv_response.ring_setup_spots = srv_input.ring_setup_spots; // ring setup spots (for manual ring placement)
             _srv_response.turn_no = srv_input.turn_no; // turn number
 
             // determine if we're originator or joiner -> assign color to client (player_black_id / player_white_id)
@@ -315,7 +315,7 @@ export function swap_data_next_turn() {
         yinsh.server_data.rings = structuredClone(yinsh.next_server_data.rings);  // rings
         yinsh.server_data.markers = structuredClone(yinsh.next_server_data.markers); // markers
         yinsh.server_data.scenario_trees = structuredClone(yinsh.next_server_data.scenario_trees); // trees
-        yinsh.server_data.ring_placement_spots = structuredClone(yinsh.next_server_data.ring_placement_spots); // ring spots
+        yinsh.server_data.ring_setup_spots = structuredClone(yinsh.next_server_data.ring_setup_spots); // ring spots
         yinsh.server_data.turn_no = yinsh.next_server_data.turn_no; // turn number
 
     // make local working copy
@@ -411,8 +411,8 @@ export function get_tree(){
     return structuredClone(yinsh.objs.tree);
 };
 
-export function get_ring_placement_spots(){
-    return yinsh.local_server_data.ring_placement_spots;
+export function get_ring_setup_spots(){
+    return yinsh.local_server_data.ring_setup_spots;
 };
 
 
@@ -700,7 +700,6 @@ function init_drop_zones(){
         };
     };
 
-
     // save to global obj and log (for some reason structuredClone fails)
     yinsh.objs.drop_zones = _drop_zones;
     console.log('LOG - Drop zones initialized')
@@ -828,6 +827,8 @@ function init_legal_moves_cues(){
 // initializes rings and updates game state -> reads from rings data in DB
 function init_rings(){
 
+    const _ring_setup_id = 0;
+
     try {
 
         // initial locations of rings from server (use local working copy)
@@ -847,21 +848,42 @@ function init_rings(){
         for (const d_zone of _drop_zones) {
             for (const s_ring of server_rings) {
 
-                if (s_ring.id == d_zone.loc.index){
+                if (s_ring.id == d_zone.loc.index){ // rings with a pre-defined location/id
+
+                    // create ring object
+                    const ring = {  path: {}, //  will hold the path, filled in by drawing function
+                                    loc: structuredClone(d_zone.loc), // pass as value -> as we'll change the x,y for drawing we don't mess the original drop zone
+                                    type: ring_id, 
+                                    player: s_ring.player
+                                };            
+
+                    // add to temporary array
+                    _rings_array.push(ring); 
+
+                };
+            };
+        };
+
+            // handling orphan ring without a drop zone
+            // ring was alredy added to the array, and now it's being re-initialized
+            // it's assumed there's only one ring with index 0, as the opponent ones' all have a determined loc_id
+            const _ring_setup = server_rings.filter((ring) => (ring.id === _ring_setup_id));
+            if (_ring_setup.length == 1) { // ring that is yet to be placed (by manual setup)
+
+                const _init_player_loc = {  x: yinsh.drawing_params.start_TR.x - yinsh.drawing_params.S*1.05*1.5, // using 1.05 for outer ring 
+                                            y: yinsh.drawing_params.start_BL.y - yinsh.drawing_params.S*2,
+                                            index: _ring_setup_id };
 
                 // create ring object
                 const ring = {  path: {}, //  will hold the path, filled in by drawing function
-                                loc: structuredClone(d_zone.loc), // pass as value -> as we'll change the x,y for drawing we don't mess the original drop zone
+                                loc: structuredClone(_init_player_loc), 
                                 type: ring_id, 
-                                player: s_ring.player
+                                player: structuredClone(_ring_setup[0].player)
                             };            
 
                 // add to temporary array
                 _rings_array.push(ring); 
-                
-                };
             };
-        };
 
         // save rings and log
         yinsh.objs.rings = structuredClone(_rings_array);
@@ -869,11 +891,8 @@ function init_rings(){
         console.log('LOG - Rings initialized');
 
     } catch {
-        
         console.log('LOG - No rings initialized');
-
     }
-
 };
 
 // initializes markers (only called after 1st+ turn)
@@ -922,11 +941,9 @@ function init_markers(){
 
 
     } catch {
-
         console.log('LOG - No markers to initialize');
 
     };
-
 };
 
 
@@ -1019,11 +1036,12 @@ export function remove_markers(mk_indexes_array){
     
 };
 
-
 // adds ring -> called when ring is manually placed
 // 0 && false (outside right to board) - 0 && true (outside up to board)
 // if opponent true, adds marker of the opponent's color (used for replaying moves)
 export function add_ring(loc_index = 0, as_opponent = false){ 
+
+    const _ring_setup_id = 0 
 
     // retrieve current player and id for markers
     const _player_id = structuredClone(yinsh.server_data.client_player_id);
@@ -1033,26 +1051,23 @@ export function add_ring(loc_index = 0, as_opponent = false){
     // retrieve array of rings (to be modified) 
     let _rings = yinsh.objs.rings;
 
-    // retrieve drop zones
-    const _drop_zones = yinsh.objs.drop_zones;
-
     // set initial ring location (loc_index -> known, 0 -> place at preset spot)
-    // for ring placement replay, placed outside/above board
-    // for manual ring placement, ring is snapped outside/right board
-    const _init_player_loc = {  x: canvas.width - yinsh.drawing_params.S*2, 
-                                y: canvas.height/2*1.5, 
-                                index:0 };
+    // for replay of ring setup by opponent -> entry from outside/above board
+    // for manual ring placement -> ready for pick up outside/right board
+    const _init_player_loc = {  x: yinsh.drawing_params.start_TR.x - yinsh.drawing_params.S*1.05*1.5, 
+                                y: yinsh.drawing_params.start_BL.y - yinsh.drawing_params.S*2, 
+                                index: _ring_setup_id };
 
     const _init_opp_loc = { x: canvas.width/2, 
                             y: 0 - yinsh.drawing_params.S,
-                            index:0 };
+                            index: loc_index };
     
     // match init location to preset or find matching drop zone
     let _init_loc = as_opponent ? _init_opp_loc : _init_player_loc; 
     
     // instate new ring object 
     const r = { path: {}, // <- to be filled in at drawing time
-                loc: _init_loc, 
+                loc: structuredClone(_init_loc), 
                 type: _ring_id, 
                 player: as_opponent ? _opponent_id : _player_id 
             }; 
@@ -1205,9 +1220,9 @@ export function end_move_action(end_index){
 
 // both functions read from the same underlying move_action variable
 // need to ensure that defaults are returned when only one action was done
-export function get_ring_placement_action_done(){
+export function get_ring_setup_action_done(){
 
-    if (get_game_status() == GS_progress_rings) { // manual ring placement
+    if (get_game_status() == GS_progress_rings) { // manual rings setup
         return structuredClone(yinsh.objs.move_action.end_index);
     } else { // normal gameplay
         return -1; // default
@@ -1226,7 +1241,7 @@ export function get_move_action_done(){
 
 
 // retrieve indexes of legal moves/drops from saved server data
-// depending on game state, these might be ring drop locations for manual ring placement or a normal gameplay move
+// depending on game state, these might be ring drop locations for manual rings setup or a normal gameplay move
 function getIndexes_legal_drops(start_index){
 
     let _gs = get_game_status()
@@ -1248,7 +1263,7 @@ function getIndexes_legal_drops(start_index){
 
     } else if (_gs == GS_progress_rings) {
 
-        return get_ring_placement_spots();
+        return get_ring_setup_spots();
 
     };
 };
@@ -1289,17 +1304,19 @@ export function update_mk_halos(mk_ids = [], hot_flag = false){
 };
 
 
-// creates and destroys highlight inside rings for cueing/selection in scoring
+// creates and destroys highlight inside rings for cueing/selection in scoring or manual rings setup
 // assumes that we either have all cold or all cold with 1 hot highlight
 export function update_ring_highlights(rings_ids = [], sel_ring = -1){
+
+    const _ring_setup_id = 0 // index of setup ring
+
+    // drawing param
+    const S = yinsh.drawing_params.S;
 
     // empty inner var
     let _ring_highlights = [];
         
-    if (rings_ids.length > 0) {
-
-        // drawing param
-        const S = yinsh.drawing_params.S;
+    if (rings_ids.length > 1) { // CASE: ring scoring (at least 2 rings to choose from when winning)
         
         // retrieve drop zones
         const _drop_zones = yinsh.objs.drop_zones;
@@ -1323,6 +1340,23 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
                 };
             };  
         };      
+    } else if (rings_ids === _ring_setup_id) { // CASE: manual rings setup (which has index 0 by definition)
+
+        // in this case we will draw the highlight directly at the {x,y} coordinates of the ring with index 0
+        // we don't have a drop zone there
+        const _ring_setup_id = 0 // <- should be in global const ?
+        const _ring_setup = yinsh.objs.rings.filter((ring) => (ring.loc.index == _ring_setup_id))[0];
+
+        // create shape + coordinates and store in the global array
+        let h_path = new Path2D()
+
+        const hot_flag = (_ring_setup_id == sel_ring) ? true : false;
+        const shape_diam = (_ring_setup_id == sel_ring) ? S*0.2 : S*0.14;
+
+        h_path.arc(_ring_setup.loc.x, _ring_setup.loc.y, shape_diam, 0, 2*Math.PI);
+
+        _ring_highlights.push({path: h_path, hot: hot_flag});
+
     };
 
     // acts as a reset function if arguments stay as default

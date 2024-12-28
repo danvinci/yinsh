@@ -2,7 +2,7 @@
 // handle mouse events and relays events to core logic
 // https://bencentra.com/code/2014/12/05/html5-canvas-touch-events.html
 
-import { get_player_id, get_move_status, get_task_status, get_scoring_options_fromTask } from './data.js'
+import { get_player_id, get_move_status, get_task_status, get_scoring_options_fromTask, get_game_status } from './data.js'
 import { GS_progress_rings, GS_progress_game } from './core.js'
 
 
@@ -168,10 +168,30 @@ function mouseMove_handler (event) {
             if (typeof hovered_ring !== 'undefined') {
                 core_et.dispatchEvent(new CustomEvent('ring_sel_hover_ON', { detail: {player_rings: _p_rings_ids, hovered_ring: hovered_ring.loc.index }}));
             } else {
-                core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF'));
+                core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', { detail: {player_rings: _p_rings_ids }}));
             };
         };
 
+        // OR manual rings setup but ring not picked up yet
+        if (get_game_status() == GS_progress_rings && !move_in_progress) {
+
+            // find ring of player with index 0 (starting index for pick-up, not dropped yet)
+            const _ring_setup_id = 0 // <- this should be made into a global const
+            const _ring_setup = yinsh.objs.rings.filter((ring) => (ring.player == player_id && ring.loc.index === _ring_setup_id));
+
+            // check if setup ring is being hovered on (find returns either the first or undefined) 
+            // should be vector of 1 element
+            const is_ring_setup_hover = (_ring_setup.length > 0) ? ctx.isPointInPath(_ring_setup[0].path, mousePos.x, mousePos.y) : false;
+
+            // dispatch event accordingly
+            // we are using fn in core that can set to OFF multiple rings (OFF = non-hover state for visual cue), here we want only 1 to be on/off
+            if (is_ring_setup_hover) {
+                core_et.dispatchEvent(new CustomEvent('ring_sel_hover_ON', { detail: {player_rings: _ring_setup_id, hovered_ring: _ring_setup_id }}));
+            } else {
+                core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF', { detail: {player_rings: _ring_setup_id}}));
+            };
+
+        };
     };
 };
 
