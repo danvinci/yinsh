@@ -2,6 +2,7 @@
 # https://stackoverflow.com/questions/3790454/how-do-i-break-a-string-in-yaml-over-multiple-lines
 # https://stackoverflow.com/questions/38567355/docker-compose-global-level-logging
 # https://docs.docker.com/engine/logging/drivers/local/
+# https://stackoverflow.com/a/75245637 (cpu/memory limits, docker compose vs docker-compose)
 
 services:
   
@@ -23,6 +24,11 @@ services:
       options:
         max-size: "10m" # 10MB
         max-file: "5"  # 5 rotating files
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 250m
 
 
   # yinsh service
@@ -35,10 +41,10 @@ services:
       options:
         max-size: "10m"
         max-file: "5"  
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 2g
-      restart-policy:
-        condition: any
+      
 
