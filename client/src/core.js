@@ -294,7 +294,7 @@ async function server_actions_handler (event) {
             ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Make your move` }));
 
             // light up users' rings
-            await sleep(500);
+            await sleep(400);
             update_ring_highlights(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
             refresh_canvas_state();
 
@@ -340,6 +340,9 @@ async function server_actions_handler (event) {
         // add/create new ring with index 0 (create from nothing, snap to right -> write into to obj.rings)
         const _ring_setup_id = 0;
         add_ring(_ring_setup_id);
+        refresh_canvas_state();
+        await sleep(400);
+        update_ring_highlights(_ring_setup_id);
         refresh_canvas_state();
         
         enableInteraction(); 
@@ -901,7 +904,7 @@ async function ringDrop_handler (event) {
                 remove_markers([drop_loc_index]);
 
                 // light up users' rings (again)
-                sleep(500);
+                await sleep(400);
                 update_ring_highlights(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
                 refresh_canvas_state();
 
@@ -1012,7 +1015,6 @@ async function end_turn_wait_opponent() {
 
     // notify server about completed turn
     try{
-        
         
         await server_ws_send(CODE_advance_game, msg_payload); 
 
@@ -1151,8 +1153,9 @@ async function scoring_handler(player_scoring_ops, pre_move = false){
         activate_task(ring_scoring); 
 
             // highlight rings - need to pass player own rings ids to the function
-            await sleep(300);
-            core_et.dispatchEvent(new CustomEvent('ring_sel_hover_OFF',{ detail: {player_rings: [] }}));
+            await sleep(400);
+            update_ring_highlights(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
+            refresh_canvas_state();
 
             // user communications
             console.log("USER - Pick a ring to be removed from the board!");
@@ -1324,7 +1327,8 @@ async function ring_scoring_handler (event) {
 
 };
 
-// listens to hovering event over rings when having to pick a ring for scoring OR manual rings setup -> handle highlighting
+// listens to hovering event over rings when having to pick a ring for scoring, manual rings setup, or before making a move
+// -> handles rings cues
 function ring_sel_hover_handler (event) {
 
     // CASE: ring sel hovered on -> get darker

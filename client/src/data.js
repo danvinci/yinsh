@@ -948,7 +948,7 @@ function init_markers(){
 export function update_legal_cues(hover_cue_index = -1){
 
     // retrieves info on active move
-    const move_in_progress = yinsh.objs.move_action.in_progress; // -> true/false
+    const move_in_progress = get_move_status(); // -> true/false
     const _legal_moves_ids = yinsh.objs.move_action.legal_drops; // -> [11,23,90,etc]
 
     // retrieves array of visual cues (to be modified)
@@ -959,7 +959,7 @@ export function update_legal_cues(hover_cue_index = -1){
         for (let cue of _legal_cues) {
             if (_legal_moves_ids.includes(cue.loc.index)) { 
                 
-                cue.on = true 
+                cue.on = true;
                 
                 // mark hover state for specific cue (loc.index given in fn input)
                 if (hover_cue_index != -1 && hover_cue_index == cue.loc.index) {
@@ -1313,6 +1313,7 @@ export function update_mk_halos(mk_ids = [], hot_flag = false){
 export function update_ring_highlights(rings_ids = [], sel_ring = -1){
 
     const _ring_setup_id = 0 // index of setup ring
+    const move_in_progress = get_move_status();
 
     // drawing param
     const S = yinsh.drawing_params.S;
@@ -1320,7 +1321,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
     // empty inner var
     let _ring_highlights = [];
         
-    if (rings_ids.length > 1) { // CASE: ring scoring (at least 2 rings to choose from when winning)
+    if (!move_in_progress && rings_ids.length > 1) { // CASE: ring scoring (we always have at least 2 rings to choose from)
         
         // retrieve drop zones
         const _drop_zones = yinsh.objs.drop_zones;
@@ -1335,7 +1336,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
                     let h_path = new Path2D()
 
                     const hot_flag = (r_id == sel_ring) ? true : false;
-                    const shape_diam = (r_id == sel_ring) ? S*0.18 : S*0.12;
+                    const shape_diam = (r_id == sel_ring) ? S*0.16 : S*0.12;
 
                     h_path.arc(d_zone.loc.x, d_zone.loc.y, shape_diam, 0, 2*Math.PI);
 
@@ -1344,7 +1345,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
                 };
             };  
         };      
-    } else if (rings_ids === _ring_setup_id) { // CASE: manual rings setup (which has index 0 by definition)
+    } else if (!move_in_progress && rings_ids === _ring_setup_id) { // CASE: manual rings setup (which has index 0 by definition)
 
         // in this case we will draw the highlight directly at the {x,y} coordinates of the ring with index 0
         // we don't have a drop zone there
@@ -1355,7 +1356,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
         let h_path = new Path2D()
 
         const hot_flag = (_ring_setup_id == sel_ring) ? true : false;
-        const shape_diam = (_ring_setup_id == sel_ring) ? S*0.2 : S*0.14;
+        const shape_diam = (_ring_setup_id == sel_ring) ? S*0.16 : S*0.12;
 
         h_path.arc(_ring_setup.loc.x, _ring_setup.loc.y, shape_diam, 0, 2*Math.PI);
 
@@ -1364,6 +1365,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
     };
 
     // acts as a reset function if arguments stay as default
+    // !move_in_progress ensures highlights go off when move starts
     yinsh.objs.ring_highlights = _ring_highlights;
  
 };

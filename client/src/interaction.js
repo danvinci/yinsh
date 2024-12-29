@@ -136,7 +136,7 @@ function mouseMove_handler (event) {
         // check if scoring is underway
         const mk_scoring_in_progress = get_task_status('mk_scoring_task'); 
         const ring_scoring_in_progress = get_task_status('ring_scoring_task'); 
-            const any_scoring_in_progress = mk_scoring_in_progress || ring_scoring_in_progress;
+        const any_scoring_in_progress = mk_scoring_in_progress || ring_scoring_in_progress;
             
         // if a move is underway, dispatch event for moving ring
         if (move_in_progress == true){
@@ -179,8 +179,16 @@ function mouseMove_handler (event) {
 
         };
 
-        // mk scoring action is completed but ring scoring is in progress
-        if (mk_scoring_in_progress == false && ring_scoring_in_progress == true){
+        // CASE: mk scoring action is completed but ring scoring is in progress
+        const ring_choice_scoring = mk_scoring_in_progress == false && ring_scoring_in_progress == true
+        
+        // CASE: normal gameplay > user has to pick up ring, we're handling the ring highlight hover state
+        const ring_choice_move = get_game_status() == GS_progress_game && !move_in_progress && !any_scoring_in_progress
+            // NOTE -> maybe better to condense all cases into a single infer function?
+            // we're excluding manual ring pick up, move in progress (picked ring) or scoring
+            // as the whole fn runs only when interaction is allowed, all is left is the dead time before picking a ring?
+
+        if (ring_choice_scoring || ring_choice_move){
 
             // retrieve array of rings
             const _player_rings = yinsh.objs.rings.filter((ring) => (ring.player == player_id));

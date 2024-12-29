@@ -22,12 +22,6 @@ using HTTP, JSON3
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
 
-# ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
-# prod packages
-
-# ╔═╡ f6dc2723-ab4a-42fc-855e-d74915b4dcbf
-# dev packages
-
 # ╔═╡ 43f89626-8583-11ed-2b3d-b118ff996f37
 # ╠═╡ disabled = true
 #=╠═╡
@@ -51,6 +45,12 @@ using JET
 #=╠═╡
 using Plots, PlotThemes;  plotly() ; theme(:default)
   ╠═╡ =#
+
+# ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
+# prod packages
+
+# ╔═╡ f6dc2723-ab4a-42fc-855e-d74915b4dcbf
+# dev packages
 
 # ╔═╡ cd36abda-0f4e-431a-a4d1-bd5366c83b9b
 begin
@@ -147,12 +147,6 @@ end
 # ╔═╡ c96e1ee9-6d78-42d2-bfd6-2e8f88913b37
 mm_yinsh = prep_base_matrix();
 
-# ╔═╡ b6292e1f-a3a8-46d7-be15-05a74a5736de
-# ╠═╡ disabled = true
-#=╠═╡
-draw_board()
-  ╠═╡ =#
-
 # ╔═╡ 55987f3e-aaf7-4d85-a6cf-11eda59cd066
 function draw_board()
 
@@ -181,6 +175,12 @@ end
 
 return ps
 end
+
+# ╔═╡ b6292e1f-a3a8-46d7-be15-05a74a5736de
+# ╠═╡ disabled = true
+#=╠═╡
+draw_board()
+  ╠═╡ =#
 
 # ╔═╡ d996152e-e9e6-412f-b4db-3eacf5b7a5a6
 function printable_base_m()
@@ -316,12 +316,6 @@ row_start = locz[locz_index][1]
 col_start = locz[locz_index][2]
   ╠═╡ =#
 
-# ╔═╡ abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
-# ╠═╡ disabled = true
-#=╠═╡
-search_loc_graph(draw_board(), row_start, col_start, search_loc(mm_states, reshape_out(CartesianIndex(row_start,col_start))))
-  ╠═╡ =#
-
 # ╔═╡ 387eeec5-f483-48af-a27c-468683fe497b
 # helper function to place how_many elem_type we need in free spots
 function place_elem!(input_board, elem_type::String, how_many::Int)
@@ -371,12 +365,6 @@ end
 mm_setup = random_states_setup();
   ╠═╡ =#
 
-# ╔═╡ 49ff65f9-8ead-448f-8a44-1a741c20bbc5
-# ╠═╡ disabled = true
-#=╠═╡
-setup_graph = rings_marks_graph();
-  ╠═╡ =#
-
 # ╔═╡ 6e7ab4f4-7c52-45bc-a503-6bf9cb0d7932
 #=╠═╡
 function rings_marks_graph()
@@ -417,6 +405,12 @@ return new_board
 end
   ╠═╡ =#
 
+# ╔═╡ 49ff65f9-8ead-448f-8a44-1a741c20bbc5
+# ╠═╡ disabled = true
+#=╠═╡
+setup_graph = rings_marks_graph();
+  ╠═╡ =#
+
 # ╔═╡ e767b0a7-282f-46c4-b2e7-1f737807a3cb
 # ╠═╡ disabled = true
 #=╠═╡
@@ -427,12 +421,6 @@ end
 # ╠═╡ disabled = true
 #=╠═╡
 row_start_n = locz[locz_index_n][1]; col_start_n = locz[locz_index_n][2];
-  ╠═╡ =#
-
-# ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
-# ╠═╡ disabled = true
-#=╠═╡
-search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, reshape_out(CartesianIndex(row_start_n,col_start_n))))
   ╠═╡ =#
 
 # ╔═╡ a3ae2bfe-41ea-4fe1-870b-2ac35153da5d
@@ -973,6 +961,18 @@ end
 
 return input_board
 end
+
+# ╔═╡ abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
+# ╠═╡ disabled = true
+#=╠═╡
+search_loc_graph(draw_board(), row_start, col_start, search_loc(mm_states, reshape_out(CartesianIndex(row_start,col_start))))
+  ╠═╡ =#
+
+# ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
+# ╠═╡ disabled = true
+#=╠═╡
+search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, reshape_out(CartesianIndex(row_start_n,col_start_n))))
+  ╠═╡ =#
 
 # ╔═╡ c334b67e-594f-49fc-8c11-be4ea11c33b5
 function gen_random_gameState(near_score_rows = 0, num_mks = 0, random_rings = true)
@@ -1591,6 +1591,9 @@ end
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
 md"### Running websocket server"
 
+# ╔═╡ 31c5bc41-2a9d-4acc-b2c1-7b3a116dc770
+games_log_dict
+
 # ╔═╡ c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
 begin
 	const ws_servers_array = []; # array of server handles
@@ -1599,6 +1602,9 @@ begin
 
 	# note: these could be replaced by finite-size channels
 end
+
+# ╔═╡ 9a579355-72af-4bae-a56b-0abea34a026a
+ws_messages_log
 
 # ╔═╡ 0bb77295-be29-4b50-bff8-f712ebe08197
 begin
@@ -1695,7 +1701,7 @@ function msg_dispatcher(ws, msg_id, msg_code, payload = Dict(), _status::Bool = 
 	# log
 	println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
 
-	# save response (TO BE REMOVED)
+	# save response (just for logging/debug)
 	setindex!(_response, "sent", :type)
 	push!(ws_messages_log, _response)
 
@@ -1762,20 +1768,19 @@ end
 # ╔═╡ 61d75e9e-b2d3-4551-947b-e8acc11e2eeb
 begin
 
-global __last_cleanup = now()
-global __cleanup_interval = Hour(2)
-global __mem_thresh = 0.04 # % of free memory over total
+const __last_cleanup = [now()]
+const __cleanup_interval = Hour(2)
+const __mem_thresh::Float64 = 0.04 # % of free memory over total
 
 
 function _mem_cleanup!(force = false) # called by game_runner
 
 	free_mb, free_mem_p, mem_limit_hit = _sys_mem_check(__mem_thresh)
-	time_diff = now() - __last_cleanup
+	time_diff = now() - __last_cleanup[1]
 
 	
     if force || (time_diff > __cleanup_interval || mem_limit_hit)
-		println("> MEM CLEANUP | free: $free_mb MB [$(free_mem_p) %] | last run: $(time_diff |> canonicalize) ago")
-
+		println("> MEM CLEANUP | remaining free mem: $free_mb MB [$(free_mem_p) %] | last run: $(time_diff |> canonicalize) ago")
 
 		# games log 
 		# -> delete completed games older than 1hr
@@ -1797,7 +1802,7 @@ function _mem_cleanup!(force = false) # called by game_runner
 		GC.gc(true)
 
 		# log last cleanup run time
-		global __last_cleanup = now() # log 
+		global __last_cleanup[1] = now() # log 
 		
     end
 end
@@ -2109,8 +2114,9 @@ end
 function set_gameStatus!(game_id::String, status::Symbol)
 
 	if status in ref_game_status
+		_prev_status = copy(games_log_dict[game_id][:identity][:status])
 		games_log_dict[game_id][:identity][:status] = status
-		println("Game $game_id -> $(status)")
+		println("LOG - Game $game_id - $_prev_status -> $(status)")
 	else
 		"Attempt to set invalid game status" |> error |> throw
 	end
@@ -3636,9 +3642,9 @@ function game_runner(msg)
 # players may have made or not a move, and asking to advance the game
 
 	# check if necessary to reduce mem pressure
-	# runs once every 2hrs or when available memory < 5% of total
+	# runs once every 2hrs or when available memory < 4% of total
 	_mem_cleanup!()
-
+	
 	# retrieve game and caller move details
 	_msg_code = msg[:msg_code]
 	_game_code = msg[:payload][:game_id]
@@ -3909,7 +3915,8 @@ function msg_handler(ws, msg, msg_log)
 
 		try
 
-			# all functions return two dictionaries
+			# all functions called here return two dictionaries
+			# matchign functions allow to generate/join a new game, or advance one
 			_pld_caller, _pld_other = codes_toFun_match[_msg_code](ws, msg)
 
 				# reply to caller, including code-specific response
@@ -4552,6 +4559,8 @@ version = "5.11.0+0"
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╟─466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
+# ╠═31c5bc41-2a9d-4acc-b2c1-7b3a116dc770
+# ╠═9a579355-72af-4bae-a56b-0abea34a026a
 # ╠═c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
 # ╟─91c35ba0-729e-4ea9-8848-3887936a8a21
 # ╟─1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
@@ -4568,7 +4577,7 @@ version = "5.11.0+0"
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╟─ca346015-b2c9-45da-8c1e-17493274aca2
-# ╟─88616e0f-6c85-4bb2-a856-ea7cee1b187d
+# ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
 # ╟─69152551-c381-42f0-9ef6-a1c4ea969b34
 # ╟─61d75e9e-b2d3-4551-947b-e8acc11e2eeb
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
