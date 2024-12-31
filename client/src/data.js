@@ -1317,6 +1317,8 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
 
     // drawing param
     const S = yinsh.drawing_params.S;
+    const _mult_base = 0.13;
+    const _mult_hover = 0.18;
 
     // empty inner var
     let _ring_highlights = [];
@@ -1336,7 +1338,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
                     let h_path = new Path2D()
 
                     const hot_flag = (r_id == sel_ring) ? true : false;
-                    const shape_diam = (r_id == sel_ring) ? S*0.16 : S*0.12;
+                    const shape_diam = (r_id == sel_ring) ? S*_mult_hover : S*_mult_base;
 
                     h_path.arc(d_zone.loc.x, d_zone.loc.y, shape_diam, 0, 2*Math.PI);
 
@@ -1356,7 +1358,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
         let h_path = new Path2D()
 
         const hot_flag = (_ring_setup_id == sel_ring) ? true : false;
-        const shape_diam = (_ring_setup_id == sel_ring) ? S*0.16 : S*0.12;
+        const shape_diam = (_ring_setup_id == sel_ring) ? S*_mult_hover : S*_mult_base;
 
         h_path.arc(_ring_setup.loc.x, _ring_setup.loc.y, shape_diam, 0, 2*Math.PI);
 

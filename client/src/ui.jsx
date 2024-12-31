@@ -219,10 +219,10 @@ export function GameSetup() {
               <>
                 <button type="button" class="back_nav_btn" onClick={toggle_newgm_settings}>&#9665;</button>
                 <hr class="menu_line"></hr>
-                <div class="join_input_div">
-                  <input size="10" type="text" class="join_input_txt_class" ref={code_input_field} placeholder="Code here..."></input>
-                  <button type="button" class="join_input_button_class" onClick={triggerRequest_newVSfriend}>PLAY</button>
-                </div>
+                <p>Game settings</p>
+                <RingsMode_Settings></RingsMode_Settings>
+                <hr class="menu_line"></hr>
+                <button type="button" onClick={triggerRequest_newVSfriend}>PLAY</button>
               </>
             </Match>
             <Match when={joinClick()}>

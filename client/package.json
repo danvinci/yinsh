@@ -16,6 +16,8 @@
   },
   "license": "CC BY-NC-SA 4.0",
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.2",
     "vite": "^4.4.9",
     "vite-plugin-solid": "^2.7.0"
   },

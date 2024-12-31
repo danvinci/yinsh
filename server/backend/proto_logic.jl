@@ -1780,7 +1780,7 @@ function _mem_cleanup!(force = false) # called by game_runner
 
 	
     if force || (time_diff > __cleanup_interval || mem_limit_hit)
-		println("> MEM CLEANUP | remaining free mem: $free_mb MB [$(free_mem_p) %] | last run: $(time_diff |> canonicalize) ago")
+		println("> MEM CLEANUP | free: $free_mb MB [$(free_mem_p) %] | last run: $(time_diff |> canonicalize) ago")
 
 		# games log 
 		# -> delete completed games older than 1hr
@@ -2114,9 +2114,8 @@ end
 function set_gameStatus!(game_id::String, status::Symbol)
 
 	if status in ref_game_status
-		_prev_status = copy(games_log_dict[game_id][:identity][:status])
 		games_log_dict[game_id][:identity][:status] = status
-		println("LOG - Game $game_id - $_prev_status -> $(status)")
+		println("Game $game_id -> $(status)")
 	else
 		"Attempt to set invalid game status" |> error |> throw
 	end
@@ -2256,12 +2255,7 @@ now it can go from ns -> (progress_rings) -> progress_play -> completed
 			ret[:outcome] = "mk_limit_draw"
 		else 
 			ret[:outcome] = "mk_limit_score"
-			
-			if scores[_W] > scores[_B] 
-				ret[:won_by] = _W
-			else
-				ret[:won_by] = _B
-			end
+			ret[:won_by] = (scores[_W] > scores[_B]) ? _W : _B
 		end
 	end
 	
@@ -4037,70 +4031,9 @@ end
 # ╔═╡ 8b6264b0-f7ea-4177-9700-30072d4c5826
 reactive_start_server(ws_servers_array, ws_messages_log, ws_messages_log_OG)
 
-# ╔═╡ 2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
-function test_ws_client()
-
-	msg_sent_counter = 0
-	msg_rec_counter = 0
-
-	try
-		# open ws
-		WebSockets.open("ws://$ws_test_ip:$ws_test_port") do ws
-			
-			println("connection opened")
-
-			for i in 1:10 # max of 10 messages sent
-				# send  message to server
-				msg = "input by client__"
-				send(ws, msg)
-				msg_sent_counter += 1
-		
-				println("--- New message sent, total: $msg_sent_counter")
-
-	
-				# handle incoming responses from server
-				for msg in ws
-	
-					msg_rec_counter +=1
-					println("--- New message received, total: $msg_rec_counter")
-	
-					if contains(msg, "close")
-						#closing websockets
-						println("message received from server:")
-						println(msg)
-						println("closing socket")
-						close(ws)
-					else
-						# receive msg and do something
-						println("message received from server:")
-						println(msg)
-					end
-		
-
-					# wait before sending other messages
-					sleep(2)
-				
-				end
-
-				# iteration
-
-			end
-	
-			println("end of ws iteration")
-	             
-		end
-
-	catch
-
-		throw(error("ERROR occurred"))
-		
-	end
-
-end
-
 # ╔═╡ 24185d12-d29c-4e72-a1de-a28319b4d369
-# make it wait forever
-println("Service running")
+# make it wait forever when running as a script
+println("> Service running")
 wait(Condition())
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -4563,8 +4496,8 @@ version = "5.11.0+0"
 # ╠═9a579355-72af-4bae-a56b-0abea34a026a
 # ╠═c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
 # ╟─91c35ba0-729e-4ea9-8848-3887936a8a21
-# ╟─1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
+# ╟─1ada0c42-9f11-4a9a-b0dc-e3e7011230a2
 # ╠═8b6264b0-f7ea-4177-9700-30072d4c5826
 # ╠═f9949a92-f4f8-4bbb-81d0-650ff218dd1c
 # ╟─5e5366a9-3086-4210-a037-c56e1374a686
@@ -4617,7 +4550,6 @@ version = "5.11.0+0"
 # ╟─e785f43f-0902-4b7b-874b-bf1c09438970
 # ╟─e6cc0cf6-617a-4231-826d-63f36d6136a5
 # ╟─cd06cad4-4b47-48dd-913f-61028ebe8cb3
-# ╟─2a63de92-47c9-44d1-ab30-6ac1e4ac3a59
 # ╠═24185d12-d29c-4e72-a1de-a28319b4d369
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

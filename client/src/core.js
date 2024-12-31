@@ -222,9 +222,6 @@ export async function init_game_fromServer(originator = false, joiner = false, g
     };
 };
 
-
-
-
 //////////// EVENT HANDLERS FOR TURNS
 async function server_actions_handler (event) {
 
@@ -903,8 +900,7 @@ async function ringDrop_handler (event) {
                 // remove marker
                 remove_markers([drop_loc_index]);
 
-                // light up users' rings (again)
-                await sleep(400);
+                // light up users' rings (again & immediately)
                 update_ring_highlights(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
                 refresh_canvas_state();
 
