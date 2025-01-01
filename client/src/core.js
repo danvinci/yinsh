@@ -338,7 +338,7 @@ async function server_actions_handler (event) {
         const _ring_setup_id = 0;
         add_ring(_ring_setup_id);
         refresh_canvas_state();
-        await sleep(400);
+        await sleep(300);
         update_ring_highlights(_ring_setup_id);
         refresh_canvas_state();
         

@@ -1,4 +1,4 @@
-import {GameCanvas, UserText, GameSetup, SoundSettings} from './ui';
+import {GameCanvas, UserText, GameSetup, Settings} from './ui';
 
 function App() {
   return (
@@ -11,7 +11,7 @@ function App() {
       <div class ="side_panel">
         <UserText></UserText>
         <GameSetup></GameSetup>
-        <SoundSettings></SoundSettings>
+        <Settings></Settings>
       </div>
 
     </div>

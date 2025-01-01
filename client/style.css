@@ -355,13 +355,13 @@ body, html {
 
 
                 /* Block for controlling on/off audio and visual cues */
-                div.sound_settings_wrapper {
+                div.component_settings_wrapper {
                     
                     padding-left: 15px;
                     box-sizing: border-box;
                 }
 
-                    div.sound_settings_item {
+                    div.settings_item {
 
                         display: grid;
                         grid-template-columns: max-content max-content;
@@ -374,48 +374,52 @@ body, html {
 
                     }
 
-                    img.sset_img {
+                    div.item_bottom_space {
+                        margin-bottom: 0.3rem;
+                    }
+
+                    img.set_img {
                         height: 24px;
                         width: 24px;
                         margin-right: 4px;
                     }
 
                     /* setting transition time equal for both img and span */
-                    .sfx_on {
+                    .set_on {
                         transition: all .15s ease-in-out;
                     }
-                    .sfx_off {
+                    .set_off {
                         transition: all .15s ease-in-out;
                     }
 
                         /* effect-anticipation <> click in both directions */
-                        span.sfx_on{
+                        span.set_on{
                             color: rgb(140, 140, 140); 
                         }
 
-                        img.sfx_on{
+                        img.set_on{
                             filter: invert(50%) sepia(79%) saturate(465%) hue-rotate(157deg) brightness(88%) contrast(91%);
                         }
 
-                            div.sound_settings_item:hover span.sfx_on{ 
+                            div.settings_item:hover span.set_on{ 
                                 color: rgb(160, 160, 160); 
                             }
 
-                            div.sound_settings_item:hover img.sfx_on{ 
+                            div.settings_item:hover img.set_on{ 
                                 filter: invert(61%) sepia(36%) saturate(456%) hue-rotate(156deg) brightness(103%) contrast(93%);
                             }
 
-                            div.sound_settings_item:hover span.sfx_off {
+                            div.settings_item:hover span.set_off {
                                 color: rgb(180, 180, 180);
                             }
-                            div.sound_settings_item:hover img.sfx_off {
+                            div.settings_item:hover img.set_off {
                                 filter: invert(81%) sepia(2%) saturate(3%) hue-rotate(316deg) brightness(87%) contrast(86%);
                             }
                        
-                        span.sfx_off{
+                        span.set_off{
                             color: rgb(200, 200, 200);
                         }
-                        img.sfx_off{
+                        img.set_off{
                             filter: invert(89%) sepia(1%) saturate(116%) hue-rotate(345deg) brightness(90%) contrast(97%);
                         }
 

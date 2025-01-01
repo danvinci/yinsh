@@ -1,8 +1,15 @@
 import { createSignal, Show, Switch, Match, createResource, createEffect, on, onMount, onCleanup } from "solid-js";
 import { init_game_fromServer, draw_empty_game_board } from "./core.js";
 import { enableSound, disableSound } from "./sound.js";
+import { enableRingsCues, disableRingsCues } from "./data.js";
+import { enableLegalMovesCues, disableLegalMovesCues } from "./data.js";
 import svg_sound_OFF from "/src/assets/sound-0.svg";
 import svg_sound_ON from "/src/assets/sound-2.svg";
+import rings_cues_OFF from "/src/assets/circle.svg";
+import rings_cues_ON from "/src/assets/circle_dot.svg";
+import moves_cues_OFF from "/src/assets/along.svg";
+import moves_cues_ON from "/src/assets/along_dot.svg";
+
 
 // event target for UI
 globalThis.ui_et = new EventTarget(); 
@@ -252,6 +259,9 @@ export function GameSetup() {
   );
 }
 
+
+
+//// SETTINGS
 // signal definition needs to be outside of fn scope, so I can call value elsewhere 
 const [randomRings, set_randomRings] = createSignal(true); 
 const toggle_randomRings = () => set_randomRings(!randomRings());
@@ -279,8 +289,23 @@ function RingsMode_Settings() {
 }
 
 
+///// SETTINGS BLOCK
+export function Settings(){
+
+  return(
+    <div class="component_settings_wrapper">
+      <SoundSettings></SoundSettings>
+      <RingsCuesSettings></RingsCuesSettings>
+      <LegalMovesCuesSettings></LegalMovesCuesSettings>
+    </div>
+
+  );
+}
+
+
+
 // component for sounds on/off
-export function SoundSettings() {
+function SoundSettings() {
 
   const [sound, set_sound] = createSignal(true); 
   
@@ -296,26 +321,90 @@ export function SoundSettings() {
   };  
 
   return (
-    <div class="sound_settings_wrapper">
       <Show
       when={sound()}
       fallback={
-        <div class="sound_settings_item sfx_off" onClick={toggle_sound}>
-          <img class="sset_img sfx_off" src={svg_sound_OFF} height="24px" width="24px"></img>
-          <span class="sfx_off">Sound effects OFF</span>
+        <div class="settings_item set_off item_bottom_space" onClick={toggle_sound}>
+          <img class="set_img set_off" src={svg_sound_OFF} height="24px" width="24px"></img>
+          <span class="set_on">Sound effects OFF</span>
         </div>
       }>
-        <div class="sound_settings_item sfx_on" onClick={toggle_sound}>
-          <img class="sset_img sfx_on" src={svg_sound_ON} height="24px" width="24px"></img>
-          <span class="sfx_on">Sound effects ON</span>
+        <div class="settings_item set_on item_bottom_space" onClick={toggle_sound}>
+          <img class="set_img set_on" src={svg_sound_ON} height="24px" width="24px"></img>
+          <span class="set_on">Sound effects ON</span>
         </div>
       </Show>  
-    </div>
+  );
+}
+
+// component for rings cues on/off
+function RingsCuesSettings() {
+
+  const [rings_cues, set_rings_cues] = createSignal(true); 
+  
+  // toggle that calls functions exported by this module
+  function toggle_rings_cues () {
+
+    // this for swapping UI component
+    set_rings_cues(!rings_cues());
+
+    // flag rings cues on/off accordingly
+    rings_cues() ? enableRingsCues() : disableRingsCues();
+    
+  };  
+
+  return (
+      <Show
+      when={rings_cues()}
+      fallback={
+        <div class="settings_item set_off item_bottom_space" onClick={toggle_rings_cues}>
+          <img class="set_img set_off" src={rings_cues_OFF} height="24px" width="24px"></img>
+          <span class="set_off">Rings visual cues OFF</span>
+        </div>
+      }>
+        <div class="settings_item sfx_on item_bottom_space" onClick={toggle_rings_cues}>
+          <img class="set_img set_on" src={rings_cues_ON} height="24px" width="24px"></img>
+          <span class="set_on">Rings visual cues ON</span>
+        </div>
+      </Show>  
+  );
+}
+
+// component for legal moves cues on/off
+function LegalMovesCuesSettings() {
+
+  const [lm_cues, set_lm_cues] = createSignal(true); 
+  
+  // toggle that calls functions exported by this module
+  function toggle_lm_cues () {
+
+    // this for swapping UI component
+    set_lm_cues(!lm_cues());
+
+    // flag rings cues on/off accordingly
+    lm_cues() ? enableLegalMovesCues() : disableLegalMovesCues();
+    
+  };  
+
+  return (
+      <Show
+      when={lm_cues()}
+      fallback={
+        <div class="settings_item set_off" onClick={toggle_lm_cues}>
+          <img class="set_img set_off" src={moves_cues_OFF} height="24px" width="24px"></img>
+          <span class="set_off">Moves visual cues OFF</span>
+        </div>
+      }>
+        <div class="settings_item set_on" onClick={toggle_lm_cues}>
+          <img class="set_img set_on" src={moves_cues_ON} height="24px" width="24px"></img>
+          <span class="set_on">Moves visual cues ON</span>
+        </div>
+      </Show>  
   );
 }
 
 
-
+// HELPER FN
 // used to retrigger resource-wrapped fetch: if on -> off and then on again
 function doubleSwitch(setter, value){
 

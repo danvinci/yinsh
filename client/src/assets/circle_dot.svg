@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Transformed by: SVG Repo Mixer Tools -->
+
+<svg
+   width="64px"
+   height="64px"
+   viewBox="-1.2 -1.2 26.40 26.40"
+   fill="none"
+   version="1.1"
+   id="svg2"
+   sodipodi:docname="circle_dot.svg"
+   inkscape:version="1.4 (e7c3feb1, 2024-10-09)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="namedview2"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="13.71875"
+     inkscape:cx="32"
+     inkscape:cy="32.036446"
+     inkscape:window-width="1200"
+     inkscape:window-height="892"
+     inkscape:window-x="286"
+     inkscape:window-y="104"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="SVGRepo_iconCarrier" />
+  <g
+     id="SVGRepo_bgCarrier"
+     stroke-width="0" />
+  <g
+     id="SVGRepo_tracerCarrier"
+     stroke-linecap="round"
+     stroke-linejoin="round" />
+  <g
+     id="SVGRepo_iconCarrier">
+    <path
+       d="m 12,21 c 4.9706,0 9,-4.0294 9,-9 C 21,10.023649 20.362973,8.1960835 19.283043,6.7114372 18.956927,6.2631061 18.590424,5.8460462 18.188877,5.4656033 17.789887,5.0875836 17.3563,4.745716 16.893359,4.4452449 15.484757,3.5309945 13.804394,3 12,3 7.02944,3 3,7.02944 3,12 c 0,4.9706 4.02944,9 9,9 z"
+       stroke="#000000"
+       stroke-width="1.8"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       id="path1"
+       style="stroke-width:2.0625;stroke-dasharray:none"
+       sodipodi:nodetypes="ssssssss" />
+    <path
+       d="m 12,14.784375 c 1.53781,0 2.784375,-1.246565 2.784375,-2.784375 0,-0.725451 -0.277413,-1.386087 -0.731945,-1.881618 C 13.543443,9.5634868 12.812359,9.215625 12,9.215625 c -0.889004,0 -1.680673,0.4165965 -2.1904447,1.065227 C 9.4375151,10.75423 9.215625,11.351192 9.215625,12 c 0,1.53781 1.246565,2.784375 2.784375,2.784375 z"
+       stroke="#000000"
+       stroke-width="1.8"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       id="path2"
+       sodipodi:nodetypes="sssssss"
+       style="fill:#000000;fill-opacity:1;stroke-width:0;stroke-dasharray:none" />
+  </g>
+</svg>

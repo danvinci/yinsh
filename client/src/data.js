@@ -1,8 +1,20 @@
 // DATA
 // data objects + functions operating on them + data utils (like reshape_index)
 
+
+// cues go off with the setting, but back on only with setting + mouseMove (handled by interaction.js), so user won't see effect of setting immediately
+// as highlights depend on game state (ie. player is about to make move or score), better to avoid replicating logic here, so we mock a mouseMove
+globalThis.cues_rings_flag = true; // global property for rings cues on/off
+export const enableRingsCues = () => {cues_rings_flag = true; update_ring_highlights(); canvas.dispatchEvent(new MouseEvent('mousemove', {clientX: 1, clientY: 1}));}; 
+export const disableRingsCues = () => {cues_rings_flag = false; update_ring_highlights(); refresh_canvas_state();};
+
+globalThis.cues_moves_flag = true; // global property for legal moves cues on/off
+export const enableLegalMovesCues = () => {cues_moves_flag = true; update_legal_cues(); refresh_canvas_state();};
+export const disableLegalMovesCues = () => {cues_moves_flag = false; update_legal_cues(); refresh_canvas_state();};
+
 import { setup_ok_codes, next_ok_codes, joiner_ok_code} from './server.js'
 import { GS_progress_rings, GS_progress_game } from './core.js'
+import { refresh_canvas_state } from './drawing.js';
 
 // UTILITY FUNCTIONS
 
@@ -556,6 +568,7 @@ export async function task_completion(task_name){
 
 
 // return current state of task -> used mostly by interaction
+// NOTE: could be cleaned up and made more general, use task_name directly as an index
 export function get_task_status(task_name){
 
     if (task_name == 'mk_scoring_task') {
@@ -801,6 +814,8 @@ function init_legal_moves_cues(){
     
     // init empty array
     let _legal_moves_cues = [];
+
+    if (cues_moves_flag) {
             
         // init a cue for each drop zone
         for(const d_zone of _drop_zones){
@@ -809,7 +824,7 @@ function init_legal_moves_cues(){
             _legal_moves_cues.push({path: {}, loc: structuredClone(d_zone.loc), on: false, hover: false});
         
         };
-
+    };
 
     // saves/overwrites updated array of visual cues and moves for picked ring
     yinsh.objs.legal_moves_cues = _legal_moves_cues;
@@ -955,7 +970,7 @@ export function update_legal_cues(hover_cue_index = -1){
     let _legal_cues = yinsh.objs.legal_moves_cues
 
     // turn matching cues on if a move was started
-    if (move_in_progress) {
+    if (cues_moves_flag && move_in_progress) {
         for (let cue of _legal_cues) {
             if (_legal_moves_ids.includes(cue.loc.index)) { 
                 
@@ -1322,52 +1337,55 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
 
     // empty inner var
     let _ring_highlights = [];
-        
-    if (!move_in_progress && rings_ids.length > 1) { // CASE: ring scoring (we always have at least 2 rings to choose from)
-        
-        // retrieve drop zones
-        const _drop_zones = yinsh.objs.drop_zones;
-        
-        for (const r_id of rings_ids) {
 
-            // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
-            for(const d_zone of _drop_zones){
-                if (d_zone.loc.index == r_id) {
-
-                    // create shape + coordinates and store in the global array
-                    let h_path = new Path2D()
-
-                    const hot_flag = (r_id == sel_ring) ? true : false;
-                    const shape_diam = (r_id == sel_ring) ? S*_mult_hover : S*_mult_base;
-
-                    h_path.arc(d_zone.loc.x, d_zone.loc.y, shape_diam, 0, 2*Math.PI);
-
-                    _ring_highlights.push({path: h_path, hot: hot_flag});
+    if (cues_rings_flag) {
+        if (!move_in_progress && rings_ids.length > 1) { // CASE: ring scoring (we always have at least 2 rings to choose from)
             
-                };
-            };  
-        };      
-    } else if (!move_in_progress && rings_ids === _ring_setup_id) { // CASE: manual rings setup (which has index 0 by definition)
+            // retrieve drop zones
+            const _drop_zones = yinsh.objs.drop_zones;
+            
+            for (const r_id of rings_ids) {
 
-        // in this case we will draw the highlight directly at the {x,y} coordinates of the ring with index 0
-        // we don't have a drop zone there
-        const _ring_setup_id = 0 // <- should be in global const ?
-        const _ring_setup = yinsh.objs.rings.filter((ring) => (ring.loc.index == _ring_setup_id))[0];
+                // let's check which is the matching drop_zone and retrieve the matching (x,y) coordinates
+                for(const d_zone of _drop_zones){
+                    if (d_zone.loc.index == r_id) {
 
-        // create shape + coordinates and store in the global array
-        let h_path = new Path2D()
+                        // create shape + coordinates and store in the global array
+                        let h_path = new Path2D()
 
-        const hot_flag = (_ring_setup_id == sel_ring) ? true : false;
-        const shape_diam = (_ring_setup_id == sel_ring) ? S*_mult_hover : S*_mult_base;
+                        const hot_flag = (r_id == sel_ring) ? true : false;
+                        const shape_diam = (r_id == sel_ring) ? S*_mult_hover : S*_mult_base;
 
-        h_path.arc(_ring_setup.loc.x, _ring_setup.loc.y, shape_diam, 0, 2*Math.PI);
+                        h_path.arc(d_zone.loc.x, d_zone.loc.y, shape_diam, 0, 2*Math.PI);
 
-        _ring_highlights.push({path: h_path, hot: hot_flag});
+                        _ring_highlights.push({path: h_path, hot: hot_flag});
+                
+                    };
+                };  
+            };      
+        } else if (!move_in_progress && rings_ids === _ring_setup_id) { // CASE: manual rings setup (which has index 0 by definition)
 
+            // in this case we will draw the highlight directly at the {x,y} coordinates of the ring with index 0
+            // we don't have a drop zone there
+            const _ring_setup_id = 0 // <- should be in global const ?
+            const _ring_setup = yinsh.objs.rings.filter((ring) => (ring.loc.index == _ring_setup_id))[0];
+
+            // create shape + coordinates and store in the global array
+            let h_path = new Path2D()
+
+            const hot_flag = (_ring_setup_id == sel_ring) ? true : false;
+            const shape_diam = (_ring_setup_id == sel_ring) ? S*_mult_hover : S*_mult_base;
+
+            h_path.arc(_ring_setup.loc.x, _ring_setup.loc.y, shape_diam, 0, 2*Math.PI);
+
+            _ring_highlights.push({path: h_path, hot: hot_flag});
+
+        };
     };
 
     // acts as a reset function if arguments stay as default
     // !move_in_progress ensures highlights go off when move starts
+    // also enable/disable ring visual cues from UI makes sure array always stays empty
     yinsh.objs.ring_highlights = _ring_highlights;
  
 };
