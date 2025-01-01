@@ -49,17 +49,11 @@ begin
 	# ip and port to use for the server
 	const ws_ip = "0.0.0.0" # listen on every ip / host ip
 	const ws_port = 6091 # local dev game server
-	const ws_localhost_ports_range = 9000:9999
-end
-
-# ╔═╡ ea50d759-9e1c-4b99-9a20-3ce96edddeb1
-function get_localhost_free_port()
-	
-	return setdiff(ws_localhost_ports_range, keys(wsc_dict)) |> rand
-
 end
 
 # ╔═╡ ae3a9096-f868-4649-ae63-efde9cbef423
+# ╠═╡ disabled = true
+#=╠═╡
 function push_to_ws_log!(_msg)
 
 	try 
@@ -71,18 +65,14 @@ function push_to_ws_log!(_msg)
 	end
 	
 end
+  ╠═╡ =#
 
 # ╔═╡ 8e1ac4e0-dbba-4a6e-b38a-bfb3f349d285
 gen_rand_id() = randstring(['a':'z'; '0':'9'])
 
 # ╔═╡ 6799bbd5-2ab3-47af-ad17-e781b2b9c4d5
-begin
 # interrupt identification fn
-	
-	interrupt_ex(e) = isa(e, InterruptException)
-	
-	interrupt_ex_HTTP(e) = (isa(e, HTTP.Exceptions.HTTPError) && isa(e.error, InterruptException))
-end
+interrupt_ex_HTTP(e) = (isa(e, HTTP.Exceptions.HTTPError) && isa(e.error, InterruptException))
 
 # ╔═╡ 4c7739b2-cf0a-4350-a049-f87875aa793e
 md"## Server communication"
@@ -136,8 +126,8 @@ struct StopToken end
 
 # ╔═╡ 3f8aa63d-5a6b-4d82-bd72-889472be3f92
 begin
-	const num_p = 15
-	const max_concurrent_p = 5
+	const num_p = 50
+	const max_concurrent_p = 10
 end
 
 # ╔═╡ d38a0908-a55c-4183-927d-894efe6e9ffb
@@ -159,56 +149,42 @@ function init_pending_ch()
 	@info "LOG - pending_p channel loaded with $num_p players"
 end
 
-# ╔═╡ 2dada36f-acef-44b9-87d8-a687528b08f7
-@spawn init_pending_ch()
-
 # ╔═╡ a1514598-6c4e-42fa-b9b8-2f7ef388f356
 md"#### Start concurrent test: $(@bind start_test CheckBox(default=false))"
 
-# ╔═╡ db003af9-654c-4a3a-8797-8f6ff8e7d8b5
-test_dump
+# ╔═╡ 04da4765-05d5-44e3-a724-3d98d808a483
+if start_test
 
-# ╔═╡ 1df492d5-f456-4242-9d40-35a50492b6bd
-md"## Play the game"
+	@spawn init_pending_ch()
 
-# ╔═╡ 4de23652-f375-4362-9c68-a3460d6940e1
-mutable struct Game
+	@spawn begin
 
-	id::String
-	status::String
-	rings::Vector{Dict}
-	markers::Vector{Dict}
-	player_id::String
-	rings_mode::String
-	ring_setup_spots::Vector
-	turn_no::Int
-	scenario_trees::Dict
-	updated::DateTime
+		try
 
-end
-
-# ╔═╡ f38f4e3e-f9dc-4d8c-9afc-0309a3ccc362
-begin
-
-	mutable struct Player
-
-		id::Int
-		send_channel::Channel{Any}
-		receive_channel::Channel{Any}
-		dispatch_task::Union{Task, Nothing}
-		ws_task::Union{Task, Nothing}
-		game::Union{Game, Nothing}
-		
-	end
-
-	Player(id) = Player(id, Channel{Any}(Inf), Channel{Any}(Inf), nothing, nothing, nothing)
+			## act on yet to run players
+			while isready(pending_p)
 	
-end
+				k = take!(pending_p)
 
-# ╔═╡ d7cc05ac-e4c6-4bb8-9977-0b5d290b4253
-begin
-	const p_dict = Dict{Int, Player}() # dict( player.id => player )
-	const p_dict_lock = ReentrantLock()
+				put!(running_p, k) # will wait until channel has space
+
+				# initialize new player on demand
+				create_player(k)
+				spawn_p_dispatch_task(k)
+					
+				# actually start game -> msg dispatcher & handler will take over
+				@spawn SRV_req_new_game_vs_server(p_dict[k])
+				
+				# limiting outer loop
+				sleep(2)
+	
+			end
+		catch e
+			@error "ERROR - player #$(p.id) - new games initializer", e
+			rethrow(e)
+		end
+			
+	end
 end
 
 # ╔═╡ 6e38243a-9127-4983-ad52-8d69f4ae12e2
@@ -216,7 +192,7 @@ if start_test
 
 	@spawn begin
 
-		sleep(60) # give time for games to start
+		sleep(30) # give time for games to start
 
 		try
 			while isready(running_p) || isready(pending_p)
@@ -272,6 +248,72 @@ if start_test
 	end
 end
 
+# ╔═╡ db003af9-654c-4a3a-8797-8f6ff8e7d8b5
+test_dump
+
+# ╔═╡ 1df492d5-f456-4242-9d40-35a50492b6bd
+md"## Play the game"
+
+# ╔═╡ 4de23652-f375-4362-9c68-a3460d6940e1
+mutable struct Game
+
+	id::String
+	status::String
+	rings::Vector{Dict}
+	markers::Vector{Dict}
+	player_id::String
+	rings_mode::String
+	ring_setup_spots::Vector
+	turn_no::Int
+	scenario_trees::Dict
+	updated::DateTime
+
+end
+
+# ╔═╡ f38f4e3e-f9dc-4d8c-9afc-0309a3ccc362
+begin
+
+	mutable struct Player
+
+		id::Int
+		send_channel::Channel{Any}
+		receive_channel::Channel{Any}
+		dispatch_task::Union{Task, Nothing}
+		ws_task::Union{Task, Nothing}
+		game::Union{Game, Nothing}
+		
+	end
+
+	Player(id) = Player(id, Channel{Any}(Inf), Channel{Any}(Inf), nothing, nothing, nothing)
+	
+end
+
+# ╔═╡ d7cc05ac-e4c6-4bb8-9977-0b5d290b4253
+begin
+	const p_dict = Dict{Int, Player}() # dict( player.id => player )
+	const p_dict_lock = ReentrantLock()
+end
+
+# ╔═╡ 6916407b-62f5-4093-98a7-ebaa18c71014
+function spawn_p_dispatch_task(k)
+
+	p = p_dict[k]
+
+	_prev_task = p.dispatch_task
+	
+	if isa(_prev_task, Task) && !istaskdone(_prev_task) # stop existing task
+		
+		put!(p.receive_channel, StopToken()) # terminates prev task
+		sleep(0.1)
+		@info "LOG - player #$k - dispatch task: sending stop token"
+	
+	end
+	
+	p.dispatch_task = @spawn incoming_msg_dispatcher(p)
+	@info "LOG - player #$k - dispatch task: active"
+
+end
+
 # ╔═╡ 8f29f032-1c5b-4578-ae7f-22f5111b19b7
 function filter_msg_by_gid(gid::String)
 
@@ -284,18 +326,18 @@ function filter_msg_by_gid(gid::String)
 end
 
 # ╔═╡ f856ad31-1393-4fb8-a0f8-32f2975cf793
-function save_p_details!(p::Player)
+function save_player_details!(p::Player)
 
 	try 
 		lock(p_dict_lock)
 			try
 				setindex!(p_dict, p, p.id)
-				@info "LOG - Player #$(p.id) saved"
+				@info "LOG - player #$(p.id) saved"
 			finally
 				unlock(p_dict_lock)
 			end
 	catch e
-		@error "LOG - Error while saving player $(p.id)"
+		@error "Error - player $(p.id) can't be saved in p_dict"
 	end
 
 end
@@ -368,16 +410,12 @@ ws_task = @spawn begin
 
 				# websocket connection should closes as we send interrupt
 				
-			catch e # <- this is for handling listener/sender failures propagating
-				close(ws) # <- close ws and unblock receive (for msg in ws)
-				sleep(0.5)
-
+			catch e 
 				# InterruptException is caught by innermost try/catch first
-				if interrupt_ex(e) || interrupt_ex_HTTP(e) || isa(e, EOFError)
-					rethrow(e)
-				else
-					@error "ERROR - player #$(p.id) - ws unhandled inner error", e
-				end
+				# close ws and unblock receive (for msg in ws)
+				!WebSockets.isclosed(ws) && close(ws) 
+				sleep(0.5)
+				rethrow(e)
 			end
 		end
 
@@ -385,7 +423,7 @@ ws_task = @spawn begin
 
 		# InterruptException is caught by innermost try/catch first
 	   	# try to clean up child tasks regardless of error type
-		if interrupt_ex(e) || interrupt_ex_HTTP(e) || isa(e, EOFError)
+		if isa(e, InterruptException) || interrupt_ex_HTTP(e) || isa(e, EOFError)
 			for t in [listener_task, sender_task]
 		       if !isnothing(t) && !istaskdone(t) # done is true also if failed
 		           try
@@ -397,13 +435,13 @@ ws_task = @spawn begin
 		   	end
 			@warn "LOG - player #$(p.id) - ws task interrupted", e 
 	   else # <- handling non-clean exits
-	       @error "ERROR - player #$(p.id) - ws unhandled outer error", e
+	       @error "ERROR - player #$(p.id) - ws unhandled error", e
 	   end
 	end
 end
 
 p.ws_task = ws_task
-save_p_details!(p)
+save_player_details!(p)
 
 end
 
@@ -596,6 +634,7 @@ function server_msg_handler(p::Player, msg::Dict)
 		setup_game=(msg_code==RESP_setup_vs_server_OK)
 		play_turn=(msg_code==RESP_advance_game_OK && next_action_code==CODE_play) 
 		end_game=(msg_code==RESP_advance_game_OK && next_action_code==CODE_end_game)
+		srv_error = contains(next_action_code, sfx_CODE_ERR)
 	
 		# new game confirmation
 		if setup_game
@@ -629,6 +668,7 @@ function server_msg_handler(p::Player, msg::Dict)
 									Dict( 	:last_msg => msg, 								
 											:player_id => p.game.player_id, 				
 											:no_turns => p.game.turn_no))
+			srv_error && push!(test_dump[:errors], msg)
 		unlock(_test_lock)
 
 	catch e
@@ -721,7 +761,7 @@ function analyse_logs()
 
 	
 	no_err = test_dump[:errors] |> length
-	@warn "$no_err error msg from server"
+	@error "$no_err errors"
 
 end
 
@@ -779,59 +819,6 @@ function incoming_msg_dispatcher(p)
 	
 	@info "LOG - player #$(p.id) - dispatch task: stopped"
 	
-end
-
-# ╔═╡ 6916407b-62f5-4093-98a7-ebaa18c71014
-function spawn_p_dispatch_task(k)
-
-	p = p_dict[k]
-
-	_prev_task = p.dispatch_task
-	
-	if isa(_prev_task, Task) && !istaskdone(_prev_task) # stop existing task
-		
-		put!(p.receive_channel, StopToken()) # terminates prev task
-		sleep(0.1)
-		@info "LOG - player #$k - dispatch task: sending stop token"
-	
-	end
-	
-	p.dispatch_task = @spawn incoming_msg_dispatcher(p)
-	@info "LOG - p #$k - dispatch task: active"
-
-end
-
-# ╔═╡ 04da4765-05d5-44e3-a724-3d98d808a483
-if start_test
-
-	@spawn begin
-
-		try
-
-			## act on yet to run players
-			while isready(pending_p)
-	
-				k = take!(pending_p)
-
-				put!(running_p, k) # will wait until channel has space
-
-				# initialize new player on demand
-				create_player(k)
-				spawn_p_dispatch_task(k)
-					
-				# actually start game -> msg dispatcher & handler will take over
-				@spawn SRV_req_new_game_vs_server(p_dict[k])
-				
-				# limiting outer loop
-				sleep(2)
-	
-			end
-		catch e
-			@error "ERROR - player #$(p.id) - new games initializer", e
-			rethrow(e)
-		end
-			
-	end
 end
 
 # ╔═╡ ca85f64a-1a2b-40cb-9216-a22b7bc8fcba
@@ -1333,14 +1320,13 @@ version = "17.4.0+2"
 # ╠═4b5bb371-0575-452b-8fe3-4204245c6b85
 # ╟─a92a4b60-9c66-4a23-a249-37437677ca2e
 # ╠═44db8669-985a-46f8-8d52-1f1a4053f25a
-# ╟─ea50d759-9e1c-4b99-9a20-3ce96edddeb1
 # ╟─ae3a9096-f868-4649-ae63-efde9cbef423
 # ╠═d7cc05ac-e4c6-4bb8-9977-0b5d290b4253
 # ╟─f856ad31-1393-4fb8-a0f8-32f2975cf793
 # ╠═f38f4e3e-f9dc-4d8c-9afc-0309a3ccc362
 # ╟─8e1ac4e0-dbba-4a6e-b38a-bfb3f349d285
-# ╠═6799bbd5-2ab3-47af-ad17-e781b2b9c4d5
-# ╠═76a92456-f985-4b1e-9821-20b54fe1d073
+# ╟─6799bbd5-2ab3-47af-ad17-e781b2b9c4d5
+# ╟─76a92456-f985-4b1e-9821-20b54fe1d073
 # ╟─4c7739b2-cf0a-4350-a049-f87875aa793e
 # ╠═379f96f4-3f11-40b2-98ed-0c11a489c3fd
 # ╟─999d80ad-8800-4906-bed7-d8eeec15d53e
@@ -1355,7 +1341,6 @@ version = "17.4.0+2"
 # ╠═3f8aa63d-5a6b-4d82-bd72-889472be3f92
 # ╠═d38a0908-a55c-4183-927d-894efe6e9ffb
 # ╟─ef27a573-669d-499b-80f4-f076222373b3
-# ╠═2dada36f-acef-44b9-87d8-a687528b08f7
 # ╟─a1514598-6c4e-42fa-b9b8-2f7ef388f356
 # ╟─04da4765-05d5-44e3-a724-3d98d808a483
 # ╟─6e38243a-9127-4983-ad52-8d69f4ae12e2
