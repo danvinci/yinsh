@@ -172,7 +172,7 @@ export async function init_game_fromServer(originator = false, joiner = false, g
             await server_ws_send(CODE_join_game, {game_id: game_code}); // asks to join existing game by ID
             
         } else if (originator) {
-            await server_ws_send(CODE_new_game_human); // requests new game vs a friend
+            await server_ws_send(CODE_new_game_human, {random_rings: random_rings}); // requests new game vs a friend
 
         } else if (ai_game) {
             await server_ws_send(CODE_new_game_server, {random_rings: random_rings}); // requests new game vs server/AI
@@ -338,7 +338,7 @@ async function server_actions_handler (event) {
         const _ring_setup_id = 0;
         add_ring(_ring_setup_id);
         refresh_canvas_state();
-        await sleep(300);
+        await sleep(200);
         update_ring_highlights(_ring_setup_id);
         refresh_canvas_state();
         

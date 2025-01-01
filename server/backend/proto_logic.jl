@@ -22,6 +22,12 @@ using HTTP, JSON3
 # ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
 using HTTP.WebSockets
 
+# ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
+# prod packages
+
+# ╔═╡ f6dc2723-ab4a-42fc-855e-d74915b4dcbf
+# dev packages
+
 # ╔═╡ 43f89626-8583-11ed-2b3d-b118ff996f37
 # ╠═╡ disabled = true
 #=╠═╡
@@ -45,12 +51,6 @@ using JET
 #=╠═╡
 using Plots, PlotThemes;  plotly() ; theme(:default)
   ╠═╡ =#
-
-# ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
-# prod packages
-
-# ╔═╡ f6dc2723-ab4a-42fc-855e-d74915b4dcbf
-# dev packages
 
 # ╔═╡ cd36abda-0f4e-431a-a4d1-bd5366c83b9b
 begin
@@ -147,6 +147,12 @@ end
 # ╔═╡ c96e1ee9-6d78-42d2-bfd6-2e8f88913b37
 mm_yinsh = prep_base_matrix();
 
+# ╔═╡ b6292e1f-a3a8-46d7-be15-05a74a5736de
+# ╠═╡ disabled = true
+#=╠═╡
+draw_board()
+  ╠═╡ =#
+
 # ╔═╡ 55987f3e-aaf7-4d85-a6cf-11eda59cd066
 function draw_board()
 
@@ -175,12 +181,6 @@ end
 
 return ps
 end
-
-# ╔═╡ b6292e1f-a3a8-46d7-be15-05a74a5736de
-# ╠═╡ disabled = true
-#=╠═╡
-draw_board()
-  ╠═╡ =#
 
 # ╔═╡ d996152e-e9e6-412f-b4db-3eacf5b7a5a6
 function printable_base_m()
@@ -316,6 +316,12 @@ row_start = locz[locz_index][1]
 col_start = locz[locz_index][2]
   ╠═╡ =#
 
+# ╔═╡ abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
+# ╠═╡ disabled = true
+#=╠═╡
+search_loc_graph(draw_board(), row_start, col_start, search_loc(mm_states, reshape_out(CartesianIndex(row_start,col_start))))
+  ╠═╡ =#
+
 # ╔═╡ 387eeec5-f483-48af-a27c-468683fe497b
 # helper function to place how_many elem_type we need in free spots
 function place_elem!(input_board, elem_type::String, how_many::Int)
@@ -365,6 +371,12 @@ end
 mm_setup = random_states_setup();
   ╠═╡ =#
 
+# ╔═╡ 49ff65f9-8ead-448f-8a44-1a741c20bbc5
+# ╠═╡ disabled = true
+#=╠═╡
+setup_graph = rings_marks_graph();
+  ╠═╡ =#
+
 # ╔═╡ 6e7ab4f4-7c52-45bc-a503-6bf9cb0d7932
 #=╠═╡
 function rings_marks_graph()
@@ -405,12 +417,6 @@ return new_board
 end
   ╠═╡ =#
 
-# ╔═╡ 49ff65f9-8ead-448f-8a44-1a741c20bbc5
-# ╠═╡ disabled = true
-#=╠═╡
-setup_graph = rings_marks_graph();
-  ╠═╡ =#
-
 # ╔═╡ e767b0a7-282f-46c4-b2e7-1f737807a3cb
 # ╠═╡ disabled = true
 #=╠═╡
@@ -421,6 +427,12 @@ setup_graph = rings_marks_graph();
 # ╠═╡ disabled = true
 #=╠═╡
 row_start_n = locz[locz_index_n][1]; col_start_n = locz[locz_index_n][2];
+  ╠═╡ =#
+
+# ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
+# ╠═╡ disabled = true
+#=╠═╡
+search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, reshape_out(CartesianIndex(row_start_n,col_start_n))))
   ╠═╡ =#
 
 # ╔═╡ a3ae2bfe-41ea-4fe1-870b-2ac35153da5d
@@ -962,18 +974,6 @@ end
 return input_board
 end
 
-# ╔═╡ abb1848e-2ade-49e7-9b15-a4c94b2f9cb7
-# ╠═╡ disabled = true
-#=╠═╡
-search_loc_graph(draw_board(), row_start, col_start, search_loc(mm_states, reshape_out(CartesianIndex(row_start,col_start))))
-  ╠═╡ =#
-
-# ╔═╡ ccbf567a-8923-4343-a2ff-53d81f2b6361
-# ╠═╡ disabled = true
-#=╠═╡
-search_loc_graph(rings_marks_graph(), row_start_n, col_start_n, search_loc(mm_setup, reshape_out(CartesianIndex(row_start_n,col_start_n))))
-  ╠═╡ =#
-
 # ╔═╡ c334b67e-594f-49fc-8c11-be4ea11c33b5
 function gen_random_gameState(near_score_rows = 0, num_mks = 0, random_rings = true)
 # generate a new random game state (server format)
@@ -1069,7 +1069,7 @@ function gen_random_gameState(near_score_rows = 0, num_mks = 0, random_rings = t
 end
 
 # ╔═╡ bc19e42a-fc82-4191-bca5-09622198d102
-const games_log_dict = Dict()
+const games_log_dict = Dict{String, Dict}()
 
 # ╔═╡ 57153574-e5ca-4167-814e-2d176baa0de9
 function save_newGame!(games_log_ref, new_game_details)
@@ -1679,35 +1679,6 @@ function dict_keys_to_sym(input::Dict)::Dict{Symbol, Any}
 	return _new
 end
 
-# ╔═╡ 28ee9310-9b7d-4169-bae4-615e4b2c386e
-function msg_dispatcher(ws, msg_id, msg_code, payload = Dict(), _status::Bool = true)
-
-	# copy response payload
-	_response::Dict{Symbol, Any} = deepcopy(payload)
-
-	# prepare response code
-	_sfx_msg_code = msg_code * (_status ? sfx_CODE_OK : sfx_CODE_ERR)
-	
-	# append original msg id and updated response_code
-	setindex!(_response, msg_id, :msg_id)
-	setindex!(_response, _sfx_msg_code, :msg_code)
-
-	# add statusCode 200 
-	setindex!(_response, 200, :statusCode)
-
-	# send response
-	send(ws, JSON3.write(_response))
-
-	# log
-	println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
-
-	# save response (just for logging/debug)
-	setindex!(_response, "sent", :type)
-	push!(ws_messages_log, _response)
-
-
-end
-
 # ╔═╡ 612a1121-b672-4bc7-9eee-f7989ac27346
 function update_ws_handler!(game_id::String, ws, is_orig_player::Bool)
 
@@ -1730,6 +1701,35 @@ function update_ws_handler!(game_id::String, ws, is_orig_player::Bool)
 	end
 	
 	
+
+end
+
+# ╔═╡ 28ee9310-9b7d-4169-bae4-615e4b2c386e
+function msg_dispatcher(ws, msg_id, msg_code, payload = Dict{Symbol, Any}(), ok_status::Bool = true)
+
+	# copy response payload
+	_response = deepcopy(payload)
+
+	# prepare response code
+	_sfx_msg_code = msg_code * (ok_status ? sfx_CODE_OK : sfx_CODE_ERR)
+	
+	# append original msg id and updated response_code
+	setindex!(_response, msg_id, :msg_id)
+	setindex!(_response, _sfx_msg_code, :msg_code)
+
+	# add statusCode 200 
+	setindex!(_response, 200, :statusCode)
+
+	# send response
+	send(ws, JSON3.write(_response))
+
+	# log
+	println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
+
+	# save response (just for logging/debug)
+	setindex!(_response, "sent", :type)
+	push!(ws_messages_log, _response)
+
 
 end
 
@@ -1916,20 +1916,16 @@ function check_both_players_ready(game_id)
 
 	try
 		
-		_players = get(games_log_dict[game_id], :players, nothing)
+		players = get(games_log_dict[game_id], :players, nothing)
 
-		if !isnothing(_players)
+		if !isnothing(players)
 
-			_both_ready = _players[:orig_player_status] == :ready && 	   _players[:join_player_status] == :ready
-	
-			return _both_ready
-		else
-			return false
+			return players[:orig_player_status] == :ready && players[:join_player_status] == :ready
 		end
 
-	catch
+	catch e
 
-		throw(error("ERROR checking players readiness status"))
+		throw("ERROR checking players readiness status, $e")
 
 	end
 
@@ -2958,11 +2954,13 @@ end
 # ╔═╡ a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
 function fn_new_game_vs_human(ws, msg)
 # human client (originator) wants new game to play against a nother human
+## NOTE -> this and other new_game request fn could be unified
 
-	# NOTE: msg input is now ignored, but in the future it could contain game options
+	# handle game settings/preferences in msg payload
+	_random_rings = msg[:payload][:random_rings] # true (random) | false (manual)
 
 	# generate and store new game data
-	_new_game_id = gen_newGame()
+	_new_game_id = gen_newGame(false, _random_rings)
 
 	# save ws handler for originating player
 	update_ws_handler!(_new_game_id, ws, true)
@@ -3834,10 +3832,15 @@ function game_runner(msg)
 	# this should be triggered only on first turn after setup
 	# ideally need to cleanup pkg gen / runner pipeline
 	_not_started_yet = get_gameStatus(_game_code) == GS_not_started
-	if _not_started_yet
-		_gstatus = infer_set_game_transitions!(_game_code)
-		setindex!(_caller_pld, _gstatus, :game_status)
-		setindex!(_other_pld, _gstatus, :game_status)
+
+	# regardless, add game status to payloads if missing 
+	gs_in_caller = haskey(_caller_pld, :game_status)
+	gs_in_other = haskey(_other_pld, :game_status)
+
+	if _not_started_yet || !gs_in_caller || !gs_in_other
+		gs = infer_set_game_transitions!(_game_code)
+		setindex!(_caller_pld, gs, :game_status)
+		setindex!(_other_pld, gs, :game_status)
 	end
 
 	# return CALLER and OTHER payload
@@ -3918,7 +3921,7 @@ function msg_handler(ws, msg, msg_log)
 				msg_dispatcher(ws, _msg_id, _msg_code, _pld_caller)
 				
 			# if payload is not empty, assumes game already exists
-			# game vs other human player, informed with other payload
+			# game vs other human player, informed with 'other' payload
 			if !isempty(_pld_other) && !is_game_vs_ai(_msg_payload[:game_id])
 
 				# game and player id are in the original msg as game exists
@@ -3931,9 +3934,14 @@ function msg_handler(ws, msg, msg_log)
 
 				# retrieve ws handler for other
 				_other_identity_flag = !_is_caller_originator
-				_ws_other = get_ws_handler(_game_id, _other_identity_flag)
 
-				msg_dispatcher(_ws_other, _msg_id, _msg_code, _pld_other)
+				# BUT other might not have joined yet
+				# this can also be a new game request
+				# also, the msg_id in this case is the one of the orig request, but not a problem as clients handle both responses & push msg
+				if check_both_players_ready(_game_id)
+					_ws_other = get_ws_handler(_game_id, _other_identity_flag)
+					msg_dispatcher(_ws_other, _msg_id, _msg_code, _pld_other)
+				end
 			
 			end
 
@@ -4034,6 +4042,7 @@ reactive_start_server(ws_servers_array, ws_messages_log, ws_messages_log_OG)
 
 # ╔═╡ 24185d12-d29c-4e72-a1de-a28319b4d369
 # make it wait forever when running as a script
+# (as this cell is not wrapped in begin/end, it's never executed in pluto, and so it doesn't hang the main thread)
 println("> Service running")
 wait(Condition())
 
@@ -4504,14 +4513,14 @@ version = "5.11.0+0"
 # ╟─5e5366a9-3086-4210-a037-c56e1374a686
 # ╟─7316a125-3bfe-4bac-babf-4e3db953078b
 # ╟─ca522939-422f-482a-8658-452790c463f6
+# ╟─612a1121-b672-4bc7-9eee-f7989ac27346
 # ╟─064496dc-4e23-4242-9e25-a41ddbaf59d1
 # ╟─28ee9310-9b7d-4169-bae4-615e4b2c386e
-# ╟─612a1121-b672-4bc7-9eee-f7989ac27346
 # ╟─a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╟─ca346015-b2c9-45da-8c1e-17493274aca2
-# ╠═88616e0f-6c85-4bb2-a856-ea7cee1b187d
+# ╟─88616e0f-6c85-4bb2-a856-ea7cee1b187d
 # ╟─69152551-c381-42f0-9ef6-a1c4ea969b34
 # ╟─61d75e9e-b2d3-4551-947b-e8acc11e2eeb
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17

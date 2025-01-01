@@ -226,7 +226,7 @@ export function GameSetup() {
               <>
                 <button type="button" class="back_nav_btn" onClick={toggle_newgm_settings}>&#9665;</button>
                 <hr class="menu_line"></hr>
-                <p>Game settings</p>
+                <p>Game options</p>
                 <RingsMode_Settings></RingsMode_Settings>
                 <hr class="menu_line"></hr>
                 <button type="button" onClick={triggerRequest_newVSfriend}>PLAY</button>
@@ -246,7 +246,7 @@ export function GameSetup() {
               <>
                 <button type="button" class="back_nav_btn" onClick={toggle_newai_settings}>&#9665;</button>
                 <hr class="menu_line"></hr>
-                <p>Game settings</p>
+                <p>Game options</p>
                 <RingsMode_Settings></RingsMode_Settings>
                 <hr class="menu_line"></hr>
                 <button type="button" onClick={triggerRequest_joinVS_AI}>PLAY</button>
@@ -326,7 +326,7 @@ function SoundSettings() {
       fallback={
         <div class="settings_item set_off item_bottom_space" onClick={toggle_sound}>
           <img class="set_img set_off" src={svg_sound_OFF} height="24px" width="24px"></img>
-          <span class="set_on">Sound effects OFF</span>
+          <span class="set_off">Sound effects OFF</span>
         </div>
       }>
         <div class="settings_item set_on item_bottom_space" onClick={toggle_sound}>

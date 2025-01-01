@@ -221,7 +221,7 @@ function onClose_handler (event) {
 function push_messages_handler(event){
     
     // see if we have the msg_code field -> advance_game_OK || game_resign_OK
-    if ( 'msg_code' in event.detail  && next_ok_codes.includes(event.detail.msg_code) ) {
+    if ( 'msg_code' in event.detail && next_ok_codes.includes(event.detail.msg_code) ) {
 
         // save server data -> data fn will take care of triggering event for core
         save_server_response(event.detail);
@@ -238,8 +238,6 @@ function push_messages_handler(event){
 
 
 //////////////////////////// MESSAGE SENDER (called by core)
-// could be unified in single function and handle cases internally
-
 // Send message for generating new game 
 export async function server_ws_send(msg_code, msg_payload = {}){
 
@@ -260,7 +258,7 @@ export async function server_ws_send(msg_code, msg_payload = {}){
         await msgPromise_lookup(msg_id);
 
         // check server response
-        const resp_code = messagePromises_log[msg_id].server_response.msg_code
+        const resp_code = messagePromises_log[msg_id].server_response.msg_code;
         if (resp_code == msg_code.concat(sfx_CODE_OK)) { 
 
             console.log(`LOG - ${resp_code} - RTT ${Date.now()-msg_time}ms`);
