@@ -75,22 +75,30 @@ end
 # ╔═╡ 8e1ac4e0-dbba-4a6e-b38a-bfb3f349d285
 gen_rand_id() = randstring(['a':'z'; '0':'9'])
 
+# ╔═╡ 6799bbd5-2ab3-47af-ad17-e781b2b9c4d5
+begin
+# interrupt identification fn
+	
+	interrupt_ex(e) = isa(e, InterruptException)
+	
+	interrupt_ex_HTTP(e) = (isa(e, HTTP.Exceptions.HTTPError) && isa(e.error, InterruptException))
+end
+
 # ╔═╡ 4c7739b2-cf0a-4350-a049-f87875aa793e
 md"## Server communication"
 
 # ╔═╡ 379f96f4-3f11-40b2-98ed-0c11a489c3fd
 begin
 	
-	# client codes codes - used for different requests
-	# server responds with these + _OK or _ERROR
+	# game codes - used for different requests by player
+	# server responds with same + _OK or _ERROR
 	const CODE_new_game_human = "new_game_vs_human"
 	const CODE_new_game_server = "new_game_vs_server"
 	const CODE_join_game = "join_game"
- 	const CODE_advance_game = "advance_game" # clients asking to progress the game
-	const CODE_resign_game = "resign_game" # clients asking to resign
+ 	const CODE_advance_game = "advance_game" # player asking to progress the game
+	const CODE_resign_game = "resign_game" # player asking to resign
 	
-	# server codes (only the server can use these)
-	# client responds with these + _OK or _ERROR
+	# server codes to instruct player (only the server can use these)
 	const CODE_play = "play" # the other player has joined -> move
 	const CODE_wait = "wait" # the other player has yet to join -> wait 
 	const CODE_end_game = "end_game" # someone won
@@ -128,27 +136,27 @@ struct StopToken end
 
 # ╔═╡ 3f8aa63d-5a6b-4d82-bd72-889472be3f92
 begin
-	const num_gc = 90
-	const max_concurrent_gc = 30
+	const num_p = 15
+	const max_concurrent_p = 5
 end
 
 # ╔═╡ d38a0908-a55c-4183-927d-894efe6e9ffb
 begin
-	const pending_gc = Channel{Int}(num_gc)
-	const running_gc = Channel{Int}(max_concurrent_gc)
-	const terminated_gc = Channel{Int}(num_gc)
+	const pending_p = Channel{Int}(num_p)
+	const running_p = Channel{Int}(max_concurrent_p)
+	const terminated_p = Channel{Int}(num_p)
 end
 
 # ╔═╡ ef27a573-669d-499b-80f4-f076222373b3
 function init_pending_ch()
 	
-	empty!(pending_gc) # for re-runs
+	empty!(pending_p) # for re-runs
 	
-	for k in 1:num_gc
-		put!(pending_gc, k)
+	for k in 1:num_p
+		put!(pending_p, k)
 	end
 	
-	@info "LOG - pending gc channel loaded with $num_gc clients"
+	@info "LOG - pending_p channel loaded with $num_p players"
 end
 
 # ╔═╡ 2dada36f-acef-44b9-87d8-a687528b08f7
@@ -182,7 +190,7 @@ end
 # ╔═╡ f38f4e3e-f9dc-4d8c-9afc-0309a3ccc362
 begin
 
-	mutable struct GameClient
+	mutable struct Player
 
 		id::Int
 		send_channel::Channel{Any}
@@ -193,14 +201,14 @@ begin
 		
 	end
 
-	GameClient(id) = GameClient(id, Channel{Any}(Inf), Channel{Any}(Inf), nothing, nothing, nothing)
+	Player(id) = Player(id, Channel{Any}(Inf), Channel{Any}(Inf), nothing, nothing, nothing)
 	
 end
 
 # ╔═╡ d7cc05ac-e4c6-4bb8-9977-0b5d290b4253
 begin
-	const gc_dict = Dict{Int, GameClient}() # dict( client_id => client )
-	const gc_dict_lock = ReentrantLock()
+	const p_dict = Dict{Int, Player}() # dict( player.id => player )
+	const p_dict_lock = ReentrantLock()
 end
 
 # ╔═╡ 6e38243a-9127-4983-ad52-8d69f4ae12e2
@@ -211,55 +219,54 @@ if start_test
 		sleep(60) # give time for games to start
 
 		try
-			while isready(running_gc) || isready(pending_gc)
+			while isready(running_p) || isready(pending_p)
 				
-				k = fetch(running_gc)
-				gc = gc_dict[k]
+				k = fetch(running_p)
+				p = p_dict[k]
 
 				can_terminate = false
 				while !can_terminate
-					_never_started = isready(gc.send_channel) && isnothing(gc.game) 
-					_completed = !isnothing(gc.game) && gc.game.status=="completed"
-					_stuck = !isnothing(gc.game) && gc.game.updated+Second(30)<now()
+					_never_started = isready(p.send_channel) && isnothing(p.game) 
+					_completed = !isnothing(p.game) && p.game.status=="completed"
+					_stuck = !isnothing(p.game) && p.game.updated+Second(30)<now()
 					
 					if _never_started || _completed || _stuck
 						can_terminate = true
-						#@warn "LOG - terminating gc #$(gc.id)"
-						take!(running_gc)
+						take!(running_p)
 					end
-					sleep(3) # wait before re-checking same client
+					sleep(3) # wait before re-checking same player
 				end
 	
 				@spawn begin # <- termination task for each game
 	
 					try 
-						@warn "LOG - terminating gc #$(gc.id)"
+						@warn "LOG - terminating player #$(p.id)"
 						
 						# stop ws task / connection
-						if !isnothing(gc.ws_task) && !istaskdone(gc.ws_task)
-							schedule(gc.ws_task, InterruptException(), error=true)
+						if !isnothing(p.ws_task) && !istaskdone(p.ws_task)
+							schedule(p.ws_task, InterruptException(), error=true)
 						end 
 						
 						# stop dispatcher 
-						if !isnothing(gc.dispatch_task) && !istaskdone(gc.dispatch_task)
-							put!(gc.receive_channel, StopToken()) 
+						if !isnothing(p.dispatch_task) && !istaskdone(p.dispatch_task)
+							put!(p.receive_channel, StopToken()) 
 						end 
 
 						# set aside the index
-						put!(terminated_gc, k)
+						put!(terminated_p, k)
 						GC.safepoint()
 						
 					catch e
-						@error "ERROR - gc #$(gc.id) - termination task", e
+						@error "ERROR - p #$(p.id) - termination task", e
 						rethrow(e)
 					end
 	
 				end
-				sleep(2) # wait before re-checking running clients
+				sleep(2) # wait before re-checking running players
 			end
 
 		catch e
-			@error "ERROR - gc #$(gc.id) - termination handler", e
+			@error "ERROR - p #$(p.id) - termination handler", e
 			rethrow(e)
 		end
 	end
@@ -268,36 +275,36 @@ end
 # ╔═╡ 8f29f032-1c5b-4578-ae7f-22f5111b19b7
 function filter_msg_by_gid(gid::String)
 
-	gc_num = filter(kv -> (last(kv).game.id == gid), gc_dict) |> first |> first
+	p_num = filter(kv -> (last(kv).game.id == gid), p_dict) |> first |> first
 
-	@info "Game $gid was played by gc #$gc_num"
+	@info "Game $gid was played by player #$p_num"
 	
 	filter(d -> (haskey(d, :game_id) && d[:game_id]==gid), test_dump[:any])
 	
 end
 
 # ╔═╡ f856ad31-1393-4fb8-a0f8-32f2975cf793
-function save_gc_details!(gc::GameClient)
+function save_p_details!(p::Player)
 
 	try 
-		lock(gc_dict_lock)
+		lock(p_dict_lock)
 			try
-				setindex!(gc_dict, gc, gc.id)
-				@info "LOG - Game client #$(gc.id) saved"
+				setindex!(p_dict, p, p.id)
+				@info "LOG - Player #$(p.id) saved"
 			finally
-				unlock(gc_dict_lock)
+				unlock(p_dict_lock)
 			end
 	catch e
-		@error "LOG - Error while saving game client $(gc.id)"
+		@error "LOG - Error while saving player $(p.id)"
 	end
 
 end
 
 # ╔═╡ 76a92456-f985-4b1e-9821-20b54fe1d073
-function create_game_client(id::Int)
+function create_player(id::Int)
 
-# new game client
-gc = GameClient(id)
+# new player
+p = Player(id)
 
 ws_task = @spawn begin
 
@@ -319,11 +326,10 @@ ws_task = @spawn begin
 						end
 					catch e
 						if isa(e, InterruptException) || isa(e, EOFError)
-							@warn "LOG - gc #$(gc.id) - listener task interrupted", e
+							@warn "LOG - player #$(p.id) - listener task interrupted", e
 							return # clean exit
 						end
-						@error "ERROR - gc #$(gc.id) - websocket listener failure", e
-						sleep(1)
+						@error "ERROR - player #$(p.id) - listener task failure", e
 						rethrow(e) # task failure
 					end
 				end
@@ -343,11 +349,10 @@ ws_task = @spawn begin
 						end
 					catch e
 						if isa(e, InterruptException) || isa(e, EOFError)
-							@warn "LOG - gc #$(gc.id) - sender task interrupted", e
+							@warn "LOG - player #$(p.id) - sender task interrupted", e
 							return # clean exit
 						end
-						@error "ERROR - gc #$(gc.id) - websocket sender failure", e
-						sleep(1)
+						@error "ERROR - player #$(p.id) - sender task failure", e
 						rethrow(e) # task failure
 					end
 				end
@@ -355,74 +360,77 @@ ws_task = @spawn begin
 
 			try 
 				# create and schedule tasks
-				listener_task = @spawn init_listener(ws, gc.receive_channel)()
-				sender_task = @spawn init_sender(ws, gc.send_channel)()
+				listener_task = @spawn init_listener(ws, p.receive_channel)()
+				sender_task = @spawn init_sender(ws, p.send_channel)()
 
 				wait(listener_task)
 				wait(sender_task)
 
-				# websocket connection should closes as tasks terminate
+				# websocket connection should closes as we send interrupt
 				
 			catch e # <- this is for handling listener/sender failures propagating
-				close(ws) # <- close ws to unblock receive / for msg in ws
-				sleep(1)
-				@error "ERROR - gc #$(gc.id) - websocket unhandled inner error", e
-				rethrow(e)
+				close(ws) # <- close ws and unblock receive (for msg in ws)
+				sleep(0.5)
+
+				# InterruptException is caught by innermost try/catch first
+				if interrupt_ex(e) || interrupt_ex_HTTP(e) || isa(e, EOFError)
+					rethrow(e)
+				else
+					@error "ERROR - player #$(p.id) - ws unhandled inner error", e
+				end
 			end
 		end
 
 	catch e
-		
-		interrupt_ex = isa(e, InterruptException)
-		interrupt_ex_HTTP = (isa(e, HTTP.Exceptions.HTTPError) && isa(e.error, InterruptException))
 
+		# InterruptException is caught by innermost try/catch first
 	   	# try to clean up child tasks regardless of error type
-		if interrupt_ex || interrupt_ex_HTTP
+		if interrupt_ex(e) || interrupt_ex_HTTP(e) || isa(e, EOFError)
 			for t in [listener_task, sender_task]
 		       if !isnothing(t) && !istaskdone(t) # done is true also if failed
 		           try
 		               schedule(t, InterruptException(), error=true)
 		           catch e
-		               @warn "LOG - gc #$(gc.id) - task interruption failed", e
+		               @warn "LOG - player #$(p.id) - task interruption failed", e
 		           end
 		       end
 		   	end
-			@warn "LOG - gc #$(gc.id) - websocket task interrupted", e 
+			@warn "LOG - player #$(p.id) - ws task interrupted", e 
 	   else # <- handling non-clean exits
-	       @error "ERROR - gc #$(gc.id) - websocket unhandled outer error", e
+	       @error "ERROR - player #$(p.id) - ws unhandled outer error", e
 	   end
 	end
 end
 
-gc.ws_task = ws_task
-save_gc_details!(gc)
+p.ws_task = ws_task
+save_p_details!(p)
 
 end
 
 # ╔═╡ 999d80ad-8800-4906-bed7-d8eeec15d53e
-function SRV_req_new_game_vs_server(gc::GameClient)
-# assumes the GC already has an open connection
+function SRV_req_new_game_vs_server(p::Player)
+# assumes the player already has an open connection
 
 	req_msg = Dict( :msg_code => CODE_new_game_server, 
 					:payload => Dict(:random_rings => true))
 
-	put!(gc.send_channel, req_msg)
+	put!(p.send_channel, req_msg)
 
 end
 
 # ╔═╡ c191aace-4ee0-4ee9-a45d-cdb226413a76
-function SRV_advance_game(gc::GameClient, turn_recap::Union{Bool, Dict})
+function SRV_advance_game(p::Player, turn_recap::Union{Bool, Dict})
 
 	# => we'll need a turn recap function
 	
 	resp = Dict(:msg_code => CODE_advance_game, 
-				:payload => Dict( 	:game_id => gc.game.id,
-									:player_id => gc.game.player_id,
+				:payload => Dict( 	:game_id => p.game.id,
+									:player_id => p.game.player_id,
 									:turn_recap => turn_recap))
 	
 
-	@info "LOG - gc #$(gc.id) - game $(gc.game.id) - requesting advance"
-	put!(gc.send_channel, resp)
+	@info "LOG - player #$(p.id) - game $(p.game.id) - requesting advance"
+	put!(p.send_channel, resp)
 	
 end
 
@@ -442,12 +450,6 @@ begin
 	
 end
 
-# ╔═╡ f9d1b5ae-2e18-4e26-a1ac-18c4ea9a0493
-# ╠═╡ disabled = true
-#=╠═╡
-const return_IN_lookup, return_OUT_lookup = reshape_lookupDicts_create();
-  ╠═╡ =#
-
 # ╔═╡ ed6d8a10-c80d-4f3b-8ff3-0c6cb2880811
 begin
 
@@ -459,7 +461,7 @@ begin
 end
 
 # ╔═╡ 661123d7-b76e-4fdf-ade7-5779808b968d
-function internalize_game_state!(gc::GameClient, msg::Dict)
+function internalize_game_state!(p::Player, msg::Dict)
 
 	try
 
@@ -475,10 +477,10 @@ function internalize_game_state!(gc::GameClient, msg::Dict)
 	
 	
 		### create new game
-		if isnothing(gc.game) 
+		if isnothing(p.game) 
 			if _has_game_id && _has_og_player_id
 				
-				gc.game = Game( msg[:game_id], 
+				p.game = Game( msg[:game_id], 
 								"not_started", 
 								Dict[], 
 								Dict[], 
@@ -493,43 +495,43 @@ function internalize_game_state!(gc::GameClient, msg::Dict)
 	
 		### update existing game
 		# game id & player
-		_has_game_id && (gc.game.id = msg[:game_id])
-		_has_og_player_id && (gc.game.player_id = msg[:orig_player_id])
+		_has_game_id && (p.game.id = msg[:game_id])
+		_has_og_player_id && (p.game.player_id = msg[:orig_player_id])
 		
 		# rings mode
-		_has_rings_mode && (gc.game.rings_mode = msg[:rings_mode])
-		_has_ring_setup_spots && (gc.game.ring_setup_spots = msg[:ring_setup_spots])
+		_has_rings_mode && (p.game.rings_mode = msg[:rings_mode])
+		_has_ring_setup_spots && (p.game.ring_setup_spots = msg[:ring_setup_spots])
 		
 		# new board state
-		_has_rings && (gc.game.rings = msg[:rings])
-		_has_markers && (gc.game.markers = msg[:markers])
+		_has_rings && (p.game.rings = msg[:rings])
+		_has_markers && (p.game.markers = msg[:markers])
 			
 		# game status
-		_has_status && (gc.game.status = msg[:game_status])
+		_has_status && (p.game.status = msg[:game_status])
 
 		# turn number
-		_has_turn_no && (gc.game.turn_no = msg[:turn_no])
+		_has_turn_no && (p.game.turn_no = msg[:turn_no])
 
 		# game scenarios
-		_has_scenario_trees && (gc.game.scenario_trees = msg[:scenario_trees])
+		_has_scenario_trees && (p.game.scenario_trees = msg[:scenario_trees])
 
 		# log last updated time anytime this fn is called 
-		gc.game.updated = now()
+		p.game.updated = now()
 		
 	
-		@info "LOG - gc #$(gc.id) - game $(gc.game.id) updated"
+		@info "LOG - player #$(p.id) - game $(p.game.id) updated"
 	catch e
-		@error "ERROR - gc #$(gc.id) - game $(gc.game.id) - internalizing game state", e
+		@error "ERROR - player #$(p.id) - game $(p.game.id) - internalizing game state", e
 	end
 	
 end
 
 # ╔═╡ 37158d4d-de39-4cbc-961c-aefb17c102d6
-function gc_play_turn(gc::GameClient)
+function p_play_turn(p::Player)
 
 	try 
 
-		turn_recap = Dict{Symbol, Any}(:completed_turn_no => gc.game.turn_no)
+		turn_recap = Dict{Symbol, Any}(:completed_turn_no => p.game.turn_no)
 	
 		#=	scenario trees
 	
@@ -556,9 +558,9 @@ function gc_play_turn(gc::GameClient)
 		# prev code should select correct tree -> not implemented
 		_tree = Dict()
 		try
-			_tree = gc.game.scenario_trees[:treepots][1][:tree]
+			_tree = p.game.scenario_trees[:treepots][1][:tree]
 		catch e
-			@error "ERROR - gc #$(gc.id) - game $(gc.game.id) - play turn: can't locate scenario tree", e
+			@error "ERROR - player #$(p.id) - game $(p.game.id) - play turn: can't locate scenario tree", e
 		end
 	
 		
@@ -571,24 +573,24 @@ function gc_play_turn(gc::GameClient)
 		# score actions
 		# not implemented
 		
-		@info "LOG - gc #$(gc.id) - game $(gc.game.id) played turn $(gc.game.turn_no)"
+		@info "LOG - player #$(p.id) - game $(p.game.id) played turn $(p.game.turn_no)"
 		return turn_recap
 
 	catch e
-		@error "ERROR - gc #$(gc.id) - game $(gc.game.id) - play turn", e
+		@error "ERROR - player #$(p.id) - game $(p.game.id) - play turn", e
 	end
 	
 
 end
 
 # ╔═╡ 3609fefa-1e57-4645-9430-e80ff6ff64ca
-function server_msg_handler(gc::GameClient, msg::Dict)
+function server_msg_handler(p::Player, msg::Dict)
 
 	try 
 
 		msg_code = haskey(msg, :msg_code) ? msg[:msg_code] : ""
 		next_action_code = haskey(msg, :next_action_code) ? msg[:next_action_code] : ""
-		@info "LOG - gc #$(gc.id) - new msg: $msg_code | $next_action_code"
+		@info "LOG - player #$(p.id) - new msg: $msg_code | $next_action_code"
 	
 		# CASES
 		setup_game=(msg_code==RESP_setup_vs_server_OK)
@@ -598,8 +600,8 @@ function server_msg_handler(gc::GameClient, msg::Dict)
 		# new game confirmation
 		if setup_game
 			
-			internalize_game_state!(gc, msg)
-			SRV_advance_game(gc, false)
+			internalize_game_state!(p, msg)
+			SRV_advance_game(p, false)
 	
 		end
 	
@@ -607,31 +609,32 @@ function server_msg_handler(gc::GameClient, msg::Dict)
 		# play turn
 		if play_turn
 			
-			internalize_game_state!(gc, msg)
-			turn_recap = gc_play_turn(gc)
-			SRV_advance_game(gc, turn_recap)
+			internalize_game_state!(p, msg)
+			turn_recap = p_play_turn(p)
+			SRV_advance_game(p, turn_recap)
 	
 		end
 	
 	
 		# game terminated
 		if end_game
-			internalize_game_state!(gc, msg)
-			@info "LOG - gc #$(gc.id) - game $(gc.game.id) completed"
+			internalize_game_state!(p, msg)
+			@info "LOG - player #$(p.id) - game $(p.game.id) completed"
 		end
 		
 		
 		lock(_test_lock) 
 			push!(test_dump[:any], msg)
 			end_game && push!(test_dump[:outcomes], 
-									Dict( 	:last_msg => msg, 								:player_id => gc.game.player_id, 				:no_turns => gc.game.turn_no))
+									Dict( 	:last_msg => msg, 								
+											:player_id => p.game.player_id, 				
+											:no_turns => p.game.turn_no))
 		unlock(_test_lock)
 
 	catch e
 		lock(_test_lock) 
 			push!(test_dump[:errors], e)
 		unlock(_test_lock)
-		@warn "GC: $gc"
 		@error "ERROR - server msg handler", e
 	end
 
@@ -650,15 +653,15 @@ end
 # ╔═╡ ad791a85-f38f-4784-921b-2ac066b1ac60
 function analyse_logs()
 
-	# game clients
-	num_GCs = gc_dict |> length
-	GCs_w_game = filter(id_gc -> !isnothing(last(id_gc).game), gc_dict)
-	GCs_w_game_completed = filter(id_gc -> last(id_gc).game.status == "completed", GCs_w_game)
+	# players
+	num_p = p_dict |> length
+	p_w_game = filter(id_p -> !isnothing(last(id_p).game), p_dict)
+	p_w_game_completed = filter(id_p -> last(id_p).game.status == "completed", p_w_game)
 
 	# games played
-	gids = filter(d -> haskey(d, :game_id), test_dump[:any]) |> v -> map(d -> d[:game_id], v) |> unique
+	g_ids = filter(d -> haskey(d, :game_id), test_dump[:any]) |> v -> map(d -> d[:game_id], v) |> unique
 	
-	tot_games = gids |> length
+	tot_games = g_ids |> length
 
 	# totals by outcome
 	won = 0
@@ -675,8 +678,8 @@ function analyse_logs()
 		resign -> won/lost
 	=#
 
-	gids_end = String[]
-	for id in gids
+	g_ids_end = String[]
+	for id in g_ids
 
 		# extract info
 		g_id_outcomes = findfirst( 	d -> (haskey(d[:last_msg], :game_id)
@@ -685,7 +688,7 @@ function analyse_logs()
 									&& d[:last_msg][:game_status] == "completed"), test_dump[:outcomes])
 
 		if !isnothing(g_id_outcomes)
-			push!(gids_end, id)
+			push!(g_ids_end, id)
 			
 			outcome = test_dump[:outcomes][g_id_outcomes][:last_msg][:outcome]
 			won_by = test_dump[:outcomes][g_id_outcomes][:last_msg][:won_by]
@@ -705,9 +708,9 @@ function analyse_logs()
 	end
 
 	# report
-	end_games = gids_end |> length
-	@info "$(GCs_w_game |> length)/$num_GCs clients with an initialized game"
-	@info "$(GCs_w_game_completed |> length)/$(GCs_w_game |> length) clients completed vs initialized game"
+	end_games = g_ids_end |> length
+	@info "$(p_w_game |> length)/$num_p players with an initialized game"
+	@info "$(p_w_game_completed |> length)/$(p_w_game |> length) players, completed vs initialized game"
 	@info "$end_games games played: $won won, $draw draw, $lost lost"
 	@info "turns: min $(minimum(turns, init=Inf)), mean $(round(mean(turns))), max $(maximum(turns, init=-1)) "
 
@@ -758,43 +761,43 @@ end
 
 
 # ╔═╡ 86e15cd0-0f49-412d-b09f-27f51cff6c6c
-function incoming_msg_dispatcher(gc)
+function incoming_msg_dispatcher(p)
 # expected to be spawn as a task by calling fn
 # takes in raw messages, parses them, and dispatches them to relevant fn
 
 	while true
 		try 
-			_msg = take!(gc.receive_channel)
+			_msg = take!(p.receive_channel)
 				
 			isa(_msg, StopToken) && break 
 		
-			JSON3.read(_msg, Dict) |> dict_keys_to_sym |> m -> server_msg_handler(gc, m)
+			JSON3.read(_msg, Dict) |> dict_keys_to_sym |> m -> server_msg_handler(p, m)
 		catch e 
-			@error "ERROR - gc #$(gc.id) - incoming msg dispatcher", e
+			@error "ERROR - player #$(p.id) - incoming msg dispatcher", e
 		end
 	end
 	
-	@info "LOG - gc #$(gc.id) - dispatch task: stopped"
+	@info "LOG - player #$(p.id) - dispatch task: stopped"
 	
 end
 
 # ╔═╡ 6916407b-62f5-4093-98a7-ebaa18c71014
-function spawn_gc_dispatch_task(k)
+function spawn_p_dispatch_task(k)
 
-	gc = gc_dict[k]
+	p = p_dict[k]
 
-	_prev_task = gc.dispatch_task
+	_prev_task = p.dispatch_task
 	
 	if isa(_prev_task, Task) && !istaskdone(_prev_task) # stop existing task
 		
-		put!(gc.receive_channel, StopToken()) # terminates prev task
+		put!(p.receive_channel, StopToken()) # terminates prev task
 		sleep(0.1)
-		@info "LOG - gc #$k - dispatch task: sending stop token"
+		@info "LOG - player #$k - dispatch task: sending stop token"
 	
 	end
 	
-	gc.dispatch_task = @spawn incoming_msg_dispatcher(gc)
-	@info "LOG - gc #$k - dispatch task: active"
+	p.dispatch_task = @spawn incoming_msg_dispatcher(p)
+	@info "LOG - p #$k - dispatch task: active"
 
 end
 
@@ -805,26 +808,26 @@ if start_test
 
 		try
 
-			## act on yet to run clients
-			while isready(pending_gc)
+			## act on yet to run players
+			while isready(pending_p)
 	
-				k = take!(pending_gc)
+				k = take!(pending_p)
 
-				put!(running_gc, k) # will wait until channel has space
+				put!(running_p, k) # will wait until channel has space
 
-				# initialize new game clients on demand
-				create_game_client(k)
-				spawn_gc_dispatch_task(k)
+				# initialize new player on demand
+				create_player(k)
+				spawn_p_dispatch_task(k)
 					
 				# actually start game -> msg dispatcher & handler will take over
-				@spawn SRV_req_new_game_vs_server(gc_dict[k])
+				@spawn SRV_req_new_game_vs_server(p_dict[k])
 				
 				# limiting outer loop
 				sleep(2)
 	
 			end
 		catch e
-			@error "ERROR - gc #$(gc.id) - new games initializer", e
+			@error "ERROR - player #$(p.id) - new games initializer", e
 			rethrow(e)
 		end
 			
@@ -1336,9 +1339,10 @@ version = "17.4.0+2"
 # ╟─f856ad31-1393-4fb8-a0f8-32f2975cf793
 # ╠═f38f4e3e-f9dc-4d8c-9afc-0309a3ccc362
 # ╟─8e1ac4e0-dbba-4a6e-b38a-bfb3f349d285
-# ╟─76a92456-f985-4b1e-9821-20b54fe1d073
+# ╠═6799bbd5-2ab3-47af-ad17-e781b2b9c4d5
+# ╠═76a92456-f985-4b1e-9821-20b54fe1d073
 # ╟─4c7739b2-cf0a-4350-a049-f87875aa793e
-# ╟─379f96f4-3f11-40b2-98ed-0c11a489c3fd
+# ╠═379f96f4-3f11-40b2-98ed-0c11a489c3fd
 # ╟─999d80ad-8800-4906-bed7-d8eeec15d53e
 # ╟─c191aace-4ee0-4ee9-a45d-cdb226413a76
 # ╟─3e2b416c-1e41-4d4b-911c-ccb9413b4823
@@ -1361,7 +1365,6 @@ version = "17.4.0+2"
 # ╟─1df492d5-f456-4242-9d40-35a50492b6bd
 # ╠═4de23652-f375-4362-9c68-a3460d6940e1
 # ╠═2a910de1-8664-4b6e-b992-c27cb613fc24
-# ╠═f9d1b5ae-2e18-4e26-a1ac-18c4ea9a0493
 # ╠═ed6d8a10-c80d-4f3b-8ff3-0c6cb2880811
 # ╠═661123d7-b76e-4fdf-ade7-5779808b968d
 # ╠═3609fefa-1e57-4645-9430-e80ff6ff64ca
