@@ -127,7 +127,7 @@ struct StopToken end
 # ╔═╡ 3f8aa63d-5a6b-4d82-bd72-889472be3f92
 begin
 	const num_p = 50
-	const max_concurrent_p = 10
+	const max_concurrent_p = 20
 end
 
 # ╔═╡ d38a0908-a55c-4183-927d-894efe6e9ffb
@@ -152,39 +152,56 @@ end
 # ╔═╡ a1514598-6c4e-42fa-b9b8-2f7ef388f356
 md"#### Start concurrent test: $(@bind start_test CheckBox(default=false))"
 
-# ╔═╡ 04da4765-05d5-44e3-a724-3d98d808a483
-if start_test
+# ╔═╡ 6ec45ba8-afc6-4028-91e7-88d91d30c953
+test_dump
 
-	@spawn init_pending_ch()
+# ╔═╡ 058491e6-4e20-4dd3-9d76-13e432e06b7b
+test_dump[:outcomes] |> 
+d -> map(o -> 
+(o[:last_msg][:outcome], (haskey(o[:last_msg], :game_id) ? o[:last_msg][:game_id] : "no_id"), o[:player_id], o[:last_msg][:won_by]), 
+d)
 
-	@spawn begin
+# ╔═╡ 1df492d5-f456-4242-9d40-35a50492b6bd
+md"## Play the game"
 
-		try
+# ╔═╡ 4de23652-f375-4362-9c68-a3460d6940e1
+mutable struct Game
 
-			## act on yet to run players
-			while isready(pending_p)
-	
-				k = take!(pending_p)
+	id::String
+	status::String
+	rings::Vector{Dict}
+	markers::Vector{Dict}
+	player_id::String
+	rings_mode::String
+	ring_setup_spots::Vector
+	turn_no::Int
+	scenario_trees::Dict
+	updated::DateTime
 
-				put!(running_p, k) # will wait until channel has space
+end
 
-				# initialize new player on demand
-				create_player(k)
-				spawn_p_dispatch_task(k)
-					
-				# actually start game -> msg dispatcher & handler will take over
-				@spawn SRV_req_new_game_vs_server(p_dict[k])
-				
-				# limiting outer loop
-				sleep(2)
-	
-			end
-		catch e
-			@error "ERROR - player #$(p.id) - new games initializer", e
-			rethrow(e)
-		end
-			
+# ╔═╡ f38f4e3e-f9dc-4d8c-9afc-0309a3ccc362
+begin
+
+	mutable struct Player
+
+		id::Int
+		send_channel::Channel{Any}
+		receive_channel::Channel{Any}
+		dispatch_task::Union{Task, Nothing}
+		ws_task::Union{Task, Nothing}
+		game::Union{Game, Nothing}
+		
 	end
+
+	Player(id) = Player(id, Channel{Any}(Inf), Channel{Any}(Inf), nothing, nothing, nothing)
+	
+end
+
+# ╔═╡ d7cc05ac-e4c6-4bb8-9977-0b5d290b4253
+begin
+	const p_dict = Dict{Int, Player}() # dict( player.id => player )
+	const p_dict_lock = ReentrantLock()
 end
 
 # ╔═╡ 6e38243a-9127-4983-ad52-8d69f4ae12e2
@@ -246,72 +263,6 @@ if start_test
 			rethrow(e)
 		end
 	end
-end
-
-# ╔═╡ db003af9-654c-4a3a-8797-8f6ff8e7d8b5
-test_dump
-
-# ╔═╡ 1df492d5-f456-4242-9d40-35a50492b6bd
-md"## Play the game"
-
-# ╔═╡ 4de23652-f375-4362-9c68-a3460d6940e1
-mutable struct Game
-
-	id::String
-	status::String
-	rings::Vector{Dict}
-	markers::Vector{Dict}
-	player_id::String
-	rings_mode::String
-	ring_setup_spots::Vector
-	turn_no::Int
-	scenario_trees::Dict
-	updated::DateTime
-
-end
-
-# ╔═╡ f38f4e3e-f9dc-4d8c-9afc-0309a3ccc362
-begin
-
-	mutable struct Player
-
-		id::Int
-		send_channel::Channel{Any}
-		receive_channel::Channel{Any}
-		dispatch_task::Union{Task, Nothing}
-		ws_task::Union{Task, Nothing}
-		game::Union{Game, Nothing}
-		
-	end
-
-	Player(id) = Player(id, Channel{Any}(Inf), Channel{Any}(Inf), nothing, nothing, nothing)
-	
-end
-
-# ╔═╡ d7cc05ac-e4c6-4bb8-9977-0b5d290b4253
-begin
-	const p_dict = Dict{Int, Player}() # dict( player.id => player )
-	const p_dict_lock = ReentrantLock()
-end
-
-# ╔═╡ 6916407b-62f5-4093-98a7-ebaa18c71014
-function spawn_p_dispatch_task(k)
-
-	p = p_dict[k]
-
-	_prev_task = p.dispatch_task
-	
-	if isa(_prev_task, Task) && !istaskdone(_prev_task) # stop existing task
-		
-		put!(p.receive_channel, StopToken()) # terminates prev task
-		sleep(0.1)
-		@info "LOG - player #$k - dispatch task: sending stop token"
-	
-	end
-	
-	p.dispatch_task = @spawn incoming_msg_dispatcher(p)
-	@info "LOG - player #$k - dispatch task: active"
-
 end
 
 # ╔═╡ 8f29f032-1c5b-4578-ae7f-22f5111b19b7
@@ -564,6 +515,25 @@ function internalize_game_state!(p::Player, msg::Dict)
 	
 end
 
+# ╔═╡ d8575f76-0c43-454f-aff8-ccfd0117fa1a
+function pick_move(tree::Dict)
+
+	# explore tree to find first move that result in score
+	for s in keys(tree) # start 
+		for e in keys(tree[s]) # end
+			if haskey(tree[s][e], :scores_avail_player)
+				return s, e
+			end
+		end
+	end
+
+	# otherwise make random move
+	_rstart = tree |> keys |> rand
+	_rend = tree[_rstart] |> keys |> rand
+
+	return _rstart, _rend
+end
+
 # ╔═╡ 37158d4d-de39-4cbc-961c-aefb17c102d6
 function p_play_turn(p::Player)
 
@@ -572,16 +542,15 @@ function p_play_turn(p::Player)
 		turn_recap = Dict{Symbol, Any}(:completed_turn_no => p.game.turn_no)
 	
 		#=	scenario trees
-	
-			no pre-move scoring -> scenario_trees > treepots[1] > tree -> start -> end
-			no pre-move scoring -> scenario_trees > treepots[?] > tree -> start -> end
+		no pre-move scoring -> scenario_trees > treepots[1] > tree -> start -> end
+		pre-move scoring -> scenario_trees > treepots[pm] > tree -> start -> end
 		=#
 	
 		### capabilities
-		# NO | handle manual rings setup -> later, now asking only random gamesss
-		# NO | handle pre-moves scoring -> let's wait for error to get example data
+		# NO | handle manual rings setup -> later, now asking only random games
+		# NO | handle pre-moves scoring + tree setup
 		# OK | handle move
-		# NO | handle scoring
+		# OK | handle scoring
 		# NO | random resignations
 	
 		# ----------------------------------------------------------
@@ -593,29 +562,58 @@ function p_play_turn(p::Player)
 		# not implemented
 			
 	
-		# prev code should select correct tree -> not implemented
+		# prev code should select correct tree in case of pre-moves -> not implemented
 		_tree = Dict()
 		try
 			_tree = p.game.scenario_trees[:treepots][1][:tree]
 		catch e
 			@error "ERROR - player #$(p.id) - game $(p.game.id) - play turn: can't locate scenario tree", e
+			rethrow(e)
 		end
 	
 		
-		# random move
-		ring_start = _tree |> keys |> rand
-		ring_end = _tree[ring_start] |> keys |> rand
+		# make move
+		ring_start, ring_end = pick_move(_tree)
 		setindex!(turn_recap, Dict(:start => ring_start, :end => ring_end), :move_action)
 		
 		
 		# score actions
-		# not implemented
+		action = _tree[ring_start][ring_end]
+		if haskey(action, :scores_avail_player)
+			scoring_actions = Dict[] # array, 1 dict per action
+
+			# scoring sets are possible scoring combinations
+			# each set is like [1,2,...] which are 1-indexes of the matching srows
+			# the srow is the row of markers that gets removed
+			sset_pick = rand(action[:scores_avail_player][:s_sets])
+			player_rings = _tree |> keys |> collect |> deepcopy  # array vs keyset
+			
+			for s_index in sset_pick # we might have more than one score/row
+
+				# mark matching row of markers as removed
+				mk_row = action[:scores_avail_player][:s_rows][s_index][:mk_locs]
+
+				# take out a ring
+				ring_score = pop!(player_rings)
+
+				# save scoring action
+				push!(scoring_actions, Dict(:mk_locs => mk_row, 
+											:ring_score => ring_score))
+			end
+
+			# save scoring action in turn_recap
+			setindex!(turn_recap, scoring_actions, :score_actions)
+
+		end
+		
+		# random resign action ? not implemented
 		
 		@info "LOG - player #$(p.id) - game $(p.game.id) played turn $(p.game.turn_no)"
 		return turn_recap
 
 	catch e
 		@error "ERROR - player #$(p.id) - game $(p.game.id) - play turn", e
+		rethrow(e)
 	end
 	
 
@@ -693,13 +691,23 @@ end
 # ╔═╡ ad791a85-f38f-4784-921b-2ac066b1ac60
 function analyse_logs()
 
-	# players
-	num_p = p_dict |> length
-	p_w_game = filter(id_p -> !isnothing(last(id_p).game), p_dict)
-	p_w_game_completed = filter(id_p -> last(id_p).game.status == "completed", p_w_game)
+
+	lock(p_dict_lock)
+	
+
+		# players
+		num_p = p_dict |> length
+		p_w_game = filter(id_p -> !isnothing(last(id_p).game), p_dict)
+		p_w_game_completed = filter(id_p -> last(id_p).game.status == "completed", p_w_game)
+
+	unlock(p_dict_lock)
+	
+	
 
 	# games played
-	g_ids = filter(d -> haskey(d, :game_id), test_dump[:any]) |> v -> map(d -> d[:game_id], v) |> unique
+	lock(_test_lock)
+		g_ids = filter(d -> haskey(d, :game_id), test_dump[:any]) |> v -> map(d -> d[:game_id], v) |> unique
+	unlock(_test_lock)
 	
 	tot_games = g_ids |> length
 
@@ -722,10 +730,12 @@ function analyse_logs()
 	for id in g_ids
 
 		# extract info
-		g_id_outcomes = findfirst( 	d -> (haskey(d[:last_msg], :game_id)
-									&& d[:last_msg][:game_id] == id 
-									&& haskey(d[:last_msg], :game_status)
-									&& d[:last_msg][:game_status] == "completed"), test_dump[:outcomes])
+		lock(_test_lock)
+			g_id_outcomes = findfirst( 	d -> (haskey(d[:last_msg], :game_id)
+										&& d[:last_msg][:game_id] == id 
+										&& haskey(d[:last_msg], :game_status)
+										&& d[:last_msg][:game_status] == "completed"), test_dump[:outcomes])
+		unlock(_test_lock)
 
 		if !isnothing(g_id_outcomes)
 			push!(g_ids_end, id)
@@ -762,6 +772,7 @@ function analyse_logs()
 	
 	no_err = test_dump[:errors] |> length
 	@error "$no_err errors"
+
 
 end
 
@@ -819,6 +830,61 @@ function incoming_msg_dispatcher(p)
 	
 	@info "LOG - player #$(p.id) - dispatch task: stopped"
 	
+end
+
+# ╔═╡ 6916407b-62f5-4093-98a7-ebaa18c71014
+function spawn_p_dispatch_task(k)
+
+	p = p_dict[k]
+
+	_prev_task = p.dispatch_task
+	
+	if isa(_prev_task, Task) && !istaskdone(_prev_task) # stop existing task
+		
+		put!(p.receive_channel, StopToken()) # terminates prev task
+		sleep(0.1)
+		@info "LOG - player #$k - dispatch task: sending stop token"
+	
+	end
+	
+	p.dispatch_task = @spawn incoming_msg_dispatcher(p)
+	@info "LOG - player #$k - dispatch task: active"
+
+end
+
+# ╔═╡ 04da4765-05d5-44e3-a724-3d98d808a483
+if start_test
+
+	@spawn init_pending_ch()
+
+	@spawn begin
+
+		try
+
+			## act on yet to run players
+			while isready(pending_p)
+	
+				k = take!(pending_p)
+
+				put!(running_p, k) # will wait until channel has space
+
+				# initialize new player on demand
+				create_player(k)
+				spawn_p_dispatch_task(k)
+					
+				# actually start game -> msg dispatcher & handler will take over
+				@spawn SRV_req_new_game_vs_server(p_dict[k])
+				
+				# limiting outer loop
+				sleep(2)
+	
+			end
+		catch e
+			@error "ERROR - player #$(p.id) - new games initializer", e
+			rethrow(e)
+		end
+			
+	end
 end
 
 # ╔═╡ ca85f64a-1a2b-40cb-9216-a22b7bc8fcba
@@ -1345,7 +1411,8 @@ version = "17.4.0+2"
 # ╟─04da4765-05d5-44e3-a724-3d98d808a483
 # ╟─6e38243a-9127-4983-ad52-8d69f4ae12e2
 # ╠═b10d5922-ecf0-4c4f-a8fc-7da9c57eef69
-# ╠═db003af9-654c-4a3a-8797-8f6ff8e7d8b5
+# ╠═6ec45ba8-afc6-4028-91e7-88d91d30c953
+# ╠═058491e6-4e20-4dd3-9d76-13e432e06b7b
 # ╟─8f29f032-1c5b-4578-ae7f-22f5111b19b7
 # ╟─1df492d5-f456-4242-9d40-35a50492b6bd
 # ╠═4de23652-f375-4362-9c68-a3460d6940e1
@@ -1353,9 +1420,10 @@ version = "17.4.0+2"
 # ╠═ed6d8a10-c80d-4f3b-8ff3-0c6cb2880811
 # ╠═661123d7-b76e-4fdf-ade7-5779808b968d
 # ╠═3609fefa-1e57-4645-9430-e80ff6ff64ca
+# ╠═d8575f76-0c43-454f-aff8-ccfd0117fa1a
 # ╠═37158d4d-de39-4cbc-961c-aefb17c102d6
 # ╟─212774ca-5ac1-4054-baab-18c9e759b431
-# ╟─ad791a85-f38f-4784-921b-2ac066b1ac60
+# ╠═ad791a85-f38f-4784-921b-2ac066b1ac60
 # ╟─eeafa3f7-f5f0-475e-9542-33fa1b1da407
 # ╟─bff27851-df78-4aff-b350-ebd5ff08737d
 # ╟─ca85f64a-1a2b-40cb-9216-a22b7bc8fcba

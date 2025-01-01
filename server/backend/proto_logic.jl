@@ -2253,9 +2253,10 @@ now it can go from ns -> (progress_rings) -> progress_play -> completed
 		
 		if scores[_W] == scores[_B] 
 			ret[:outcome] = "mk_limit_draw"
+			# won_by stays as "" in case of draw
 		else 
 			ret[:outcome] = "mk_limit_score"
-			ret[:won_by] = (scores[_W] > scores[_B]) ? _W : _B
+			ret[:won_by] = (scores[_W] > scores[_B]) ? _W : _B 
 		end
 	end
 	
