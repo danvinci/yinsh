@@ -14,7 +14,7 @@ body, html {
     header {
         display: grid;
         grid-template-columns: 1fr max-content;
-        margin: 25px;
+        margin: 21px;
         margin-right: 5%;
         align-items: center;
 
@@ -28,7 +28,8 @@ body, html {
             margin-bottom: 0px;
             font-weight: 500;
             font-size: 1.35rem;
-            cursor: default;
+            display: inline-block;
+            cursor: pointer;
         }
 
         div.header_menu {

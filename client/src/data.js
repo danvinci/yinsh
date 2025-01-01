@@ -150,8 +150,8 @@ export function bind_adapt_canvas(){
     // SET DRAWING CONSTANTS
     // compute S_h and S_w (H) taking into account height and width of the canvas
 
-    const h_ratio_factor = 12; // empirical value ~ number of triangle sides in height + 3 (proxy for scoring slots)
-    const w_ratio_factor = h_ratio_factor + 2 ; // +2 as we want more H space for scoring slots
+    const h_ratio_factor = 10.5; // empirical value ~ number of triangle sides in height + 3 (proxy for scoring slots)
+    const w_ratio_factor = h_ratio_factor + 2; // +2 as we need space for the scoring slots
 
         // find out if height or width is the constraint for fittng triangles of the board
         const S_by_height = canvas.height/h_ratio_factor;
@@ -161,8 +161,8 @@ export function bind_adapt_canvas(){
         const H_param = Math.round(S_param * Math.sqrt(3)/2);
 
     // compute X & Y offset for drawing board and drop zones
-    const _off_x = canvas.width/2 - 6*H_param;
-    const _off_y = H_param/2;
+    const _off_x = canvas.width/2 - 5*H_param;
+    const _off_y = H_param/2 - 0.7*S_param;
 
         // compute offset for drawing scoring slots
         const _start_BL_point = {x: H_param, y: H_param/3 + h_ratio_factor*H_param }
@@ -741,15 +741,20 @@ export function init_scoring_slots(){
     let _scoring_slots = [];
 
     /* RECIPE
-    - pick top/right point and draw 3 in a row, leftward (other player)
-    - pick bottom/left point and draw 3 in a row, rightward (this player)
+    - pick top/right point and draw 3 in a row, leftward or downward (other player)
+    - pick bottom/left point and draw 3 in a row, rightward or upward (this player)
     */
 
-    // bottom left slots (local player)
+    // player slots
     for (let k = 1; k <=3; k++){
 
-        const s_point_x = _start_BL_point.x + k*1.05*S; // goes rightward
-        const s_point_y = _start_BL_point.y; // doesn't change
+        //// HORIZONTAL
+        //const s_point_x = _start_BL_point.x + k*1.05*S; // goes rightward
+        //const s_point_y = _start_BL_point.y; // doesn't change
+
+        //// VERTICAL
+        const s_point_x = _start_BL_point.x + 0.3*S; // doesn't change
+        const s_point_y = _start_BL_point.y - k*1.05*S; // goes up
 
         // score can be 1 -> 3, fill slot accordingly as we go through them
         const _score_flag = local_score >= k ? true : false;
@@ -766,11 +771,20 @@ export function init_scoring_slots(){
 
     };
 
-     // top right slots
+     // opponent slots
      for (let k = 1; k <=3; k++){
 
-        const s_point_x = _start_TR_point.x - k*1.05*S; // goes leftward
-        const s_point_y = _start_TR_point.y; // doesn't change
+        //// HORIZONTAL
+        //const s_point_x = _start_TR_point.x - k*1.05*S; // goes leftward
+        //const s_point_y = _start_TR_point.y; // doesn't change
+
+        //// VERTICAL RIGHT
+        //const s_point_x = _start_TR_point.x - 0.3*S; // doesn't change
+        //const s_point_y = _start_TR_point.y + k*1.05*S; // goes down
+
+        //// VERTICAL LEFT
+        const s_point_x = _start_BL_point.x + 0.3*S; // doesn't change
+        const s_point_y = _start_TR_point.y + k*1.05*S; // goes down
 
         // score can be 1 -> 3, fill slot accordingly as we go through them (negative)
         const _score_flag = oppon_score >= k ? true : false;
@@ -1333,7 +1347,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
     // drawing param
     const S = yinsh.drawing_params.S;
     const _mult_base = 0.13;
-    const _mult_hover = 0.18;
+    const _mult_hover = 0.17;
 
     // empty inner var
     let _ring_highlights = [];

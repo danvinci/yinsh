@@ -305,13 +305,13 @@ function draw_scoring_slots(alpha_param){
             if (slot.player == _local_player) {
 
                 // draw ring  
-                const _ring_spec = {x: slot.x, y: slot.y, id: _local_color_id, alpha:0.8*alpha_param}
+                const _ring_spec = {x: slot.x, y: slot.y, id: _local_color_id, alpha:0.75*alpha_param}
                 draw_rings(_ring_spec);
 
             } else {
                 
                 // draw ring  
-                const _ring_spec = {x: slot.x, y: slot.y, id: _oppon_color_id, alpha:0.8*alpha_param}
+                const _ring_spec = {x: slot.x, y: slot.y, id: _oppon_color_id, alpha:0.75*alpha_param}
                 draw_rings(_ring_spec);
 
             };
@@ -338,6 +338,8 @@ function draw_rings(ring_spec = {}){
     const _black_col = "#1e1e1e";
     const _white_col = "#f8f8f8";
     const _lgray_col = "#828e82";
+    const _lgray_score_col = "#BFC4BF";
+    
 
     // check for valid input to decide which flow to enact
     const _ring_spec_flag = ring_spec.hasOwnProperty('x'); 
@@ -456,7 +458,7 @@ function draw_rings(ring_spec = {}){
                 ctx.stroke(ring_path);
 
                 // outer border
-                ctx.strokeStyle = _lgray_col;
+                ctx.strokeStyle = _lgray_score_col;
                 ctx.lineWidth = border_lineWidth; 
                 
                 let outerB_path = new Path2D()
@@ -464,7 +466,7 @@ function draw_rings(ring_spec = {}){
                 ctx.stroke(outerB_path);
 
                 // inner border
-                ctx.strokeStyle = _lgray_col;
+                ctx.strokeStyle = _lgray_score_col;
                 ctx.lineWidth = border_lineWidth;  
 
                 let innerB_path = new Path2D()
