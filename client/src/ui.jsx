@@ -307,6 +307,9 @@ export function Settings(){
 // component for sounds on/off
 function SoundSettings() {
 
+  // preload icons to avoid flashing
+  onMount(() => {[svg_sound_ON, svg_sound_OFF].forEach(src => new Image().src = src);});
+
   const [sound, set_sound] = createSignal(true); 
   
   // toggle that calls functions exported by sound module
@@ -340,6 +343,9 @@ function SoundSettings() {
 // component for rings cues on/off
 function RingsCuesSettings() {
 
+  // preload icons to avoid flashing
+  onMount(() => {[rings_cues_ON, rings_cues_OFF].forEach(src => new Image().src = src);});
+
   const [rings_cues, set_rings_cues] = createSignal(true); 
   
   // toggle that calls functions exported by this module
@@ -372,6 +378,9 @@ function RingsCuesSettings() {
 
 // component for legal moves cues on/off
 function LegalMovesCuesSettings() {
+
+  // preload icons to avoid flashing
+  onMount(() => {[moves_cues_ON, moves_cues_OFF].forEach(src => new Image().src = src);});
 
   const [lm_cues, set_lm_cues] = createSignal(true); 
   
