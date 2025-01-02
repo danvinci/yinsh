@@ -7,8 +7,8 @@ import svg_sound_OFF from "/src/assets/sound-0.svg";
 import svg_sound_ON from "/src/assets/sound-2.svg";
 import rings_cues_OFF from "/src/assets/circle.svg";
 import rings_cues_ON from "/src/assets/circle_dot.svg";
-import moves_cues_OFF from "/src/assets/along.svg";
-import moves_cues_ON from "/src/assets/along_dot.svg";
+import moves_cues_OFF from "/src/assets/cross.svg";
+import moves_cues_ON from "/src/assets/cross_dot.svg";
 
 
 // event target for UI
@@ -325,12 +325,12 @@ function SoundSettings() {
       when={sound()}
       fallback={
         <div class="settings_item set_off item_bottom_space" onClick={toggle_sound}>
-          <img class="set_img set_off" src={svg_sound_OFF} height="24px" width="24px"></img>
+          <img class="set_img set_off" src={svg_sound_OFF} height="28px" width="28px"></img>
           <span class="set_off">Sound effects OFF</span>
         </div>
       }>
         <div class="settings_item set_on item_bottom_space" onClick={toggle_sound}>
-          <img class="set_img set_on" src={svg_sound_ON} height="24px" width="24px"></img>
+          <img class="set_img set_on" src={svg_sound_ON} height="28px" width="28px"></img>
           <span class="set_on">Sound effects ON</span>
         </div>
       </Show>  
@@ -358,12 +358,12 @@ function RingsCuesSettings() {
       when={rings_cues()}
       fallback={
         <div class="settings_item set_off item_bottom_space" onClick={toggle_rings_cues}>
-          <img class="set_img set_off" src={rings_cues_OFF} height="24px" width="24px"></img>
+          <img class="set_img set_off" src={rings_cues_OFF} height="28px" width="28px"></img>
           <span class="set_off">Rings visual cues OFF</span>
         </div>
       }>
         <div class="settings_item sfx_on item_bottom_space" onClick={toggle_rings_cues}>
-          <img class="set_img set_on" src={rings_cues_ON} height="24px" width="24px"></img>
+          <img class="set_img set_on" src={rings_cues_ON} height="28px" width="28px"></img>
           <span class="set_on">Rings visual cues ON</span>
         </div>
       </Show>  
@@ -391,12 +391,12 @@ function LegalMovesCuesSettings() {
       when={lm_cues()}
       fallback={
         <div class="settings_item set_off" onClick={toggle_lm_cues}>
-          <img class="set_img set_off" src={moves_cues_OFF} height="24px" width="24px"></img>
+          <img class="set_img set_off" src={moves_cues_OFF} height="28px" width="28px"></img>
           <span class="set_off">Moves visual cues OFF</span>
         </div>
       }>
         <div class="settings_item set_on" onClick={toggle_lm_cues}>
-          <img class="set_img set_on" src={moves_cues_ON} height="24px" width="24px"></img>
+          <img class="set_img set_on" src={moves_cues_ON} height="28px" width="28px"></img>
           <span class="set_on">Moves visual cues ON</span>
         </div>
       </Show>  

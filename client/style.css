@@ -52,7 +52,7 @@ body, html {
                     width: 18px;
                     margin-right: 4px;
                     filter: opacity(55%);
-                    transition: all .3s ease-in-out;
+                    transition: all .1s ease-in-out;
                 }
 
                     /* picking parent element but applying transformation only to matching child*/
@@ -76,7 +76,7 @@ body, html {
                 .header_link_text {
                     color: rgba(40, 40, 40, 0.7);
                     font-size: small;
-                    transition: all .3s ease-in-out;
+                    transition: all .1s ease-in-out;
                 }
 
                     a.header_link:hover .header_link_text {
@@ -155,7 +155,7 @@ body, html {
 
                     color: rgb(170, 170, 170);
 
-                    transition: all .25s ease-in-out;
+                    transition: all .1s ease-in-out;
                 }
 
                     /* increasing contrast on hover */
@@ -380,17 +380,17 @@ body, html {
                     }
 
                     img.set_img {
-                        height: 24px;
-                        width: 24px;
+                        height: 28px;
+                        width: 28px;
                         margin-right: 4px;
                     }
 
                     /* setting transition time equal for both img and span */
                     .set_on {
-                        transition: all .15s ease-in-out;
+                        transition: all .1s ease-in-out;
                     }
                     .set_off {
-                        transition: all .15s ease-in-out;
+                        transition: all .1s ease-in-out;
                     }
 
                         /* effect-anticipation <> click in both directions */
