@@ -42,7 +42,7 @@ server_et.addEventListener('new_push_message', push_messages_handler, false);
 
 // custom class for managing the lifecycle of messages
 class MessagePromise {
-    constructor(payload, msg_id, msg_time, timeout = 900_000) { // 900k ms -> 15 mins timeout - server should replay almost immediately anyway
+    constructor(payload, msg_id, msg_time, timeout = 300_000) { // 300k ms -> 5 mins timeout - server should replay almost immediately anyway
         this.payload = payload;
         this.msg_id = msg_id;
         this.msg_time = msg_time;
@@ -170,7 +170,7 @@ export async function init_ws () {
 // close connection to WS - called when player resigns
 // https://stackoverflow.com/questions/67526503/can-a-browser-execute-on-close-websocket-event-when-closing-the-browser
 export function close_ws (){
-    ws.close(); // close waits ~30sec and gracefully shuts doen
+    ws.close(); // close waits ~30sec and gracefully shuts down
 };
 
 

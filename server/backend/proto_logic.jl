@@ -1627,13 +1627,17 @@ begin
 
 end
 
+# ╔═╡ 4fad24a9-f75b-48c1-8990-041c75afc09c
+ws_msg_log_raw
+
 # ╔═╡ 7c026677-5c44-4a12-99a4-2d1228e31795
 function terminate_active_ws!()
 
-	for ws in filter(ws -> !istaskdone(ws.task), ws_array)
+	for ws in filter(ws -> !istaskdone(ws.task) || !isempty(ws.connections), ws_array)
 		HTTP.forceclose(ws)
+		_num_conn = ws.connections |> length
+		@warn "WARNING - Terminating ws server: $(ws.task) - $_num_conn connections"
 	end
-	@warn "WARNING - Terminating active ws servers"
 end
 
 # ╔═╡ 5ff005dd-2347-4dc3-a24f-42cb576822fc
@@ -1642,9 +1646,9 @@ function terminate_active_watchdog!()
 	for task in ws_watchdog
 		if !istaskdone(task)
    			schedule(task, InterruptException(), error=true)
+			@warn "WARNING - Terminating ws watchdog: $task"
 		end
 	end
-	@warn "WARNING - Terminating active ws watchdogs"
 end
 
 # ╔═╡ 5e5366a9-3086-4210-a037-c56e1374a686
@@ -1753,12 +1757,6 @@ function msg_dispatcher(ws, msg_id, msg_code, payload = Dict{Symbol, Any}(), ok_
 	# add statusCode 200 
 	setindex!(_response, 200, :statusCode)
 
-	# send response
-	send(ws, JSON3.write(_response))
-
-	# log
-	println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
-
 	# save response (just for logging/debug)
 	setindex!(_response, "sent", :type)
 	
@@ -1766,6 +1764,11 @@ function msg_dispatcher(ws, msg_id, msg_code, payload = Dict{Symbol, Any}(), ok_
 		push!(ws_msg_log, _response)
 	unlock(msg_lock)
 
+	# send response
+	send(ws, JSON3.write(_response))
+	
+	# log
+	println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
 
 end
 
@@ -4044,8 +4047,10 @@ function msg_handler(ws, msg)
 
 		# if fields are missing, also give error
 		msg_dispatcher(ws, _msg_id, _msg_code, Dict(:server_msg => "Error, missing msg_id and/or invalid msg_code"), false)
-
-		println("ERROR in msg_handler - missing msg_id and/or invalid msg_code")
+		
+		_err = "ERROR in msg_handler - missing msg_id and/or invalid msg_code"
+		println(_err)
+		@error _errr
 	end
 
 
@@ -4054,12 +4059,9 @@ end
 # ╔═╡ d5239071-d71a-4e56-a938-5051e23a07de
 function start_ws_server()
 
-	# start new server 
-    ws_server = WebSockets.listen!(ws_ip, ws_port; idle_timeout_enabled=false) do ws
 
-		_info = "WebSocket server $(objectid(ws_server.task)) START at $(now())"
-		println(_info)
-		@info _info
+	# start new server 
+    ws_server = WebSockets.listen!(ws_ip, ws_port; verbose = true) do ws
 
 		for msg in ws
 
@@ -4091,6 +4093,11 @@ function start_ws_server()
 		end
 		
     end
+
+	
+	_info = "LOG - New Websocket server started: $(ws_server.task)"
+	@info _info
+	println(_info)
 
 	# saves server handler & task for reference
     push!(ws_array, ws_server)
@@ -4180,6 +4187,8 @@ function start_ws_watchdog()
 				rethrow(e)
 	        end
 		end
+
+	@info "LOG - New watchdog started: $watchdog_task"
     
     # save watchdog task reference
     push!(ws_watchdog, watchdog_task)
@@ -4658,6 +4667,7 @@ version = "5.11.0+0"
 # ╟─91c35ba0-729e-4ea9-8848-3887936a8a21
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
 # ╠═721547b0-7be1-41d6-bffe-cb82a5c294cd
+# ╠═4fad24a9-f75b-48c1-8990-041c75afc09c
 # ╟─7c026677-5c44-4a12-99a4-2d1228e31795
 # ╟─5ff005dd-2347-4dc3-a24f-42cb576822fc
 # ╟─b1e9aafc-6473-4114-a5d5-b0c3114eab7d
