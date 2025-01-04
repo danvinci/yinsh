@@ -251,7 +251,7 @@ if start_test
 						
 					catch e
 						@error "ERROR - p #$(p.id) - termination task", e
-						rethrow(e)
+						throw(e)
 					end
 	
 				end
@@ -260,7 +260,7 @@ if start_test
 
 		catch e
 			@error "ERROR - p #$(p.id) - termination handler", e
-			rethrow(e)
+			throw(e)
 		end
 	end
 end
@@ -323,7 +323,7 @@ ws_task = @spawn begin
 							return # clean exit
 						end
 						@error "ERROR - player #$(p.id) - listener task failure", e
-						rethrow(e) # task failure
+						throw(e) # task failure
 					end
 				end
 			end
@@ -346,7 +346,7 @@ ws_task = @spawn begin
 							return # clean exit
 						end
 						@error "ERROR - player #$(p.id) - sender task failure", e
-						rethrow(e) # task failure
+						throw(e) # task failure
 					end
 				end
 			end
@@ -366,7 +366,7 @@ ws_task = @spawn begin
 				# close ws and unblock receive (for msg in ws)
 				!WebSockets.isclosed(ws) && close(ws) 
 				sleep(0.5)
-				rethrow(e)
+				throw(e)
 			end
 		end
 
@@ -568,7 +568,7 @@ function p_play_turn(p::Player)
 			_tree = p.game.scenario_trees[:treepots][1][:tree]
 		catch e
 			@error "ERROR - player #$(p.id) - game $(p.game.id) - play turn: can't locate scenario tree", e
-			rethrow(e)
+			throw(e)
 		end
 	
 		
@@ -613,7 +613,7 @@ function p_play_turn(p::Player)
 
 	catch e
 		@error "ERROR - player #$(p.id) - game $(p.game.id) - play turn", e
-		rethrow(e)
+		throw(e)
 	end
 	
 
@@ -881,7 +881,7 @@ if start_test
 			end
 		catch e
 			@error "ERROR - player #$(p.id) - new games initializer", e
-			rethrow(e)
+			throw(e)
 		end
 			
 	end
