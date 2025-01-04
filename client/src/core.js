@@ -396,7 +396,7 @@ async function server_actions_handler (event) {
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` })); // reset UI
 
                 // trigger sound & winning animation
-                await sleep(250);
+                await sleep(500);
                 endGame_win_playSound();
                 await win_animation(); 
 
@@ -406,7 +406,7 @@ async function server_actions_handler (event) {
                 ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt }));
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
-                await sleep(400); // draw animation is bit faster, adding extra pause post-replay/last-move
+                await sleep(500); // draw animation is bit faster, adding extra pause post-replay/last-move
                 endGame_draw_playSound();
                 await draw_animation();
 
@@ -425,7 +425,7 @@ async function server_actions_handler (event) {
                 ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: user_comm_txt }));
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
-                await sleep(250);
+                await sleep(500);
                 endGame_lose_playSound(); // sound only
 
             };

@@ -229,7 +229,7 @@ export function GameSetup() {
                 <p>Game options</p>
                 <RingsMode_Settings></RingsMode_Settings>
                 <hr class="menu_line"></hr>
-                <button type="button" onClick={triggerRequest_newVSfriend}>PLAY</button>
+                <button type="button" onClick={triggerRequest_newVSfriend}>START</button>
               </>
             </Match>
             <Match when={joinClick()}>
@@ -238,7 +238,7 @@ export function GameSetup() {
                 <hr class="menu_line"></hr>
                 <div class="join_input_div">
                   <input size="10" type="text" class="join_input_txt_class" ref={code_input_field} placeholder="Code here..."></input>
-                  <button type="button" onClick={triggerRequest_joinVSfriend}>JOIN</button>
+                  <button type="button" onClick={triggerRequest_joinVSfriend}>START</button>
                 </div>
               </>
             </Match>
@@ -249,7 +249,7 @@ export function GameSetup() {
                 <p>Game options</p>
                 <RingsMode_Settings></RingsMode_Settings>
                 <hr class="menu_line"></hr>
-                <button type="button" onClick={triggerRequest_joinVS_AI}>PLAY</button>
+                <button type="button" onClick={triggerRequest_joinVS_AI}>START</button>
               </>
             </Match>
           </Switch>

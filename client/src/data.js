@@ -165,8 +165,9 @@ export function bind_adapt_canvas(){
     const _off_y = H_param/2 - 0.7*S_param;
 
         // compute offset for drawing scoring slots
-        const _start_BL_point = {x: H_param, y: H_param/3 + h_ratio_factor*H_param }
-        const _start_TR_point = {x: canvas.width - H_param, y: H_param}
+        //const _start_BL_point = {x: H_param, y: H_param/4.4 + h_ratio_factor*H_param }
+        const _start_BL_point = {x: H_param, y: S_param * 9.27}
+        const _start_TR_point = {x: canvas.width - H_param, y: H_param*1.09}
  
     // save to global obj and log
     yinsh.drawing_params = structuredClone({S: S_param, H: H_param, x_offset: _off_x, y_offset: _off_y, start_BL: _start_BL_point, start_TR: _start_TR_point});
