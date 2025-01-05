@@ -167,6 +167,10 @@ export async function init_game_fromServer(originator = false, joiner = false, g
 
         // initialize empty game objects
         init_empty_game_objects();
+
+        // Bind canvas and do first drawing/refresh
+        bind_adapt_canvas();
+        refresh_canvas_state();
     
         if (joiner) {
             if (game_code.length == 0){
@@ -183,18 +187,14 @@ export async function init_game_fromServer(originator = false, joiner = false, g
             await server_ws_send(CODE_new_game_server, {random_rings: random_rings, player_color: player_color}); // requests new game vs server/AI
         };
         
-        // Bind canvas
-        bind_adapt_canvas();
-        
-            // maps data from server to game objects
-            // sets up drop zones and rings
-            init_game_objs();
-        
-            // draw everything
-            refresh_canvas_state();
+        // maps data from server to game objects: drop zones, rings, and markers
+        init_game_objs();
+    
+        // draw everything
+        refresh_canvas_state();
 
-            // initialize event listeners for canvas interaction
-            init_interaction();
+        // initialize event listeners for canvas interaction
+        init_interaction();
 
         // log local game ready
         console.log(`LOG - Game setup time: ${Date.now() - request_start_time}ms`);

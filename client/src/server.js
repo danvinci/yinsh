@@ -42,7 +42,7 @@ server_et.addEventListener('new_push_message', push_messages_handler, false);
 
 // custom class for managing the lifecycle of messages
 class MessagePromise {
-    constructor(payload, msg_id, msg_time, timeout = 300_000) { // 300k ms -> 5 mins timeout - server should replay almost immediately anyway
+    constructor(payload, msg_id, msg_time, timeout = 120_000) { // 120k ms -> 2 mins timeout - server should replay almost immediately anyway
         this.payload = payload;
         this.msg_id = msg_id;
         this.msg_time = msg_time;
