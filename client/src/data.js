@@ -5,8 +5,8 @@
 // cues go off with the setting, but back on only with setting + mouseMove (handled by interaction.js), so user won't see effect of setting immediately
 // as highlights depend on game state (ie. player is about to make move or score), better to avoid replicating logic here, so we mock a mouseMove
 globalThis.cues_rings_flag = true; // global property for rings cues on/off
-export const enableRingsCues = () => {cues_rings_flag = true; update_ring_highlights(); canvas.dispatchEvent(new MouseEvent('mousemove', {clientX: 1, clientY: 1}));}; 
-export const disableRingsCues = () => {cues_rings_flag = false; update_ring_highlights(); refresh_canvas_state();};
+export const enableRingsCues = () => {cues_rings_flag = true; update_ring_cues(); canvas.dispatchEvent(new MouseEvent('mousemove', {clientX: 1, clientY: 1}));}; 
+export const disableRingsCues = () => {cues_rings_flag = false; update_ring_cues(); refresh_canvas_state();};
 
 globalThis.cues_moves_flag = true; // global property for legal moves cues on/off
 export const enableLegalMovesCues = () => {cues_moves_flag = true; update_legal_cues(); refresh_canvas_state();};
@@ -205,7 +205,7 @@ export function init_empty_game_objects(){
         _game_objects.current_animation = {in_progress: false, task_ref: {}}; // task for tracking animations and prevent game resets from UI (only supports 1 task/time)
 
         _game_objects.mk_halos = []; // -> halos objects
-        _game_objects.ring_highlights = []; // -> highlights for rings
+        _game_objects.ring_cues = []; // -> highlights for rings
 
         _game_objects.player_score = 0;
         _game_objects.opponent_score = 0;
@@ -1341,7 +1341,7 @@ export function update_mk_halos(mk_ids = [], hot_flag = false){
 
 // creates and destroys highlight inside rings for cueing/selection in scoring, manual rings setup, or normal gameplay
 // assumes that we either have all cold or all cold with 1 hot highlight
-export function update_ring_highlights(rings_ids = [], sel_ring = -1){
+export function update_ring_cues(rings_ids = [], sel_ring = -1){
 
     const _ring_setup_id = 0 // index of setup ring
     const move_in_progress = get_move_status();
@@ -1353,7 +1353,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
     const _mult_hover = 0.17;
 
     // empty inner var
-    let _ring_highlights = [];
+    let _ring_cues = [];
 
     if (cues_rings_flag && _gstatus != GS_completed) { // CASE (for game status check): prevent cues being drawn for terminations mid-replay/move
         if (!move_in_progress && rings_ids.length > 1) { // CASE: ring scoring (we always have at least 2 rings to choose from)
@@ -1375,7 +1375,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
 
                         h_path.arc(d_zone.loc.x, d_zone.loc.y, shape_diam, 0, 2*Math.PI);
 
-                        _ring_highlights.push({path: h_path, hot: hot_flag});
+                        _ring_cues.push({path: h_path, hot: hot_flag});
                 
                     };
                 };  
@@ -1395,7 +1395,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
 
             h_path.arc(_ring_setup.loc.x, _ring_setup.loc.y, shape_diam, 0, 2*Math.PI);
 
-            _ring_highlights.push({path: h_path, hot: hot_flag});
+            _ring_cues.push({path: h_path, hot: hot_flag});
 
         };
     };
@@ -1403,6 +1403,6 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
     // acts as a reset function if arguments stay as default
     // !move_in_progress ensures highlights go off when move starts
     // also enable/disable ring visual cues from UI makes sure array always stays empty
-    yinsh.objs.ring_highlights = _ring_highlights;
+    yinsh.objs.ring_cues = _ring_cues;
  
 };

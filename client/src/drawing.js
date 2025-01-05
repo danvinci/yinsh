@@ -31,7 +31,7 @@ export function refresh_canvas_state(board_params = {}, ss_alpha = 1){
             
             // Draw markers halos (score handling)
             draw_markers_halos();
-            draw_rings_highlight();
+            draw_rings_cues();
 
         // logging time 
         //console.log(`LOG - Drawing time: ${Date.now() - painting_start_time}ms`);
@@ -595,12 +595,12 @@ function draw_markers_halos(){
 };
 
 // cues for picking score ring
-function draw_rings_highlight(){
+function draw_rings_cues(){
 
     // const painting_start_time = Date.now()
     
-    // retrieve ring highlights data and other constants
-    const _r_high = yinsh.objs.ring_highlights; // the function is called at each refresh, if array is empty nothing happens
+    // retrieve ring cues data and other constants
+    const _r_high = yinsh.objs.ring_cues; // the function is called at each refresh, if array is empty nothing happens
 
     const S = yinsh.drawing_params.S;
 
@@ -631,7 +631,7 @@ function draw_rings_highlight(){
     
     ctx.restore();
 
-    // console.log(`LOG - ${_r_high.length} Rings highlights painted on canvas: ${Date.now() - painting_start_time}ms`);
+    // console.log(`LOG - ${_r_high.length} Rings cues painted on canvas: ${Date.now() - painting_start_time}ms`);
     
 };
 

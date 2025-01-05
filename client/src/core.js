@@ -9,7 +9,7 @@ import { CODE_new_game_human, CODE_new_game_server, CODE_join_game, CODE_advance
 import { init_global_obj_params, init_empty_game_objects, init_game_objs, get_game_id, get_player_id, get_winning_score, get_player_score } from './data.js'
 import { get_move_status, start_move_action, end_move_action, get_move_action_done, reset_move_action, update_legal_cues } from './data.js'
 import { bind_adapt_canvas, reorder_rings, add_marker, add_ring, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
-import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
+import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_cues, get_coord_free_slot} from './data.js' 
 import { activate_task, get_scoring_options_fromTask, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
 import { preMove_score_op_check, get_preMove_score_op_data, select_apply_scenarioTree } from './data.js'
 import { delta_replay_check, get_delta, wipe_delta, get_preMove_scoring_actions_done, reset_preMove_scoring_actions, pushTo_preMove_scoring_actions, get_tree } from './data.js'
@@ -122,7 +122,7 @@ function window_resize_handler() {
     bind_adapt_canvas();
         
     // initialize other objects as well drop zones, rings, markers, scoring slots, cues - using new S/H constants
-    update_ring_highlights(); 
+    update_ring_cues(); 
     init_game_objs(); 
 
     // if scoring tasks are in progress -> re-emit events so that options are regenerated & stay on
@@ -298,7 +298,7 @@ async function server_actions_handler (event) {
 
             // light up users' rings
             await sleep(300);
-            update_ring_highlights(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
+            update_ring_cues(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
             refresh_canvas_state();
 
         };
@@ -345,7 +345,7 @@ async function server_actions_handler (event) {
         add_ring(_ring_setup_id);
         refresh_canvas_state();
         await sleep(200);
-        update_ring_highlights(_ring_setup_id);
+        update_ring_cues(_ring_setup_id);
         refresh_canvas_state();
         
         enableInteraction(); 
@@ -404,7 +404,11 @@ async function server_actions_handler (event) {
                 // trigger sound & winning animation
                 await sleep(500);
                 endGame_win_playSound();
-                update_mk_halos(); // clean-up before any animation (other cues can be drawn only when game not completed anyway)
+                
+                // clean-up cues -> animation
+                update_mk_halos(); 
+                update_legal_cues();
+                update_ring_cues();
                 await win_animation(); 
 
             } else if (winning_player == '' && outcome == 'mk_limit_draw') {  // nobody won, it's a draw
@@ -415,7 +419,11 @@ async function server_actions_handler (event) {
 
                 await sleep(500); // draw animation is bit faster, adding extra pause post-replay/last-move
                 endGame_draw_playSound();
-                update_mk_halos();
+
+                // clean up cues -> animation
+                update_mk_halos(); 
+                update_legal_cues();
+                update_ring_cues();
                 await draw_animation();
 
             } else { // opponent wins
@@ -434,9 +442,13 @@ async function server_actions_handler (event) {
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
                 await sleep(500);
-                update_mk_halos();
-                refresh_canvas_state();
                 endGame_lose_playSound(); // sound only
+
+                // clean up cues -> refresh
+                update_mk_halos(); 
+                update_legal_cues();
+                update_ring_cues();
+                refresh_canvas_state();
 
             };
 
@@ -758,8 +770,8 @@ async function replay_ring_move_drop(moved_ring_details) {
 // listens to ring picks and updates game state
 function ringPicked_handler (event) {
 
-    // turn off all rings highlight cues
-    update_ring_highlights();
+    // turn off all rings cues
+    update_ring_cues();
 
     // detail contains index in rings array of picked ring
     const index_picked_ring_in_array = event.detail;
@@ -791,8 +803,8 @@ function ringPicked_handler (event) {
 
     } else if (_gstatus == GS_progress_rings)  {
 
-        // empty array of rings highlights (on from hovering)
-        update_ring_highlights(); 
+        // empty array of rings cues (on from hovering)
+        update_ring_cues(); 
 
         // turn visual cues on
         update_legal_cues();
@@ -910,7 +922,7 @@ async function ringDrop_handler (event) {
                 remove_markers([drop_loc_index]);
 
                 // light up users' rings (again & immediately)
-                update_ring_highlights(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
+                update_ring_cues(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
                 refresh_canvas_state();
 
                 // log
@@ -1159,7 +1171,7 @@ async function scoring_handler(player_scoring_ops, pre_move = false){
 
             // highlight rings - need to pass player own rings ids to the function
             await sleep(400);
-            update_ring_highlights(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
+            update_ring_cues(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
             refresh_canvas_state();
 
             // user communications
@@ -1285,7 +1297,7 @@ function mk_sel_hover_handler (event) {
 // listens for scoring ring to be picked, animates its move to the 1st scoring slot and then removes it from the obj array
 async function ring_scoring_handler (event) {
 
-    disableInteraction(); // -> prevents further interaction and triggering of 'ring_sel_hover' event and avoid zombie ring highlights to stay on
+    disableInteraction(); // -> prevents further interaction and triggering of 'ring_sel_hover' event and avoid zombie ring cues to stay on
 
         // retrieve index of ring (meant as location)
         const picked_ring_id = event.detail;
@@ -1294,8 +1306,8 @@ async function ring_scoring_handler (event) {
         const _ring_index_in_array = yinsh.objs.rings.findIndex(r => r.loc.index == picked_ring_id);
         reorder_rings(_ring_index_in_array);
 
-        // empty array of rings highlights
-        update_ring_highlights(); 
+        // empty array of rings cues
+        update_ring_cues(); 
 
         // grab start (x,y) coordinates     
         const _start = yinsh.objs.drop_zones.find(d => d.loc.index == picked_ring_id);
@@ -1319,8 +1331,8 @@ async function ring_scoring_handler (event) {
         // remove ring from rings array 
         remove_ring(picked_ring_id);
 
-        // empty array of rings highlights
-        update_ring_highlights(); 
+        // empty array of rings cues
+        update_ring_cues(); 
         refresh_canvas_state();
 
         // completes ring scoring task
@@ -1344,7 +1356,7 @@ function ring_sel_hover_handler (event) {
         const hovered_ring_id = event.detail.hovered_ring;
 
         // prepare ring cores objects and refresh canvas
-        update_ring_highlights(player_rings_ids, hovered_ring_id);
+        update_ring_cues(player_rings_ids, hovered_ring_id);
         refresh_canvas_state();
 
     // CASE: ring sel hovered off -> need to establish/restore baseline highlighting of all rings
@@ -1354,7 +1366,7 @@ function ring_sel_hover_handler (event) {
         const player_rings_ids = event.detail.player_rings;
 
         // prepare ring cores objects and refresh canvas
-        update_ring_highlights(player_rings_ids);
+        update_ring_cues(player_rings_ids);
         refresh_canvas_state();
 
     };
