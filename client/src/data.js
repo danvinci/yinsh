@@ -161,7 +161,7 @@ export function bind_adapt_canvas(){
         const H_param = Math.round(S_param * Math.sqrt(3)/2);
 
     // compute X & Y offset for drawing board and drop zones
-    const _off_x = canvas.width/2 - 5.5*H_param;
+    const _off_x = canvas.width/2 - 5.7*H_param;
     const _off_y = H_param/2 - 0.7*S_param;
 
         // compute offset for drawing scoring slots
@@ -896,7 +896,7 @@ function init_rings(){
             const _ring_setup = server_rings.filter((ring) => (ring.id === _ring_setup_id));
             if (_ring_setup.length == 1) { // ring that is yet to be placed (by manual setup)
 
-                const _init_player_loc = {  x: yinsh.drawing_params.start_TR.x - yinsh.drawing_params.H/1.25, 
+                const _init_player_loc = {  x: yinsh.drawing_params.x_offset + yinsh.drawing_params.H*12, 
                                             y: yinsh.drawing_params.start_BL.y - yinsh.drawing_params.S*1.7,
                                             index: _ring_setup_id };
 
@@ -979,10 +979,10 @@ export function update_legal_cues(hover_cue_index = -1){
 
     // retrieves info on active move
     const move_in_progress = get_move_status(); // -> true/false
-    const _legal_moves_ids = yinsh.objs.move_action.legal_drops; // -> [11,23,90,etc]
+    const _legal_moves_ids = structuredClone(yinsh.objs.move_action.legal_drops); // -> [11,23,90,etc]
 
     // retrieves array of visual cues (to be modified)
-    let _legal_cues = yinsh.objs.legal_moves_cues
+    let _legal_cues = yinsh.objs.legal_moves_cues;
 
     // turn matching cues on if a move was started
     if (cues_moves_flag && move_in_progress) {
@@ -1088,7 +1088,7 @@ export function add_ring(loc_index = 0, as_opponent = false){
     // set initial ring location (loc_index -> known, 0 -> place at preset spot)
     // for replay of ring setup by opponent -> entry from outside/above board
     // for manual ring placement -> ready for pick up outside/right board
-    const _init_player_loc = {  x: yinsh.drawing_params.start_TR.x - yinsh.drawing_params.H/1.25, 
+    const _init_player_loc = {  x: yinsh.drawing_params.x_offset + yinsh.drawing_params.H*12, 
                                 y: yinsh.drawing_params.start_BL.y - yinsh.drawing_params.S*1.7, 
                                 index: _ring_setup_id };
 

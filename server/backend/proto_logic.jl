@@ -1580,10 +1580,10 @@ begin
 end
 
 # ╔═╡ 691404a6-53bc-4340-a750-636fe219f633
-msg_lock = ReentrantLock()
+const msg_lock = ReentrantLock()
 
 # ╔═╡ 1160c8c0-8a90-4c89-898f-328749611a76
-games_lock = ReentrantLock()
+const games_lock = ReentrantLock()
 
 # ╔═╡ 57153574-e5ca-4167-814e-2d176baa0de9
 function save_newGame!(new_game_details)
@@ -1627,13 +1627,10 @@ begin
 
 end
 
-# ╔═╡ 4fad24a9-f75b-48c1-8990-041c75afc09c
-ws_msg_log_raw
-
 # ╔═╡ 7c026677-5c44-4a12-99a4-2d1228e31795
 function terminate_active_ws!()
 
-	for ws in filter(ws -> !istaskdone(ws.task) || !isempty(ws.connections), ws_array)
+	for ws in filter(ws -> !istaskdone(ws.task) || !isempty(ws.connections) || isopen(ws.listener.server), ws_array)
 		HTTP.forceclose(ws)
 		_num_conn = ws.connections |> length
 		@warn "WARNING - Terminating ws server: $(ws.task) - $_num_conn connections"
@@ -1743,32 +1740,38 @@ end
 # ╔═╡ 28ee9310-9b7d-4169-bae4-615e4b2c386e
 function msg_dispatcher(ws, msg_id, msg_code, payload = Dict{Symbol, Any}(), ok_status::Bool = true)
 
-	# copy response payload
-	# need to do a comprehension so we have a separate copy + general type
-	_response = Dict{Symbol, Any}(k => v for (k,v) in payload)
+	try 
 
-	# prepare response code
-	_sfx_msg_code = msg_code * (ok_status ? sfx_CODE_OK : sfx_CODE_ERR)
+		# copy response payload
+		# need to do a comprehension so we have a separate copy + general type
+		_response = Dict{Symbol, Any}(k => v for (k,v) in payload)
 	
-	# append original msg id and updated response_code
-	setindex!(_response, msg_id, :msg_id)
-	setindex!(_response, _sfx_msg_code, :msg_code)
-
-	# add statusCode 200 
-	setindex!(_response, 200, :statusCode)
-
-	# save response (just for logging/debug)
-	setindex!(_response, "sent", :type)
+		# prepare response code
+		_sfx_msg_code = msg_code * (ok_status ? sfx_CODE_OK : sfx_CODE_ERR)
+		
+		# append original msg id and updated response_code
+		setindex!(_response, msg_id, :msg_id)
+		setindex!(_response, _sfx_msg_code, :msg_code)
 	
-	lock(msg_lock)
-		push!(ws_msg_log, _response)
-	unlock(msg_lock)
-
-	# send response
-	send(ws, JSON3.write(_response))
+		# add statusCode 200 
+		setindex!(_response, 200, :statusCode)
 	
-	# log
-	println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
+		# save response (just for logging/debug)
+		setindex!(_response, "sent", :type)
+		
+		lock(msg_lock)
+			push!(ws_msg_log, _response)
+		unlock(msg_lock)
+	
+		# send response
+		send(ws, JSON3.write(_response))
+		
+		# log
+		println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
+	
+	catch e 
+		@error "ERROR - msg dispatcher, $e"
+	end
 
 end
 
@@ -2922,14 +2925,14 @@ function sim_scenarioTrees(ex_gs::Matrix, nx_player_id::String, players_scores::
 end
 
 # ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
-function gen_newGame(vs_server = false, random_rings = true)
+function gen_newGame(vs_server = false, random_rings = true, player_color = "random")
 # initializes new game, saves data server-side and returns object for client
 	
 	# generate random game identifier (only uppercase letters)
 	game_id = randstring(['A':'Z'; '0':'9'], 6)
 
-	# pick the id of the originating vs joining player -> should be a setting
-	ORIG_player_id = rand([_W, _B]) 
+	# assign id of originating vs joining player
+	ORIG_player_id = (player_color == "random") ? rand([_W, _B]) : (player_color == "black") ? _B : _W
 	JOIN_player_id = (ORIG_player_id == _W) ? _B : _W
 
 	# set next moving player -> should be a setting (for now always white)
@@ -3038,9 +3041,10 @@ function fn_new_game_vs_human(ws, msg)
 
 	# handle game settings/preferences in msg payload
 	_random_rings = msg[:payload][:random_rings] # true (random) | false (manual)
+	_player_color = msg[:payload][:player_color] # random | black | white
 
 	# generate and store new game data
-	_new_game_id = gen_newGame(false, _random_rings)
+	_new_game_id = gen_newGame(false, _random_rings, _player_color)
 
 	# save ws handler for originating player
 	update_ws_handler!(_new_game_id, ws, true)
@@ -3061,9 +3065,10 @@ function fn_new_game_vs_server(ws, msg)
 	
 	# handle game settings/preferences in msg payload
 	_random_rings = msg[:payload][:random_rings] # true (random) | false (manual)
+	_player_color = msg[:payload][:player_color] # random | black | white
 	
 	# generate and store new game data
-	_new_game_id = gen_newGame(true, _random_rings) 
+	_new_game_id = gen_newGame(true, _random_rings, _player_color) 
 
 	# save ws handler for originating player
 	update_ws_handler!(_new_game_id, ws, true)
@@ -3587,7 +3592,7 @@ try
 		@sync for (i, sc) in enumerate(px_moves_sc) 
 
 			if !best_found_yet 
-				Threads.@spawn begin	
+				@spawn begin	
 				
 				new_gs::Matrix{String} = get_new_gs(tree, sc)::Matrix{String}
 				new_sim::Dict = sim_scenarioTrees(new_gs, opp_player_id, _last_scores) 
@@ -4060,8 +4065,12 @@ end
 function start_ws_server()
 
 
-	# start new server 
+	# start new server (it spawns its on task)
     ws_server = WebSockets.listen!(ws_ip, ws_port; verbose = true) do ws
+
+		_info = "LOG - New Websocket server started: $(ws_server.task)"
+		@info _info
+		println(_info)
 
 		for msg in ws
 
@@ -4093,11 +4102,6 @@ function start_ws_server()
 		end
 		
     end
-
-	
-	_info = "LOG - New Websocket server started: $(ws_server.task)"
-	@info _info
-	println(_info)
 
 	# saves server handler & task for reference
     push!(ws_array, ws_server)
@@ -4159,8 +4163,8 @@ function start_ws_watchdog()
 			while true
 				try
 				
-					# start websocket server if there's none or they're all done
-					if isempty(ws_array) || all(ws -> istaskdone(ws.task), ws_array)
+					# start websocket server if there's none or they're all done/closed
+					if isempty(ws_array) || all(ws -> istaskdone(ws.task), ws_array) || all(ws -> !isopen(ws.listener.server), ws_array)
 						start_ws_server()				
 					end
 
@@ -4667,7 +4671,6 @@ version = "5.11.0+0"
 # ╟─91c35ba0-729e-4ea9-8848-3887936a8a21
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
 # ╠═721547b0-7be1-41d6-bffe-cb82a5c294cd
-# ╠═4fad24a9-f75b-48c1-8990-041c75afc09c
 # ╟─7c026677-5c44-4a12-99a4-2d1228e31795
 # ╟─5ff005dd-2347-4dc3-a24f-42cb576822fc
 # ╟─b1e9aafc-6473-4114-a5d5-b0c3114eab7d

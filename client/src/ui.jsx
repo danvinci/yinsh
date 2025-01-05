@@ -3,12 +3,21 @@ import { init_game_fromServer, draw_empty_game_board } from "./core.js";
 import { enableSound, disableSound } from "./sound.js";
 import { enableRingsCues, disableRingsCues } from "./data.js";
 import { enableLegalMovesCues, disableLegalMovesCues } from "./data.js";
+
 import svg_sound_OFF from "/src/assets/sound-0.svg";
 import svg_sound_ON from "/src/assets/sound-2.svg";
 import rings_cues_OFF from "/src/assets/circle.svg";
 import rings_cues_ON from "/src/assets/circle_dot.svg";
 import moves_cues_OFF from "/src/assets/cross.svg";
 import moves_cues_ON from "/src/assets/cross_dot.svg";
+
+import random_color from "/src/assets/round_black_white.svg";
+import white_color from "/src/assets/round_white.svg";
+import black_color from "/src/assets/round_black.svg";
+
+import manual from "/src/assets/round_target.svg";
+import random from "/src/assets/round_random.svg";
+
 
 
 // event target for UI
@@ -121,7 +130,7 @@ export function GameSetup() {
       const [req_new_VSfriend, set_reqTrig_newVSfriend] = createSignal(false); 
 
       // function wrapper for requesting new game as originator
-      const fn_req_newVSfriend = async () => (await init_game_fromServer(true, false, undefined, false, randomRings()));
+      const fn_req_newVSfriend = async () => (await init_game_fromServer(true, false, undefined, false, randomRings(), playerColor()));
       
       // resource handler for new games
       const [res_handler_newVSfriend] = createResource(req_new_VSfriend, fn_req_newVSfriend);
@@ -167,7 +176,7 @@ export function GameSetup() {
     const [req_join_VS_AI, set_req_join_VS_AI] = createSignal(false); 
 
     // function wrapper for requesting new game
-    const fn_req_newGame_AI = async () => (await init_game_fromServer(false, false, undefined, true, randomRings()));
+    const fn_req_newGame_AI = async () => (await init_game_fromServer(false, false, undefined, true, randomRings(), playerColor()));
     
     // resource handler for new games
     const [res_handler_joinVS_AI] = createResource(req_join_VS_AI, fn_req_newGame_AI);
@@ -226,8 +235,7 @@ export function GameSetup() {
               <>
                 <button type="button" class="back_nav_btn" onClick={toggle_newgm_settings}>&#9665;</button>
                 <hr class="menu_line"></hr>
-                <p>Game options</p>
-                <RingsMode_Settings></RingsMode_Settings>
+                <GameOptions></GameOptions>
                 <hr class="menu_line"></hr>
                 <button type="button" onClick={triggerRequest_newVSfriend}>START</button>
               </>
@@ -237,17 +245,17 @@ export function GameSetup() {
                 <button type="button" class="back_nav_btn" onClick={toggle_joinClick}>&#9665;</button>
                 <hr class="menu_line"></hr>
                 <div class="join_input_div">
-                  <input size="10" type="text" class="join_input_txt_class" ref={code_input_field} placeholder="Code here..."></input>
-                  <button type="button" onClick={triggerRequest_joinVSfriend}>START</button>
+                  <input size="10" type="text" class="join_input_txt_class" ref={code_input_field} placeholder="Game code here..."></input>
                 </div>
+                <hr class="menu_line"></hr>
+                <button type="button" onClick={triggerRequest_joinVSfriend}>START</button>
               </>
             </Match>
             <Match when={new_gm_ai_setttings()}>
               <>
                 <button type="button" class="back_nav_btn" onClick={toggle_newai_settings}>&#9665;</button>
                 <hr class="menu_line"></hr>
-                <p>Game options</p>
-                <RingsMode_Settings></RingsMode_Settings>
+                <GameOptions></GameOptions>
                 <hr class="menu_line"></hr>
                 <button type="button" onClick={triggerRequest_joinVS_AI}>START</button>
               </>
@@ -261,29 +269,85 @@ export function GameSetup() {
 
 
 
-//// SETTINGS
-// signal definition needs to be outside of fn scope, so I can call value elsewhere 
+//// GAME OPTIONS BLOCK
+export function GameOptions(){
+
+  return(
+    <div class="game_options_wrapper">
+      <RingsMode_Option></RingsMode_Option>
+      <PlayerColor_Option></PlayerColor_Option>
+    </div>
+
+  );
+}
+
+
+
+// RINGS MODE - manual vs random setup
+// signal definition needs to be outside of fn scope, so I can call value from init game functions
 const [randomRings, set_randomRings] = createSignal(true); 
 const toggle_randomRings = () => set_randomRings(!randomRings());
 
 // component for ring settings on/off
-function RingsMode_Settings() {
+function RingsMode_Option() {
+
+  // preload icons to avoid flashing
+  onMount(() => {[manual, random].forEach(src => new Image().src = src);});
 
   return (
     <div class="">
       <Show
       when={randomRings()}
       fallback={
-        <div onClick={toggle_randomRings}>
-          <img src={svg_sound_OFF} height="24px" width="24px"></img>
-          <span>Manual rings</span>
+        <div class="game_opt_item game_opt_item_bottom_space" onClick={toggle_randomRings}>
+          <img class="game_opt" src={manual} height="28px" width="28px"></img>
+          <span class="game_opt">Manual setup</span>
         </div>
       }>
-        <div onClick={toggle_randomRings}>
-          <img src={svg_sound_ON} height="24px" width="24px"></img>
-          <span>Random rings</span>
+        <div class="game_opt_item game_opt_item_bottom_space" onClick={toggle_randomRings}>
+          <img class="game_opt" src={random} height="28px" width="28px"></img>
+          <span class="game_opt">Random setup</span>
         </div>
       </Show>  
+    </div>
+  );
+}
+
+const [playerColor, set_playerColor] = createSignal("random");
+const rotateColor = () => {
+ if (playerColor() === "random") set_playerColor("black")
+ else if (playerColor() === "black") set_playerColor("white")
+ else set_playerColor("random")
+}
+
+// component for ring settings on/off
+function PlayerColor_Option() {
+
+  // preload icons to avoid flashing
+  onMount(() => {[random_color, black_color, white_color].forEach(src => new Image().src = src);});
+
+  return (
+    <div class="">
+      <Switch>
+        <Match when={playerColor() === "random"}>
+          <div class="game_opt_item game_opt_item_bottom_space" onClick={rotateColor}>
+            <img class="game_opt" src={random_color} height="28px" width="28px"></img>
+            <span class="game_opt">Random color</span>
+          </div>
+        </Match>
+        <Match when={playerColor() === "black"}>
+          <div class="game_opt_item game_opt_item_bottom_space" onClick={rotateColor}>
+            <img class="game_opt" src={black_color} height="28px" width="28px"></img>
+            <span class="game_opt">Black</span>
+          </div>
+        </Match>
+        <Match when={playerColor() === "white"}>
+          <div class="game_opt_item game_opt_item_bottom_space" onClick={rotateColor}>
+            <img class="game_opt" src={white_color} height="28px" width="28px"></img>
+            <span class="game_opt">White</span>
+          </div>
+        </Match>
+      </Switch>
     </div>
   );
 }

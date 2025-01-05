@@ -141,7 +141,7 @@ function window_resize_handler() {
 
 // retrieve data from server (as originator or joiner) and init new game
 // NOTE: might need to refactor to cram all parameters into a single object
-export async function init_game_fromServer(originator = false, joiner = false, game_code = '', ai_game = false, random_rings = true){
+export async function init_game_fromServer(originator = false, joiner = false, game_code = '', ai_game = false, random_rings = true, player_color = 'random'){
 
     // input could be changed to a more general purpose object, also to save/send game setup settings
     //_setup = {originator: false, joiner: false, game_code: undefined, ai_game: false}
@@ -169,13 +169,18 @@ export async function init_game_fromServer(originator = false, joiner = false, g
         init_empty_game_objects();
     
         if (joiner) {
-            await server_ws_send(CODE_join_game, {game_id: game_code}); // asks to join existing game by ID
-            
+            if (game_code.length == 0){
+                ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Game code input can't be empty` }));
+                return;
+            } else {
+                await server_ws_send(CODE_join_game, {game_id: game_code}); // asks to join existing game by ID
+            }; 
+                        
         } else if (originator) {
-            await server_ws_send(CODE_new_game_human, {random_rings: random_rings}); // requests new game vs a friend
+            await server_ws_send(CODE_new_game_human, {random_rings: random_rings, player_color: player_color}); // requests new game vs a friend
 
         } else if (ai_game) {
-            await server_ws_send(CODE_new_game_server, {random_rings: random_rings}); // requests new game vs server/AI
+            await server_ws_send(CODE_new_game_server, {random_rings: random_rings, player_color: player_color}); // requests new game vs server/AI
         };
         
         // Bind canvas
@@ -291,7 +296,7 @@ async function server_actions_handler (event) {
             ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Make your move` }));
 
             // light up users' rings
-            await sleep(400);
+            await sleep(300);
             update_ring_highlights(yinsh.objs.rings.filter((r) => (r.player == get_player_id())).map((r)=> (r.loc.index)));
             refresh_canvas_state();
 
@@ -320,7 +325,7 @@ async function server_actions_handler (event) {
 
 
         // wait a bit after move_replay is complete
-        await sleep(300);
+        await sleep(250);
 
          // inform user, manual ring setup
          ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `> Place your ring` }));
@@ -512,7 +517,7 @@ async function replay_opponent_turn(){
              if('ring_setup_done' in delta) {
 
                 // replay move
-                await sleep(400);
+                await sleep(300);
                 await replay_opponent_ring_setup(delta.ring_setup_done);
                 ringDrop_playSound(); 
             };
@@ -1602,8 +1607,11 @@ export async function game_exit_handler(event){
         await task_completion('canvas_animation_task');
     };
 
-    // disable any canvas interaction
+    // disable any canvas interaction & reset any move that might be active
     disableInteraction();
+    reset_move_action();
+    update_ring_highlights();
+    refresh_canvas_state();
 
     // notify server (game is lost automatically) --> other user is informed by server
     // note: we're keeping turn_recap here to avoid handling exceptions inside the server game_runner -> to be fixed
