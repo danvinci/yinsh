@@ -13,7 +13,7 @@ export const enableLegalMovesCues = () => {cues_moves_flag = true; update_legal_
 export const disableLegalMovesCues = () => {cues_moves_flag = false; update_legal_cues(); refresh_canvas_state();};
 
 import { setup_ok_codes, next_ok_codes, joiner_ok_code} from './server.js'
-import { GS_progress_rings, GS_progress_game } from './core.js'
+import { GS_progress_rings, GS_progress_game, GS_completed } from './core.js'
 import { refresh_canvas_state } from './drawing.js';
 
 // UTILITY FUNCTIONS
@@ -978,6 +978,7 @@ function init_markers(){
 export function update_legal_cues(hover_cue_index = -1){
 
     // retrieves info on active move
+    const _gstatus = get_game_status();
     const move_in_progress = get_move_status(); // -> true/false
     const _legal_moves_ids = structuredClone(yinsh.objs.move_action.legal_drops); // -> [11,23,90,etc]
 
@@ -985,7 +986,7 @@ export function update_legal_cues(hover_cue_index = -1){
     let _legal_cues = yinsh.objs.legal_moves_cues;
 
     // turn matching cues on if a move was started
-    if (cues_moves_flag && move_in_progress) {
+    if (cues_moves_flag && move_in_progress && _gstatus != GS_completed) {
         for (let cue of _legal_cues) {
             if (_legal_moves_ids.includes(cue.loc.index)) { 
                 
@@ -1344,6 +1345,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
 
     const _ring_setup_id = 0 // index of setup ring
     const move_in_progress = get_move_status();
+    const _gstatus = get_game_status();
 
     // drawing param
     const S = yinsh.drawing_params.S;
@@ -1353,7 +1355,7 @@ export function update_ring_highlights(rings_ids = [], sel_ring = -1){
     // empty inner var
     let _ring_highlights = [];
 
-    if (cues_rings_flag) {
+    if (cues_rings_flag && _gstatus != GS_completed) { // CASE (for game status check): prevent cues being drawn for terminations mid-replay/move
         if (!move_in_progress && rings_ids.length > 1) { // CASE: ring scoring (we always have at least 2 rings to choose from)
             
             // retrieve drop zones

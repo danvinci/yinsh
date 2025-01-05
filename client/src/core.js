@@ -11,7 +11,7 @@ import { get_move_status, start_move_action, end_move_action, get_move_action_do
 import { bind_adapt_canvas, reorder_rings, add_marker, add_ring, getIndex_last_ring, updateLoc_last_ring, flip_markers, remove_markers } from './data.js'
 import { swap_data_next_turn, update_objects_next_turn, turn_start, turn_end, get_current_turn_no, update_ring_highlights, get_coord_free_slot} from './data.js' 
 import { activate_task, get_scoring_options_fromTask, update_mk_halos, complete_task, reset_scoring_tasks, remove_ring, increase_player_score, increase_opponent_score, init_scoring_slots} from './data.js' 
-import { preMove_score_op_check, get_preMove_score_op_data, select_apply_scenarioTree  } from './data.js'
+import { preMove_score_op_check, get_preMove_score_op_data, select_apply_scenarioTree } from './data.js'
 import { delta_replay_check, get_delta, wipe_delta, get_preMove_scoring_actions_done, reset_preMove_scoring_actions, pushTo_preMove_scoring_actions, get_tree } from './data.js'
 import { reset_scoring_actions, pushTo_scoring_actions, get_scoring_actions_done, get_task_status, task_completion, set_game_status, get_game_status, get_ring_setup_action_done } from './data.js'
 
@@ -60,12 +60,13 @@ import { ringDrop_playSound, markersRemoved_player_playSound, markersRemoved_opp
     // not_started (temp at creation) -> :progress_rings (optional) -> :progress_game -> :completed
     export const GS_progress_rings = 'progress_rings' // initial (manual) rings setup
     export const GS_progress_game = 'progress_game' // normal gameplay
+    export const GS_completed = 'completed'
 
     // window resizing -> canvas and object adjustments
     window.addEventListener('resize', window_resize_handler);
 
     // game termination by user (via UI)
-    core_et.addEventListener('game_exited', game_exit_handler, false);
+    core_et.addEventListener('game_exited', resign_game_handler, false);
 
     // handler for tests triggered from the UI - used only in DEV
     core_et.addEventListener('test_triggered', text_exec_from_ui_handler, false);
@@ -370,7 +371,7 @@ async function server_actions_handler (event) {
         // wait any potential animation task underway (eg. last move replay already underway while resign msg comes)
         // necessary as if replay is underway, delta from next_server_data hasn't been wiped yet
         // it will then be found on the 2nd call of the function, leading to a glitchy 2nd delta replay before the game ends
-        // by waiting, delta gets wiped
+        // by waiting, delta gets wiped as animation is completed 
         if (get_task_status('canvas_animation_task')) {
             await task_completion('canvas_animation_task');
         };
@@ -403,6 +404,7 @@ async function server_actions_handler (event) {
                 // trigger sound & winning animation
                 await sleep(500);
                 endGame_win_playSound();
+                update_mk_halos(); // clean-up before any animation (other cues can be drawn only when game not completed anyway)
                 await win_animation(); 
 
             } else if (winning_player == '' && outcome == 'mk_limit_draw') {  // nobody won, it's a draw
@@ -413,6 +415,7 @@ async function server_actions_handler (event) {
 
                 await sleep(500); // draw animation is bit faster, adding extra pause post-replay/last-move
                 endGame_draw_playSound();
+                update_mk_halos();
                 await draw_animation();
 
             } else { // opponent wins
@@ -431,11 +434,12 @@ async function server_actions_handler (event) {
                 ui_et.dispatchEvent(new CustomEvent('game_status_update', { detail: `game_exited` }));
 
                 await sleep(500);
+                update_mk_halos();
+                refresh_canvas_state();
                 endGame_lose_playSound(); // sound only
 
             };
 
-        
         console.log("LOG - GAME COMPLETED");
 
     };
@@ -1392,7 +1396,6 @@ async function win_animation() {
 
         const win_anim_start_time = Date.now();
 
-
         await sleep(200);
 
         // loop over every object (rings + markers)
@@ -1598,7 +1601,7 @@ async function draw_animation(){
 
 
 /////////// EXITING GAME - prompted by user via resign action, mediated by server
-export async function game_exit_handler(event){
+export async function resign_game_handler(event){
 
     // wait for any animation in progress to be done
     if (get_task_status('canvas_animation_task')) {
@@ -1607,11 +1610,11 @@ export async function game_exit_handler(event){
         await task_completion('canvas_animation_task');
     };
 
-    // disable any canvas interaction & reset any move that might be active
+    // disable any canvas interaction
     disableInteraction();
-    reset_move_action();
-    update_ring_highlights();
-    refresh_canvas_state();
+
+    // mark game as completed (don't wait for server)
+    set_game_status(GS_completed);
 
     // notify server (game is lost automatically) --> other user is informed by server
     // note: we're keeping turn_recap here to avoid handling exceptions inside the server game_runner -> to be fixed
