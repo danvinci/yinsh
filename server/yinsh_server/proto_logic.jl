@@ -4,26 +4,16 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 6f0ad323-1776-4efd-bf1e-667e8a834f41
-using Random
+# ╔═╡ c2e0d024-d34f-45b2-a668-8d31de12757c
+begin
+	# using local project env
+	import Pkg
+	Pkg.activate(Base.current_project())
+	Pkg.instantiate()
 
-# ╔═╡ e68b41fc-cbf5-477f-b211-2462d835def0
-using Combinatorics
-
-# ╔═╡ c2797a4c-81d3-4409-9038-117fe50540a8
-using StatsBase
-
-# ╔═╡ 13cb8a74-8f5e-48eb-89c6-f7429d616fb9
-using Dates
-
-# ╔═╡ 70ecd4ed-cbb1-4ebd-85a8-42f7b072bee3
-using HTTP, JSON3
-
-# ╔═╡ bd7e7cdd-878e-475e-b2bb-b00c636ff26a
-using HTTP.WebSockets
-
-# ╔═╡ d489db2d-3e73-44bd-aeb6-bfe17775d20c
-using .Threads
+	using Random, Combinatorics, StatsBase, Dates, HTTP, HTTP.WebSockets, JSON3
+	using Base.Threads
+end
 
 # ╔═╡ 69c4770e-1091-4744-950c-ed23deb55661
 # prod packages
@@ -1485,8 +1475,9 @@ function getLast_clientPkg(game_id)
 
 		return _client_packages
 	
-	catch 
-		throw(error("ERROR retrieving game data"))
+	catch e
+		@error "ERROR retrieving game data, $e"
+		e |> throw
 	end
 
 end
@@ -1502,9 +1493,9 @@ function getLast_clientDelta(game_id)
 
 		return _client_delta
 	
-	catch 
-		throw(error("ERROR retrieving game data"))
-
+	catch e
+		@error "ERROR retrieving game data, $e"
+		e |> throw
 	end
 
 end
@@ -1579,6 +1570,12 @@ begin
 	const ws_msg_log_raw = []; # log for all received messages (raw)
 end
 
+# ╔═╡ 3eb3a140-0065-447a-a95a-5b919868098d
+const handler_task_array = Task[];
+
+# ╔═╡ 00094688-1b11-448c-9b09-4f2423cdcec1
+const handler_task_array_lock = ReentrantLock();
+
 # ╔═╡ 691404a6-53bc-4340-a750-636fe219f633
 const msg_lock = ReentrantLock()
 
@@ -1593,10 +1590,12 @@ function save_newGame!(new_game_details)
 	try
 		lock(games_lock)
 			setindex!(games_log_dict, new_game_details, new_game_details[:identity][:game_id])
+		@info "setter > new game data saved"
 	catch e 
 		e |> throw
 	finally
 		unlock(games_lock)
+		@info "setter > lock released"
 	end
 
 end
@@ -1627,13 +1626,46 @@ begin
 
 end
 
+# ╔═╡ 7042a7f7-e130-4601-a5f9-1e486da36a9e
+ws_msg_log
+
+# ╔═╡ a80e69bc-ea79-4ba0-898d-5989dc754a2e
+games_lock
+
+# ╔═╡ c0b2b18a-f023-42e8-98df-f2fa45b618f8
+handler_task_array
+
+# ╔═╡ c517cc4e-b605-4a2b-a445-993b82dacf9f
+
+
+# ╔═╡ ba840e33-9e18-478b-9d51-aa196e7bf75e
+ws_array
+
+# ╔═╡ 9a9ded0d-cfd8-4b2f-a849-6a30bcccef9d
+games_log_dict["RQSU9J"]
+
+# ╔═╡ 046d983f-5b37-44ed-8ec8-ef9e53feca4d
+games_lock
+
+# ╔═╡ 2fac931f-5e0d-4525-adc4-62e88a2fbb2d
+send(games_log_dict["2JCUMJ"][:ws_connections][:join_player_ws], "hello")
+
+# ╔═╡ cdba6c7c-13d1-45d4-9fa6-52c8b05ecfc7
+msg_lock
+
+# ╔═╡ 15704701-8faa-4212-a506-1f4d7ec15a9e
+games_lock
+
+# ╔═╡ f936af7d-c2a6-47c0-9e14-eae6b934ee1e
+ws_msg_log
+
 # ╔═╡ 7c026677-5c44-4a12-99a4-2d1228e31795
 function terminate_active_ws!()
 
 	for ws in filter(ws -> !istaskdone(ws.task) || !isempty(ws.connections) || isopen(ws.listener.server), ws_array)
 		HTTP.forceclose(ws)
 		_num_conn = ws.connections |> length
-		@warn "WARNING - Terminating ws server: $(ws.task) - $_num_conn connections"
+		@warn "WARNING - terminating ws server: $(ws.task) - $_num_conn connections"
 	end
 end
 
@@ -1643,8 +1675,35 @@ function terminate_active_watchdog!()
 	for task in ws_watchdog
 		if !istaskdone(task)
    			schedule(task, InterruptException(), error=true)
-			@warn "WARNING - Terminating ws watchdog: $task"
+			@warn "WARNING - terminating ws watchdog: $task"
 		end
+	end
+end
+
+# ╔═╡ 80fcd730-a945-4057-9617-de88425128fe
+function terminate_msg_handlers!()
+
+	try
+		lock(handler_task_array_lock)
+		_terminated = Int[]
+		for (i, task) in enumerate(handler_task_array)
+			if !istaskdone(task)
+	   			schedule(task, InterruptException(), error=true)
+				push!(_terminated, i)
+				@warn "WARNING - terminating msg handler: $task"
+			end
+		end
+
+		# clean up
+		for i in _terminated
+			deleteat!(handler_task_array, i)
+		end
+
+	catch e
+		@error "ERROR - terminating msg handler tasks, $e"
+		e |> throw
+	finally
+		unlock(handler_task_array_lock)
 	end
 end
 
@@ -1658,6 +1717,7 @@ begin
 	const CODE_join_game = "join_game"
  	const CODE_advance_game = "advance_game" # clients asking to progress the game
 	const CODE_resign_game = "resign_game" # clients asking to resign
+	const allowed_CODES = [CODE_new_game_human, CODE_new_game_server, CODE_join_game, CODE_advance_game, CODE_resign_game]
 	
 	# server codes (only the server can use these)
 	# client responds with these + _OK or _ERROR
@@ -1726,9 +1786,9 @@ function update_ws_handler!(game_id::String, ws, is_orig_player::Bool)
 
 			println("LOG - WS handler updated for $_dict_key")
 	
-	catch 
-		throw(error("ERROR retrieving game data when updating WS handler"))
-	
+	catch e
+		@error "ERROR retrieving game data when updating WS handler, $e"
+		e |> throw
 	finally
 		unlock(games_lock)
 	end
@@ -1741,6 +1801,8 @@ end
 function msg_dispatcher(ws, msg_id, msg_code, payload = Dict{Symbol, Any}(), ok_status::Bool = true)
 
 	try 
+
+		@info "dispatching response for $msg_id"
 
 		# copy response payload
 		# need to do a comprehension so we have a separate copy + general type
@@ -1756,39 +1818,51 @@ function msg_dispatcher(ws, msg_id, msg_code, payload = Dict{Symbol, Any}(), ok_
 		# add statusCode 200 
 		setindex!(_response, 200, :statusCode)
 	
-		# save response (just for logging/debug)
-		setindex!(_response, "sent", :type)
+		# save response in msg log (just for logging/debug)
+		setindex!(_response, :sent, :type)
 		
 		lock(msg_lock)
 			push!(ws_msg_log, _response)
 		unlock(msg_lock)
 	
 		# send response
-		send(ws, JSON3.write(_response))
-		
-		# log
-		println("LOG - $_sfx_msg_code sent for msg ID $msg_id")
-	
+		if !ws.writeclosed
+			send(ws, JSON3.write(_response))
+			@info "LOG - sending $_sfx_msg_code as response to msg_id $msg_id"
+		else
+			"ws write closed" |> error
+		end
 	catch e 
 		@error "ERROR - msg dispatcher, $e"
+		throw(e)
 	end
 
 end
+
+# ╔═╡ cc1a5948-d6d5-4b9e-8731-85b7eb7e601d
+ws_msg_log
 
 # ╔═╡ ac87a771-1d91-4ade-ad39-271205c1e16e
 function fn_join_game(ws, msg)
 # human client asking to join existing code via game code
 
-	# retrieve existing game data (otherwise error is handled by calling function)
-	_existing_game_data = getLast_clientPkg(msg[:payload][:game_id]) # caller payload
+	try 
 
-	# save ws handler for joining player
-	update_ws_handler!(msg[:payload][:game_id], ws, false) # true if originator
+		# retrieve existing game data (otherwise error is handled by calling function)
+		_existing_game_data = getLast_clientPkg(msg[:payload][:game_id]) # caller payload
 
-	_other_pld = Dict() # empty payload for other
+		# save ws handler for joining player
+		update_ws_handler!(msg[:payload][:game_id], ws, false) # true if originator
 
-	# return payload - requester, other
-	return _existing_game_data, _other_pld
+		_other_pld = Dict() # empty payload for other
+
+		# return payload - requester, other
+		return _existing_game_data, _other_pld
+	
+	catch e
+		@error "ERROR - join game, $e"
+		throw(e)
+	end
 
 end
 
@@ -1843,6 +1917,7 @@ function _mem_cleanup!(force = false) # called by game_runner
 			foreach(k -> delete!(games_log_dict, k), union(g_ids_done, g_ids_zombie))
 
 		catch e 
+			@error "ERROR - mem cleanup, $e"
 			e |> throw
 		finally
 			unlock(games_lock)
@@ -1870,15 +1945,18 @@ function _is_playing_next(game_id::String, _player_id::String)::Bool
 # returns false if error
 
 	try
-		_current_turn = games_log_dict[game_id][:turns][:current]
-		_moving_player = games_log_dict[game_id][:turns][:data][_current_turn][:moving_player]
+		lock(games_lock)
+			_current_turn = games_log_dict[game_id][:turns][:current]
+			_moving_player = games_log_dict[game_id][:turns][:data][_current_turn][:moving_player]
 
-		return _moving_player == _player_id
+			return _moving_player == _player_id
 
-	catch
-		println("ERROR - _is_playing_next fn, data for g_id $game_id can't be located")
+	catch e
+		@error "ERROR - _is_playing_next fn, data for g_id $game_id can't be located, $e"
 		return false
 
+	finally 
+		unlock(games_lock)
 	end
 
 end
@@ -1888,13 +1966,15 @@ function is_human_playing_next(game_id::String)::Bool
 # human is always the originator
 
 	try
-
+		lock(games_lock)
 		_originator_id = games_log_dict[game_id][:identity][:orig_player_id]
 		return _is_playing_next(game_id, _originator_id)
-	catch
-
-		println("ERROR - is_human_playing_next fn, data for g_id $game_id can't be located")
+	
+	catch e
+		@error "ERROR - is_human_playing_next fn, data for g_id $game_id can't be located, $e"
 		return false
+	finally 
+		unlock(games_lock)
 	end
 end
 
@@ -1906,10 +1986,17 @@ function get_ws_handler(game_id::String, _is_originator::Bool)
 	try
 		return games_log_dict[game_id][:ws_connections][_key]
 	catch e
-		@error e
+		if isa(e, KeyError) # key doesn't exist yet -> ws connection not set
+			return nothing
+		else
+			@error e
+		end
 	end
 
 end
+
+# ╔═╡ 70b479c1-9613-4b8c-a325-b09aab0211f7
+get_ws_handler("RQSU9J", true)
 
 # ╔═╡ b5c7295e-c464-4f57-8556-c36b9a5df6ca
 function set_turn_closed!(game_code::String, turn_no::Int)
@@ -1918,7 +2005,8 @@ function set_turn_closed!(game_code::String, turn_no::Int)
 		lock(games_lock)
 		setindex!(games_log_dict[game_code][:turns][:data][turn_no], :closed, :status)
 	catch e
-		throw(error("ERROR while setting turn $turn_no as closed - $e"))
+		@error "ERROR while setting turn $turn_no as closed - $e"
+		e |> throw
 	finally
 		unlock(games_lock)
 	end
@@ -1941,7 +2029,7 @@ function advance_turn!(game_code::String, completed_turn_no::Int)::Dict
 
 	if _current_turn_no != completed_turn_no
 
-		throw(error("ERROR - fn advance_turn - current and completed turn don't match"))
+		error("ERROR - fn advance_turn - current and completed turn don't match")
 
 	else
 
@@ -1988,9 +2076,8 @@ function check_both_players_ready(game_id)
 		end
 
 	catch e
-
-		throw("ERROR checking players readiness status, $e")
-
+		@error "ERROR checking players readiness status, $e"
+		e |> throw
 	end
 
 end
@@ -2031,9 +2118,9 @@ function whos_player(game_code::String, player_id::String)::Symbol
 		# understand who is the player 
 		return whos = (_orig_player == player_id) ? :originator : :joiner
 
-	catch
-
-		throw(error("ERROR retrieving game data for whos_player lookup"))
+	catch e
+		@error "ERROR retrieving game data for whos_player lookup, $e"
+		e |> throw
 	end
 
 end
@@ -2107,7 +2194,8 @@ function get_player_score(game_id::String, player_id::String)
 		
 		return games_log_dict[game_id][:players][key] 
 	catch e
-		throw(error("ERROR - while retrieving $player_id score for game $game_id $e"))
+		@error "ERROR - while retrieving $player_id score for game $game_id, $e"
+		e |> throw
 	end
 
 end
@@ -2149,7 +2237,8 @@ function get_scores_byID(game_id::String)::Dict{String, Int}
 		
 		return Dict(_W => W_score_val, _B => B_score_val)
 	catch e
-		throw(error("ERROR - while retrieving player scores for game $game_id $e"))
+		@error "ERROR - while retrieving player scores for game $game_id, $e"
+		e |> throw
 	end
 
 end
@@ -2263,7 +2352,8 @@ function get_resignedStatus_byID(game_id::String)::Dict{String, Bool}
 		return Dict(_W => W_resigned, _B => B_resigned)
 		
 	catch e
-		throw(error("ERROR - while retrieving player status for game $game_id $e"))
+		@error "ERROR - while retrieving player status for game $game_id, $e"
+		e |> throw
 	end
 
 end
@@ -2385,7 +2475,7 @@ function get_first_maxL(set::Set)
 		fm_id = findfirst( v -> length(v) == maximum(vec .|> length), vec)
 		return @inbounds vec[fm_id]
 	else
-		throw(error("ERROR - get_first_maxL expects a non-empty input"))		
+		error("ERROR - get_first_maxL expects a non-empty input")
 	end
 
 end
@@ -2398,7 +2488,7 @@ function get_first_maxL(vec::Vector)
 		fm_id = findfirst( v -> length(v) == maximum(vec .|> length), vec)
 		return @inbounds vec[fm_id]
 	else
-		throw(error("ERROR - get_first_maxL expects a non-empty input"))		
+		error("ERROR - get_first_maxL expects a non-empty input")
 	end
 
 end
@@ -2427,8 +2517,9 @@ function get_hScoring_sc(tree, ref_sc)::Dict{Symbol, CartesianIndex}
 
 		return ref_sc[h_sc_index]
 
-	catch
-		throw(error("ERROR in get_hScoring_sc, no scenario found"))
+	catch e
+		@error("ERROR in get_hScoring_sc, no scenario found, $e")
+		e |> throw
 	end
 
 
@@ -2927,6 +3018,9 @@ end
 # ╔═╡ f1949d12-86eb-4236-b887-b750916d3493
 function gen_newGame(vs_server = false, random_rings = true, player_color = "random")
 # initializes new game, saves data server-side and returns object for client
+
+try 
+	@info "generating new game"
 	
 	# generate random game identifier (only uppercase letters)
 	game_id = randstring(['A':'Z'; '0':'9'], 6)
@@ -2976,6 +3070,7 @@ function gen_newGame(vs_server = false, random_rings = true, player_color = "ran
 	
 	
 	### package data for server storage
+	@info "pkg game data"
 
 		# game identity
 		_identity = Dict(:game_id => game_id,
@@ -3025,12 +3120,19 @@ function gen_newGame(vs_server = false, random_rings = true, player_color = "ran
 							:ws_connections => Dict())
 
 		
-		# saves game to general log (DB?)
-		save_newGame!(new_game_data)
+	### saves game to general log (DB?)
+	@info "save game data"
+	save_newGame!(new_game_data)
 
-
+	@info "LOG - New game initialized - Game ID $game_id"
 	println("LOG - New game initialized - Game ID $game_id")
 	return game_id
+
+
+catch e
+	@error "ERROR - generating new game, $e"
+	throw(e)
+end
 	
 end
 
@@ -3039,47 +3141,71 @@ function fn_new_game_vs_human(ws, msg)
 # human client (originator) wants new game to play against a nother human
 ## NOTE -> this and other new_game request fn could be unified
 
-	# handle game settings/preferences in msg payload
-	_random_rings = msg[:payload][:random_rings] # true (random) | false (manual)
-	_player_color = msg[:payload][:player_color] # random | black | white
+	try 
 
-	# generate and store new game data
-	_new_game_id = gen_newGame(false, _random_rings, _player_color)
-
-	# save ws handler for originating player
-	update_ws_handler!(_new_game_id, ws, true)
+		# handle game settings/preferences in msg payload
+		_random_rings = msg[:payload][:random_rings] # true (random) | false (manual)
+		_player_color = msg[:payload][:player_color] # random | black | white
 	
-	# retrieve payload in client format 
-	new_game_data = getLast_clientPkg(_new_game_id)
-
-	_other_pld = Dict() # empty payload for other
-
-	# return payload - requester, other
-	return new_game_data, _other_pld
+		# generate and store new game data
+		_new_game_id = gen_newGame(false, _random_rings, _player_color)
+	
+		# save ws handler for originating player
+		update_ws_handler!(_new_game_id, ws, true)
+		
+		# retrieve payload in client format 
+		new_game_data = getLast_clientPkg(_new_game_id)
+	
+		_other_pld = Dict() # empty payload for other
+	
+		# return payload - requester, other
+		return new_game_data, _other_pld
+	
+	catch e
+		@error "ERROR - new game - $e"
+		throw(e)
+	end
 
 end
+
+# ╔═╡ b1b9e9fb-ce76-462a-9c12-fdfe3dd6433d
+gen_newGame()
 
 # ╔═╡ 32307f96-6503-4dbc-bf5e-49cf253fbfb2
 function fn_new_game_vs_server(ws, msg)
 # human client (originator) wants new game to play against server/AI
+
+	try 
+
+		@info "new game vs AI"
 	
-	# handle game settings/preferences in msg payload
-	_random_rings = msg[:payload][:random_rings] # true (random) | false (manual)
-	_player_color = msg[:payload][:player_color] # random | black | white
+		# handle game settings/preferences in msg payload
+		_random_rings = msg[:payload][:random_rings] # true (random) | false (manual)
+		_player_color = msg[:payload][:player_color] # random | black | white
+		
+		# generate and store new game data
+		_new_game_id = gen_newGame(true, _random_rings, _player_color) 
+
+		@info _new_game_id
+		@info "about to update handler"
 	
-	# generate and store new game data
-	_new_game_id = gen_newGame(true, _random_rings, _player_color) 
+		# save ws handler for originating player
+		update_ws_handler!(_new_game_id, ws, true)
+	
+		# retrieve payload
+		@info "retrieving payload"
+		new_game_data = getLast_clientPkg(_new_game_id)
+	
+		_other_pld = Dict() # empty payload for other
+	
+		# return payload - requester, other
+		@info "returning payloads"
+		return new_game_data, _other_pld
 
-	# save ws handler for originating player
-	update_ws_handler!(_new_game_id, ws, true)
-
-	# retrieve payload
-	new_game_data = getLast_clientPkg(_new_game_id)
-
-	_other_pld = Dict() # empty payload for other
-
-	# return payload - requester, other
-	return new_game_data, _other_pld
+	catch e
+		@error "ERROR - new game vs AI - $e"
+		throw(e)
+	end
 
 
 end
@@ -3178,7 +3304,7 @@ function fn_nextPlaying_payload(game_code::String)
 
 	catch e
 
-		throw(error("ERROR generating payload for next move, $e"))
+		error("ERROR generating payload for next move, $e")
 
 	end
 
@@ -3314,7 +3440,7 @@ function find_treepotIndex(gs_id::Dict, treepots::Vector)::Int
 
 	# throw error if not found - it shouldn't happen
 	if isnothing(treepot_index) 
-		throw(error("ERROR - Treepot index for $gs_id can't be found"))
+		error("ERROR - Treepot index for $gs_id can't be found")
 	else
 		return treepot_index
 	end
@@ -3973,28 +4099,22 @@ end
 
 # ╔═╡ 7316a125-3bfe-4bac-babf-4e3db953078b
 begin
-
-	# matching each code to a function call
-	codes_toFun_match::Dict{String, Function} = Dict(
+# matching each code to a function call
+# note: advance and resign both converge on game_runner
+const codes_toFun_match::Dict{String, Function} = Dict(
 									CODE_new_game_human => fn_new_game_vs_human,
 									CODE_new_game_server => fn_new_game_vs_server,
 									CODE_join_game => fn_join_game,
 									CODE_advance_game => fn_advance_game,
-									CODE_resign_game => fn_advance_game
-									)
-
-	# note: advance and resign both converge on game_runner, case handled there
-
-	# array of codes
-	allowed_CODES = collect(keys(codes_toFun_match))
-
+									CODE_resign_game => fn_advance_game)	
 end
 
 # ╔═╡ 064496dc-4e23-4242-9e25-a41ddbaf59d1
 function msg_handler(ws, msg)
-
 # handles messages depending on their code
 # every incoming message should have an id and code - if they're missing, throw error
+
+	@info "received new msg $(msg[:msg_code])"
 
 	# try retrieving specific values (msg header)
 	_msg_id = get(msg, :msg_id, nothing)
@@ -4010,8 +4130,8 @@ function msg_handler(ws, msg)
 			# matchign functions allow to generate/join a new game, or advance one
 			_pld_caller, _pld_other = codes_toFun_match[_msg_code](ws, msg)
 
-				# reply to caller, including code-specific response
-				msg_dispatcher(ws, _msg_id, _msg_code, _pld_caller)
+			# reply to caller, including code-specific response
+			msg_dispatcher(ws, _msg_id, _msg_code, _pld_caller)
 				
 			# if payload is not empty, assumes game already exists
 			# game vs other human player, informed with 'other' payload
@@ -4028,11 +4148,9 @@ function msg_handler(ws, msg)
 				# retrieve ws handler for other
 				_other_identity_flag = !_is_caller_originator
 
-				# BUT other might not have joined yet
-				# this can also be a new game request
-				# also, the msg_id in this case is the one of the orig request, but not a problem as clients handle both responses & push msg
-				if check_both_players_ready(_game_id)
-					_ws_other = get_ws_handler(_game_id, _other_identity_flag)
+				# share other pld if ws connection was established
+				_ws_other = get_ws_handler(_game_id, _other_identity_flag)
+				if !isnothing(_ws_other)
 					msg_dispatcher(_ws_other, _msg_id, _msg_code, _pld_other)
 				end
 			
@@ -4040,22 +4158,18 @@ function msg_handler(ws, msg)
 
 		catch e
 
-			# reply to client with error
+			# reply to sender with error
 			msg_dispatcher(ws, _msg_id, _msg_code, Dict(:server_msg => "Error when handling request, $e"), false)
 
-			println("ERROR in msg_handler - $e")
+			@error "ERROR in msg_handler - $e"
 
 		end
 
-
 	else
-
-		# if fields are missing, also give error
+		# missing fields -> error
 		msg_dispatcher(ws, _msg_id, _msg_code, Dict(:server_msg => "Error, missing msg_id and/or invalid msg_code"), false)
 		
-		_err = "ERROR in msg_handler - missing msg_id and/or invalid msg_code"
-		println(_err)
-		@error _errr
+		@error "ERROR in msg_handler - missing msg_id and/or invalid msg_code"
 	end
 
 
@@ -4068,14 +4182,10 @@ function start_ws_server()
 	# start new server (it spawns its on task)
     ws_server = WebSockets.listen!(ws_ip, ws_port; verbose = true) do ws
 
-		_info = "LOG - New Websocket server started: $(ws_server.task)"
-		@info _info
-		println(_info)
-
 		for msg in ws
 
 			# message handler & downstream functions have their own task/thread
-			@spawn try
+			msg_handler_task = @spawn try
 
 				# save received messages as-is
 				lock(msg_lock)
@@ -4088,7 +4198,7 @@ function start_ws_server()
 				parsed_msg = JSON3.read(msg, Dict) |> dict_keys_to_sym
 				
 				# save parsed message
-				setindex!(parsed_msg, "received", :type)
+				setindex!(parsed_msg, :received, :type)
 				lock(msg_lock)
 					push!(ws_msg_log, parsed_msg)
 				unlock(msg_lock)
@@ -4097,13 +4207,25 @@ function start_ws_server()
 				msg_handler(ws, parsed_msg)
 			
 			catch e
-				@error "ERROR - Message handler error, $e"
+				if isa(e, InterruptException)
+	            	@warn "LOG - Message handler task terminated"
+				else
+					@error "ERROR - Message handler error, $e"
+					e |> throw
+				end
 			end
+
+			# set aside msg handler task
+			lock(handler_task_array_lock)
+				push!(handler_task_array, msg_handler_task)
+				@info "msg handler task saved"
+			unlock(handler_task_array_lock)
 		end
 		
     end
 
 	# saves server handler & task for reference
+	@info "LOG - New websocket server started: $(ws_server.task)"
     push!(ws_array, ws_server)
 	
 end
@@ -4150,13 +4272,16 @@ function start_ws_watchdog()
 	# terminate any running watchdog(s) - by InterruptException
 	terminate_active_watchdog!()
 
-	# terminate any active websockets
+	# terminate any active websockets & handler tasks
 	terminate_active_ws!()
+	terminate_msg_handlers!()
 	
 	sleep(1)
 
 	# start new watchdog
 	watchdog_task = @spawn try 
+
+			@info "LOG - New watchdog started: $watchdog_task"
 
 			#ws_array |> empty!
 
@@ -4176,7 +4301,7 @@ function start_ws_watchdog()
 						sleep(1)	
 						terminate_active_ws!()
 					else
-						rethrow(e)
+						e |> throw
 					end
 				end
 				
@@ -4185,14 +4310,12 @@ function start_ws_watchdog()
 				
 		catch e
 			if isa(e, InterruptException)
-	            @warn "LOG - Websocket watchdog terminated"
+	            @warn "LOG - websocket watchdog terminated"
 	        else
 				@error "ERROR - ws watchdog, $e"
-				rethrow(e)
+				e |> throw
 	        end
 		end
-
-	@info "LOG - New watchdog started: $watchdog_task"
     
     # save watchdog task reference
     push!(ws_watchdog, watchdog_task)
@@ -4208,393 +4331,9 @@ start_ws_watchdog()
 println("> Service running")
 wait(Condition())
 
-# ╔═╡ 00000000-0000-0000-0000-000000000001
-PLUTO_PROJECT_TOML_CONTENTS = """
-[deps]
-Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
-Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
-HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-
-[compat]
-Combinatorics = "~1.0.2"
-HTTP = "~1.10.15"
-JSON3 = "~1.14.1"
-StatsBase = "~0.34.4"
-"""
-
-# ╔═╡ 00000000-0000-0000-0000-000000000002
-PLUTO_MANIFEST_TOML_CONTENTS = """
-# This file is machine-generated - editing it directly is not advised
-
-julia_version = "1.11.1"
-manifest_format = "2.0"
-project_hash = "a83dd56650c9f3967f1c72a6471bffdc425a53fd"
-
-[[deps.AliasTables]]
-deps = ["PtrArrays", "Random"]
-git-tree-sha1 = "9876e1e164b144ca45e9e3198d0b689cadfed9ff"
-uuid = "66dad0bd-aa9a-41b7-9441-69ab47430ed8"
-version = "1.1.3"
-
-[[deps.Artifacts]]
-uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
-version = "1.11.0"
-
-[[deps.Base64]]
-uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
-version = "1.11.0"
-
-[[deps.BitFlags]]
-git-tree-sha1 = "0691e34b3bb8be9307330f88d1a3c3f25466c24d"
-uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
-version = "0.1.9"
-
-[[deps.CodecZlib]]
-deps = ["TranscodingStreams", "Zlib_jll"]
-git-tree-sha1 = "bce6804e5e6044c6daab27bb533d1295e4a2e759"
-uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
-version = "0.7.6"
-
-[[deps.Combinatorics]]
-git-tree-sha1 = "08c8b6831dc00bfea825826be0bc8336fc369860"
-uuid = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
-version = "1.0.2"
-
-[[deps.Compat]]
-deps = ["TOML", "UUIDs"]
-git-tree-sha1 = "8ae8d32e09f0dcf42a36b90d4e17f5dd2e4c4215"
-uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.16.0"
-weakdeps = ["Dates", "LinearAlgebra"]
-
-    [deps.Compat.extensions]
-    CompatLinearAlgebraExt = "LinearAlgebra"
-
-[[deps.CompilerSupportLibraries_jll]]
-deps = ["Artifacts", "Libdl"]
-uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.1.1+0"
-
-[[deps.ConcurrentUtilities]]
-deps = ["Serialization", "Sockets"]
-git-tree-sha1 = "f36e5e8fdffcb5646ea5da81495a5a7566005127"
-uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
-version = "2.4.3"
-
-[[deps.DataAPI]]
-git-tree-sha1 = "abe83f3a2f1b857aac70ef8b269080af17764bbe"
-uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
-version = "1.16.0"
-
-[[deps.DataStructures]]
-deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
-git-tree-sha1 = "1d0a14036acb104d9e89698bd408f63ab58cdc82"
-uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-version = "0.18.20"
-
-[[deps.Dates]]
-deps = ["Printf"]
-uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
-version = "1.11.0"
-
-[[deps.DocStringExtensions]]
-deps = ["LibGit2"]
-git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
-uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
-version = "0.9.3"
-
-[[deps.ExceptionUnwrapping]]
-deps = ["Test"]
-git-tree-sha1 = "d36f682e590a83d63d1c7dbd287573764682d12a"
-uuid = "460bff9d-24e4-43bc-9d9f-a8973cb893f4"
-version = "0.1.11"
-
-[[deps.HTTP]]
-deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "PrecompileTools", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "c67b33b085f6e2faf8bf79a61962e7339a81129c"
-uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.10.15"
-
-[[deps.InteractiveUtils]]
-deps = ["Markdown"]
-uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
-version = "1.11.0"
-
-[[deps.IrrationalConstants]]
-git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
-uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
-version = "0.2.2"
-
-[[deps.JLLWrappers]]
-deps = ["Artifacts", "Preferences"]
-git-tree-sha1 = "a007feb38b422fbdab534406aeca1b86823cb4d6"
-uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
-version = "1.7.0"
-
-[[deps.JSON3]]
-deps = ["Dates", "Mmap", "Parsers", "PrecompileTools", "StructTypes", "UUIDs"]
-git-tree-sha1 = "1d322381ef7b087548321d3f878cb4c9bd8f8f9b"
-uuid = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
-version = "1.14.1"
-
-    [deps.JSON3.extensions]
-    JSON3ArrowExt = ["ArrowTypes"]
-
-    [deps.JSON3.weakdeps]
-    ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
-
-[[deps.LibGit2]]
-deps = ["Base64", "LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
-uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
-version = "1.11.0"
-
-[[deps.LibGit2_jll]]
-deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll"]
-uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
-version = "1.7.2+0"
-
-[[deps.LibSSH2_jll]]
-deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
-uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.11.0+1"
-
-[[deps.Libdl]]
-uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
-version = "1.11.0"
-
-[[deps.LinearAlgebra]]
-deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
-uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-version = "1.11.0"
-
-[[deps.LogExpFunctions]]
-deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "13ca9e2586b89836fd20cccf56e57e2b9ae7f38f"
-uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.29"
-
-    [deps.LogExpFunctions.extensions]
-    LogExpFunctionsChainRulesCoreExt = "ChainRulesCore"
-    LogExpFunctionsChangesOfVariablesExt = "ChangesOfVariables"
-    LogExpFunctionsInverseFunctionsExt = "InverseFunctions"
-
-    [deps.LogExpFunctions.weakdeps]
-    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-    ChangesOfVariables = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
-    InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
-
-[[deps.Logging]]
-uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
-version = "1.11.0"
-
-[[deps.LoggingExtras]]
-deps = ["Dates", "Logging"]
-git-tree-sha1 = "f02b56007b064fbfddb4c9cd60161b6dd0f40df3"
-uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
-version = "1.1.0"
-
-[[deps.Markdown]]
-deps = ["Base64"]
-uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
-version = "1.11.0"
-
-[[deps.MbedTLS]]
-deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "NetworkOptions", "Random", "Sockets"]
-git-tree-sha1 = "c067a280ddc25f196b5e7df3877c6b226d390aaf"
-uuid = "739be429-bea8-5141-9913-cc70e7f3736d"
-version = "1.1.9"
-
-[[deps.MbedTLS_jll]]
-deps = ["Artifacts", "Libdl"]
-uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.28.6+0"
-
-[[deps.Missings]]
-deps = ["DataAPI"]
-git-tree-sha1 = "ec4f7fbeab05d7747bdf98eb74d130a2a2ed298d"
-uuid = "e1d29d7a-bbdc-5cf2-9ac0-f12de2c33e28"
-version = "1.2.0"
-
-[[deps.Mmap]]
-uuid = "a63ad114-7e13-5084-954f-fe012c677804"
-version = "1.11.0"
-
-[[deps.MozillaCACerts_jll]]
-uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2023.12.12"
-
-[[deps.NetworkOptions]]
-uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
-version = "1.2.0"
-
-[[deps.OpenBLAS_jll]]
-deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
-uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.27+1"
-
-[[deps.OpenSSL]]
-deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
-git-tree-sha1 = "38cb508d080d21dc1128f7fb04f20387ed4c0af4"
-uuid = "4d8831e6-92b7-49fb-bdf8-b643e874388c"
-version = "1.4.3"
-
-[[deps.OpenSSL_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "f58782a883ecbf9fb48dcd363f9ccd65f36c23a8"
-uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.0.15+2"
-
-[[deps.OrderedCollections]]
-git-tree-sha1 = "12f1439c4f986bb868acda6ea33ebc78e19b95ad"
-uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-version = "1.7.0"
-
-[[deps.Parsers]]
-deps = ["Dates", "PrecompileTools", "UUIDs"]
-git-tree-sha1 = "8489905bcdbcfac64d1daa51ca07c0d8f0283821"
-uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.8.1"
-
-[[deps.PrecompileTools]]
-deps = ["Preferences"]
-git-tree-sha1 = "5aa36f7049a63a1528fe8f7c3f2113413ffd4e1f"
-uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
-version = "1.2.1"
-
-[[deps.Preferences]]
-deps = ["TOML"]
-git-tree-sha1 = "9306f6085165d270f7e3db02af26a400d580f5c6"
-uuid = "21216c6a-2e73-6563-6e65-726566657250"
-version = "1.4.3"
-
-[[deps.Printf]]
-deps = ["Unicode"]
-uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
-version = "1.11.0"
-
-[[deps.PtrArrays]]
-git-tree-sha1 = "77a42d78b6a92df47ab37e177b2deac405e1c88f"
-uuid = "43287f4e-b6f4-7ad1-bb20-aadabca52c3d"
-version = "1.2.1"
-
-[[deps.Random]]
-deps = ["SHA"]
-uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-version = "1.11.0"
-
-[[deps.SHA]]
-uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
-version = "0.7.0"
-
-[[deps.Serialization]]
-uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
-version = "1.11.0"
-
-[[deps.SimpleBufferStream]]
-git-tree-sha1 = "f305871d2f381d21527c770d4788c06c097c9bc1"
-uuid = "777ac1f9-54b0-4bf8-805c-2214025038e7"
-version = "1.2.0"
-
-[[deps.Sockets]]
-uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
-version = "1.11.0"
-
-[[deps.SortingAlgorithms]]
-deps = ["DataStructures"]
-git-tree-sha1 = "66e0a8e672a0bdfca2c3f5937efb8538b9ddc085"
-uuid = "a2af1166-a08f-5f64-846c-94a0d3cef48c"
-version = "1.2.1"
-
-[[deps.SparseArrays]]
-deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
-uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-version = "1.11.0"
-
-[[deps.Statistics]]
-deps = ["LinearAlgebra"]
-git-tree-sha1 = "ae3bb1eb3bba077cd276bc5cfc337cc65c3075c0"
-uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-version = "1.11.1"
-weakdeps = ["SparseArrays"]
-
-    [deps.Statistics.extensions]
-    SparseArraysExt = ["SparseArrays"]
-
-[[deps.StatsAPI]]
-deps = ["LinearAlgebra"]
-git-tree-sha1 = "1ff449ad350c9c4cbc756624d6f8a8c3ef56d3ed"
-uuid = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
-version = "1.7.0"
-
-[[deps.StatsBase]]
-deps = ["AliasTables", "DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "29321314c920c26684834965ec2ce0dacc9cf8e5"
-uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-version = "0.34.4"
-
-[[deps.StructTypes]]
-deps = ["Dates", "UUIDs"]
-git-tree-sha1 = "159331b30e94d7b11379037feeb9b690950cace8"
-uuid = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
-version = "1.11.0"
-
-[[deps.SuiteSparse_jll]]
-deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
-uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "7.7.0+0"
-
-[[deps.TOML]]
-deps = ["Dates"]
-uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
-version = "1.0.3"
-
-[[deps.Test]]
-deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
-uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-version = "1.11.0"
-
-[[deps.TranscodingStreams]]
-git-tree-sha1 = "0c45878dcfdcfa8480052b6ab162cdd138781742"
-uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.11.3"
-
-[[deps.URIs]]
-git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
-uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
-version = "1.5.1"
-
-[[deps.UUIDs]]
-deps = ["Random", "SHA"]
-uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
-version = "1.11.0"
-
-[[deps.Unicode]]
-uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
-version = "1.11.0"
-
-[[deps.Zlib_jll]]
-deps = ["Libdl"]
-uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.2.13+1"
-
-[[deps.libblastrampoline_jll]]
-deps = ["Artifacts", "Libdl"]
-uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.11.0+0"
-"""
-
 # ╔═╡ Cell order:
 # ╠═69c4770e-1091-4744-950c-ed23deb55661
-# ╠═6f0ad323-1776-4efd-bf1e-667e8a834f41
-# ╠═e68b41fc-cbf5-477f-b211-2462d835def0
-# ╠═c2797a4c-81d3-4409-9038-117fe50540a8
-# ╠═13cb8a74-8f5e-48eb-89c6-f7429d616fb9
-# ╠═70ecd4ed-cbb1-4ebd-85a8-42f7b072bee3
-# ╠═bd7e7cdd-878e-475e-b2bb-b00c636ff26a
-# ╠═d489db2d-3e73-44bd-aeb6-bfe17775d20c
+# ╠═c2e0d024-d34f-45b2-a668-8d31de12757c
 # ╠═f6dc2723-ab4a-42fc-855e-d74915b4dcbf
 # ╠═43f89626-8583-11ed-2b3d-b118ff996f37
 # ╠═20bc797e-c99b-417d-8921-9b95c8e21679
@@ -4648,7 +4387,7 @@ version = "5.11.0+0"
 # ╟─f1949d12-86eb-4236-b887-b750916d3493
 # ╟─bc19e42a-fc82-4191-bca5-09622198d102
 # ╟─e0368e81-fb5a-4dc4-aebb-130c7fd0a123
-# ╟─57153574-e5ca-4167-814e-2d176baa0de9
+# ╠═57153574-e5ca-4167-814e-2d176baa0de9
 # ╟─1fe8a98e-6dc6-466e-9bc9-406c416d8076
 # ╟─156c508f-2026-4619-9632-d679ca2cae50
 # ╟─823ce280-15c4-410f-8216-efad03897282
@@ -4666,13 +4405,28 @@ version = "5.11.0+0"
 # ╟─466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
+# ╠═3eb3a140-0065-447a-a95a-5b919868098d
+# ╠═00094688-1b11-448c-9b09-4f2423cdcec1
 # ╠═691404a6-53bc-4340-a750-636fe219f633
 # ╠═1160c8c0-8a90-4c89-898f-328749611a76
 # ╟─91c35ba0-729e-4ea9-8848-3887936a8a21
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
+# ╠═7042a7f7-e130-4601-a5f9-1e486da36a9e
+# ╠═a80e69bc-ea79-4ba0-898d-5989dc754a2e
+# ╠═c0b2b18a-f023-42e8-98df-f2fa45b618f8
+# ╠═c517cc4e-b605-4a2b-a445-993b82dacf9f
 # ╠═721547b0-7be1-41d6-bffe-cb82a5c294cd
+# ╠═ba840e33-9e18-478b-9d51-aa196e7bf75e
+# ╠═9a9ded0d-cfd8-4b2f-a849-6a30bcccef9d
+# ╠═70b479c1-9613-4b8c-a325-b09aab0211f7
+# ╠═046d983f-5b37-44ed-8ec8-ef9e53feca4d
+# ╠═2fac931f-5e0d-4525-adc4-62e88a2fbb2d
+# ╠═cdba6c7c-13d1-45d4-9fa6-52c8b05ecfc7
+# ╠═15704701-8faa-4212-a506-1f4d7ec15a9e
+# ╠═f936af7d-c2a6-47c0-9e14-eae6b934ee1e
 # ╟─7c026677-5c44-4a12-99a4-2d1228e31795
 # ╟─5ff005dd-2347-4dc3-a24f-42cb576822fc
+# ╟─80fcd730-a945-4057-9617-de88425128fe
 # ╟─b1e9aafc-6473-4114-a5d5-b0c3114eab7d
 # ╟─d5239071-d71a-4e56-a938-5051e23a07de
 # ╟─5e5366a9-3086-4210-a037-c56e1374a686
@@ -4682,6 +4436,8 @@ version = "5.11.0+0"
 # ╟─064496dc-4e23-4242-9e25-a41ddbaf59d1
 # ╟─28ee9310-9b7d-4169-bae4-615e4b2c386e
 # ╟─a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
+# ╠═b1b9e9fb-ce76-462a-9c12-fdfe3dd6433d
+# ╠═cc1a5948-d6d5-4b9e-8731-85b7eb7e601d
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╟─ca346015-b2c9-45da-8c1e-17493274aca2
@@ -4709,7 +4465,7 @@ version = "5.11.0+0"
 # ╟─67322d28-5f9e-43da-90a0-2e517b003b58
 # ╟─f1c0e395-1b22-4e68-8d2d-49d6fc71e7d9
 # ╟─c38bfef9-2e3a-4042-8bd0-05f1e1bcc10b
-# ╠═20a8fbe0-5840-4a70-be33-b4103df291a1
+# ╟─20a8fbe0-5840-4a70-be33-b4103df291a1
 # ╟─59efcc6c-7ec7-4ac7-8510-ae9257d0ff23
 # ╟─d4e9c5b2-4eb5-44a5-a221-399d77b50db3
 # ╟─cb8ffb39-073d-4f2b-9df4-53febcf3ca99
@@ -4726,5 +4482,3 @@ version = "5.11.0+0"
 # ╟─e6cc0cf6-617a-4231-826d-63f36d6136a5
 # ╟─cd06cad4-4b47-48dd-913f-61028ebe8cb3
 # ╠═24185d12-d29c-4e72-a1de-a28319b4d369
-# ╟─00000000-0000-0000-0000-000000000001
-# ╟─00000000-0000-0000-0000-000000000002
