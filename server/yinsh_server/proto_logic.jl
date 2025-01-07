@@ -1613,12 +1613,10 @@ function save_newGame!(new_game_details)
 	try
 		lock(games_lock)
 			setindex!(games_log_dict, new_game_details, new_game_details[:identity][:game_id])
-		@info "setter > new game data saved"
 	catch e 
 		e |> throw
 	finally
 		unlock(games_lock)
-		@info "setter > lock released"
 	end
 
 end
@@ -1670,7 +1668,7 @@ function start_locks_watchdog()
 				_error_msg |> error
 			end
 			
-			sleep(5) # re-checks every 5 sec
+			sleep(10) # re-checks every 10 sec
 		end
 			
 	catch e
@@ -1793,7 +1791,7 @@ function _mem_cleanup!(force = false) # called by game_runner
     if force || (time_diff > __cleanup_interval || mem_limit_hit)
 
 		_mem_log = "> MEM CLEANUP | free: $free_mb MB [$(free_mem_p) %] | last run: $(time_diff |> canonicalize) ago"
-		@info _mem_log # comment out for deployment
+		@info _mem_log
 
 		# games log 
 		try 
@@ -1892,8 +1890,6 @@ end
 function msg_dispatcher(ws, msg_id, msg_code, payload = Dict{Symbol, Any}(), ok_status::Bool = true)
 
 	try 
-
-		@info "dispatching response for $msg_id"
 
 		# copy response payload
 		# need to do a comprehension so we have a separate copy + general type
@@ -3032,7 +3028,6 @@ function gen_newGame(vs_server = false, random_rings = true, player_color = "ran
 # initializes new game, saves data server-side and returns object for client
 
 try 
-	@info "generating new game"
 	
 	# generate random game identifier (only uppercase letters)
 	game_id = randstring(['A':'Z'; '0':'9'], 6)
@@ -3079,10 +3074,7 @@ try
 
 	_ring_setup_spots = random_rings ? [] : (valid_empty_locs(gs) |> reshape_out)
 	
-	
-	
 	### package data for server storage
-	@info "pkg game data"
 
 		# game identity
 		_identity = Dict(:game_id => game_id,
@@ -3133,7 +3125,6 @@ try
 
 		
 	### saves game to general log (DB?)
-	@info "save game data"
 	save_newGame!(new_game_data)
 
 	@info "LOG - New game initialized - Game ID $game_id"
@@ -3185,29 +3176,22 @@ function fn_new_game_vs_server(ws, msg)
 
 	try 
 
-		@info "new game vs AI"
-	
 		# handle game settings/preferences in msg payload
 		_random_rings = msg[:payload][:random_rings] # true (random) | false (manual)
 		_player_color = msg[:payload][:player_color] # random | black | white
 		
 		# generate and store new game data
 		_new_game_id = gen_newGame(true, _random_rings, _player_color) 
-
-		@info _new_game_id
-		@info "about to update handler"
 	
 		# save ws handler for originating player
 		update_ws_handler!(_new_game_id, ws, true)
 	
 		# retrieve payload
-		@info "retrieving payload"
 		new_game_data = getLast_clientPkg(_new_game_id)
 	
 		_other_pld = Dict() # empty payload for other
 	
 		# return payload - requester, other
-		@info "returning payloads"
 		return new_game_data, _other_pld
 
 	catch e
@@ -4117,8 +4101,6 @@ function msg_handler(ws, msg)
 # handles messages depending on their code
 # every incoming message should have an id and code - if they're missing, throw error
 
-	@info "received new msg $(msg[:msg_code])"
-
 	# try retrieving specific values (msg header)
 	_msg_id = get(msg, :msg_id, nothing)
 	_msg_code = get(msg, :msg_code, nothing)
@@ -4221,7 +4203,6 @@ function start_ws_server()
 			# set aside msg handler task
 			lock(handler_task_array_lock)
 				push!(handler_task_array, msg_handler_task)
-				@info "msg handler task saved"
 			unlock(handler_task_array_lock)
 		end
 		

@@ -32,33 +32,35 @@ The game can be played against the server, or in two-players mode:
 &nbsp;
 
 ### Technical bits
-I built this version from scratch, using:
+I've built it using:
 - JavaScript and the Canvas API for the game interface
 - SolidJS for the navigation UI
 - Julia for everything that runs server-side, including the adversarial 'AI': a minimax heuristic at depth-2
 - Deployed using Docker, behind Cloudflare, at [yinsh.net](https://yinsh.net/)
 
-&nbsp;
 
 ### Improvement ideas
 - Add support for touch events (enable to play on tablets)
-- Make use of a database server-side (Redis?)
+- Make use of a (low-latency) database server-side (Redis/RocksDB?)
 - Add a join by invite link functionality
-- Allow users to place their own rings at the beginning (now random)
 - Replay/navigate game history in client 
-- Make a mobile version (?)
+- Make a mobile/tablet/app version
 - Performance optimizations in server play
 - Make anything exchanged with the client a parameter (eg. ids of markers/players/rings)
 - Cleaner implementation of game_runner function
+- Simplify state handling in interaction code
 - Adding quick game option (first to score wins)
-- Dark mode?
-- Ability for originating player to configure game (pick color, game mode)
-- Got any? Feel free to share it, just open an issue on this repo!
+- Dark mode
+- Play with strangers / match-making
+- New end-game animations
+- Smarter adversarial AI
+- Got any? Feel free to share, just open an issue on this repo!
 
 &nbsp;
 
 ### Credits
 - Sounds (CC0 licensed) sourced from [freesound](https://freesound.org/)
+- (some) icons (CC0 licensed) sourced from [SVGrepo](https://www.svgrepo.com/)
 - Julia [repo](https://github.com/JuliaLang/julia)
 - Pluto.jl [repo](https://github.com/fonsp/Pluto.jl)
 - HTTP.jl [repo](https://github.com/JuliaWeb/HTTP.jl)

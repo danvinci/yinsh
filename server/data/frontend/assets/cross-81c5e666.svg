@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+
+<svg
+   fill="#000000"
+   height="64px"
+   width="64px"
+   version="1.1"
+   viewBox="0 0 100 100"
+   xml:space="preserve"
+   id="svg6"
+   sodipodi:docname="cross.svg"
+   inkscape:version="1.4 (e7c3feb1, 2024-10-09)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"><defs
+   id="defs6" /><sodipodi:namedview
+   id="namedview6"
+   pagecolor="#ffffff"
+   bordercolor="#000000"
+   borderopacity="0.25"
+   inkscape:showpageshadow="2"
+   inkscape:pageopacity="0.0"
+   inkscape:pagecheckerboard="0"
+   inkscape:deskcolor="#d1d1d1"
+   inkscape:zoom="9.9889022"
+   inkscape:cx="30.133441"
+   inkscape:cy="30.48383"
+   inkscape:window-width="1640"
+   inkscape:window-height="1004"
+   inkscape:window-x="149"
+   inkscape:window-y="25"
+   inkscape:window-maximized="0"
+   inkscape:current-layer="turf-along" />
+
+<g
+   id="SVGRepo_bgCarrier"
+   stroke-width="0" />
+
+<g
+   id="SVGRepo_tracerCarrier"
+   stroke-linecap="round"
+   stroke-linejoin="round" />
+
+<g
+   id="SVGRepo_iconCarrier"> <g
+   id="turf-along">        <path
+   id="rect9"
+   style="fill:#000000;fill-opacity:1;stroke-width:80.9704"
+   d="M 36.499023 53.839111 L 11.129761 68.484497 L 11.129761 75.3479 L 39.300537 59.088135 A 14.068954 14.068954 0 0 1 38.476562 58.068848 A 14.068954 14.068954 0 0 1 36.499023 53.839111 z " /><path
+   id="rect10"
+   style="fill:#000000;fill-opacity:1;stroke-width:80.9704"
+   d="M 88.870239 23.602295 L 60.089111 40.216064 A 14.068954 14.068954 0 0 1 61.523438 41.931152 A 14.068954 14.068954 0 0 1 63.241577 45.26062 L 88.870239 30.465698 L 88.870239 23.602295 z " /><path
+   id="path22"
+   style="fill:#000000;fill-opacity:1;stroke-width:80.9704"
+   d="M 63.598633 53.598022 A 14.068954 14.068954 0 0 1 60.891724 58.898926 L 88.870239 75.05188 L 88.870239 68.188477 L 63.598633 53.598022 z " /><path
+   id="path23"
+   style="fill:#000000;fill-opacity:1;stroke-width:80.9704"
+   d="M 11.129761 23.306274 L 11.129761 30.169678 L 36.862183 45.028687 A 14.068954 14.068954 0 0 1 40.103149 40.029907 L 11.129761 23.306274 z " /></g> <g
+   id="Layer_1"> </g> </g>
+
+</svg>
