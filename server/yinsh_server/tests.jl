@@ -47,8 +47,9 @@ md"## Server connection"
 begin
 	
 	# ip and port to use for the server
-	const ws_ip = "0.0.0.0" # listen on every ip / host ip
-	const ws_port = 6091 # local dev game server
+	const ws_ip = "localhost" # listen on every ip / host ip
+	const ws_port = 80 # local dev game server - 6091 (pluto/vscode) vs 80 (docker)
+	const ws_url = "/api" # /api (docker) '' (pluto/vscode)
 end
 
 # ╔═╡ ae3a9096-f868-4649-ae63-efde9cbef423
@@ -306,7 +307,7 @@ ws_task = @spawn begin
 
 	try
 
-		WebSockets.open("ws://$ws_ip:$ws_port"; idle_timeout_enabled = false) do ws 
+		WebSockets.open("ws://$ws_ip:$ws_port$ws_url"; idle_timeout_enabled = false) do ws 
 
 			# listener task definition
 			function init_listener(ws, receive_ch)
@@ -401,7 +402,7 @@ function SRV_req_new_game_vs_server(p::Player)
 # assumes the player already has an open connection
 
 	req_msg = Dict( :msg_code => CODE_new_game_server, 
-					:payload => Dict(:random_rings => true))
+					:payload => Dict(:random_rings => true, :player_color => "random"))
 
 	put!(p.send_channel, req_msg)
 
@@ -1395,7 +1396,7 @@ version = "17.4.0+2"
 # ╟─76a92456-f985-4b1e-9821-20b54fe1d073
 # ╟─4c7739b2-cf0a-4350-a049-f87875aa793e
 # ╠═379f96f4-3f11-40b2-98ed-0c11a489c3fd
-# ╟─999d80ad-8800-4906-bed7-d8eeec15d53e
+# ╠═999d80ad-8800-4906-bed7-d8eeec15d53e
 # ╟─c191aace-4ee0-4ee9-a45d-cdb226413a76
 # ╟─3e2b416c-1e41-4d4b-911c-ccb9413b4823
 # ╠═39daeffb-2da6-484e-8ac2-90f701832898

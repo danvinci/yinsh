@@ -1471,7 +1471,7 @@ function getLast_clientPkg(game_id)
 
 	try
 		_client_packages = games_log_dict[game_id][:client_pkgs][end]
-		println("LOG - Game data pkg retrieved - Game ID: $game_id")
+		@info "LOG - Game data pkg retrieved - Game ID: $game_id"
 
 		return _client_packages
 	
@@ -1489,7 +1489,7 @@ function getLast_clientDelta(game_id)
 	try
 
 		_client_delta = games_log_dict[game_id][:client_delta][end]
-		println("LOG - Game data client delta retrieved - Game ID: $game_id")
+		@info "LOG - Game data client delta retrieved - Game ID: $game_id"
 
 		return _client_delta
 	
@@ -1559,6 +1559,29 @@ function initRand_ringsLoc()
 	
 end
 
+# ╔═╡ 617f414a-f8c1-443e-bdd5-d17d92557a7d
+begin
+	# used by _mem_cleanup! fn
+	const __last_cleanup = [now()]
+	const __cleanup_interval = Hour(2)
+	const __mem_thresh::Float64 = 0.03 # % of free memory over total
+end
+
+# ╔═╡ 69152551-c381-42f0-9ef6-a1c4ea969b34
+function _sys_mem_check(limit::Float64) 
+# as of percentage of total memory
+	
+	tot = Base.Sys.total_memory()
+	free = Base.Sys.free_memory()
+	
+	_free_mem_ratio = free/tot
+	_free_below_limit = (_free_mem_ratio <= limit) ? true : false
+	_free_mb = free / 1024^2
+
+	return round(Int, _free_mb), round(_free_mem_ratio*100, digits=2), _free_below_limit
+
+end
+
 # ╔═╡ b170050e-cb51-47ec-9870-909ec141dc3d
 md"### Running websocket server"
 
@@ -1577,10 +1600,10 @@ const handler_task_array = Task[];
 const handler_task_array_lock = ReentrantLock();
 
 # ╔═╡ 691404a6-53bc-4340-a750-636fe219f633
-const msg_lock = ReentrantLock()
+const msg_lock = ReentrantLock(); 
 
 # ╔═╡ 1160c8c0-8a90-4c89-898f-328749611a76
-const games_lock = ReentrantLock()
+const games_lock = ReentrantLock(); 
 
 # ╔═╡ 57153574-e5ca-4167-814e-2d176baa0de9
 function save_newGame!(new_game_details)
@@ -1617,6 +1640,9 @@ function save_new_clientPkg!(game_id, _client_pkg)
 
 end
 
+# ╔═╡ 279c87c4-f965-44ac-bd86-d45088166afa
+const locks_watchdog = Task[]; 
+
 # ╔═╡ 0bb77295-be29-4b50-bff8-f712ebe08197
 begin
 	
@@ -1626,48 +1652,44 @@ begin
 
 end
 
-# ╔═╡ 7042a7f7-e130-4601-a5f9-1e486da36a9e
-ws_msg_log
+# ╔═╡ dfcd4ee6-8242-48a8-b2c0-99386739cf2d
+function start_locks_watchdog()
 
-# ╔═╡ a80e69bc-ea79-4ba0-898d-5989dc754a2e
-games_lock
+	locks_watchdog_task = @spawn try 
 
-# ╔═╡ c0b2b18a-f023-42e8-98df-f2fa45b618f8
-handler_task_array
+		while true
 
-# ╔═╡ c517cc4e-b605-4a2b-a445-993b82dacf9f
+			_gs_locked = !isnothing(games_lock.locked_by)
+			_msg_locked = !isnothing(msg_lock.locked_by)
+			_msg_handler_locked = !isnothing(handler_task_array_lock.locked_by)
+			
 
-
-# ╔═╡ ba840e33-9e18-478b-9d51-aa196e7bf75e
-ws_array
-
-# ╔═╡ 9a9ded0d-cfd8-4b2f-a849-6a30bcccef9d
-games_log_dict["RQSU9J"]
-
-# ╔═╡ 046d983f-5b37-44ed-8ec8-ef9e53feca4d
-games_lock
-
-# ╔═╡ 2fac931f-5e0d-4525-adc4-62e88a2fbb2d
-send(games_log_dict["2JCUMJ"][:ws_connections][:join_player_ws], "hello")
-
-# ╔═╡ cdba6c7c-13d1-45d4-9fa6-52c8b05ecfc7
-msg_lock
-
-# ╔═╡ 15704701-8faa-4212-a506-1f4d7ec15a9e
-games_lock
-
-# ╔═╡ f936af7d-c2a6-47c0-9e14-eae6b934ee1e
-ws_msg_log
-
-# ╔═╡ 7c026677-5c44-4a12-99a4-2d1228e31795
-function terminate_active_ws!()
-
-	for ws in filter(ws -> !istaskdone(ws.task) || !isempty(ws.connections) || isopen(ws.listener.server), ws_array)
-		HTTP.forceclose(ws)
-		_num_conn = ws.connections |> length
-		@warn "WARNING - terminating ws server: $(ws.task) - $_num_conn connections"
+			if _gs_locked || _msg_locked || _msg_handler_locked
+				_error_msg = "ERROR - sustained lock detected"
+				@error _error_msg
+				_error_msg |> error
+			end
+			
+			sleep(5) # re-checks every 5 sec
+		end
+			
+	catch e
+		if isa(e, InterruptException)
+			@warn "LOG - locks watchdog terminated"
+		else
+			e |> throw
+			return
+		end
 	end
+    
+    # save watchdog task reference
+	@info "LOG - New locks watchdog started: $locks_watchdog_task"
+    push!(locks_watchdog, locks_watchdog_task)
+
 end
+
+# ╔═╡ 9b726652-e1df-4c9e-b159-afbf74d9e97b
+start_locks_watchdog()
 
 # ╔═╡ 5ff005dd-2347-4dc3-a24f-42cb576822fc
 function terminate_active_watchdog!()
@@ -1678,6 +1700,28 @@ function terminate_active_watchdog!()
 			@warn "WARNING - terminating ws watchdog: $task"
 		end
 	end
+end
+
+# ╔═╡ 7c026677-5c44-4a12-99a4-2d1228e31795
+function terminate_active_ws!()
+
+	try
+		_terminated = Int[]
+		for (i, ws) in enumerate(filter(ws -> !istaskdone(ws.task) || !isempty(ws.connections) || isopen(ws.listener.server), ws_array))
+			HTTP.forceclose(ws)
+			push!(_terminated, i)
+			_num_conn = ws.connections |> length
+			@warn "WARNING - terminating ws server: $(ws.task) - $_num_conn connections"
+		end
+
+		# clean up
+		foreach(i -> deleteat!(ws_array, i), _terminated)
+		
+	catch e
+		@error "ERROR - terminating ws server tasks, $e"
+		e |> throw
+	end
+
 end
 
 # ╔═╡ 80fcd730-a945-4057-9617-de88425128fe
@@ -1695,9 +1739,7 @@ function terminate_msg_handlers!()
 		end
 
 		# clean up
-		for i in _terminated
-			deleteat!(handler_task_array, i)
-		end
+		foreach(i -> deleteat!(handler_task_array, i), _terminated)
 
 	catch e
 		@error "ERROR - terminating msg handler tasks, $e"
@@ -1739,6 +1781,55 @@ begin
 	# keys to access specific values
 	const key_nextActionCode = :next_action_code
 	
+end
+
+# ╔═╡ 61d75e9e-b2d3-4551-947b-e8acc11e2eeb
+function _mem_cleanup!(force = false) # called by game_runner
+
+	free_mb, free_mem_p, mem_limit_hit = _sys_mem_check(__mem_thresh)
+	time_diff = now() - __last_cleanup[1]
+
+	
+    if force || (time_diff > __cleanup_interval || mem_limit_hit)
+
+		_mem_log = "> MEM CLEANUP | free: $free_mb MB [$(free_mem_p) %] | last run: $(time_diff |> canonicalize) ago"
+		@info _mem_log # comment out for deployment
+
+		# games log 
+		try 
+			lock(games_lock)
+			
+			# -> delete completed games older than 1hr
+			g_ids_done = [ 	k for (k,v) in games_log_dict if 
+							v[:identity][:status] == GS_completed && 
+							v[:identity][:end_dateTime] <= (now() - Hour(1)) ]
+	
+			# -> delete games older than a week, regardless of status
+			g_ids_zombie = [k for (k,v) in games_log_dict if 
+							v[:identity][:init_dateTime] <= (now() - Day(7)) ]
+	
+			foreach(k -> delete!(games_log_dict, k), union(g_ids_done, g_ids_zombie))
+
+		catch e 
+			@error "ERROR - mem cleanup, $e"
+			e |> throw
+		finally
+			unlock(games_lock)
+		end
+
+		# wipe messages logs
+		lock(msg_lock)
+			ws_msg_log |> empty!
+			ws_msg_log_raw |> empty!
+		unlock(msg_lock)
+
+		# run garbage collector	
+		GC.gc(true)
+
+		# log last cleanup run time
+		global __last_cleanup[1] = now() # log 
+		
+    end
 end
 
 # ╔═╡ ca522939-422f-482a-8658-452790c463f6
@@ -1784,7 +1875,7 @@ function update_ws_handler!(game_id::String, ws, is_orig_player::Bool)
 		lock(games_lock)
 			games_log_dict[game_id][:ws_connections][_dict_key] = ws
 
-			println("LOG - WS handler updated for $_dict_key")
+			@info "LOG - ws handler updated for $_dict_key"
 	
 	catch e
 		@error "ERROR retrieving game data when updating WS handler, $e"
@@ -1839,9 +1930,6 @@ function msg_dispatcher(ws, msg_id, msg_code, payload = Dict{Symbol, Any}(), ok_
 
 end
 
-# ╔═╡ cc1a5948-d6d5-4b9e-8731-85b7eb7e601d
-ws_msg_log
-
 # ╔═╡ ac87a771-1d91-4ade-ad39-271205c1e16e
 function fn_join_game(ws, msg)
 # human client asking to join existing code via game code
@@ -1863,80 +1951,6 @@ function fn_join_game(ws, msg)
 		@error "ERROR - join game, $e"
 		throw(e)
 	end
-
-end
-
-# ╔═╡ 69152551-c381-42f0-9ef6-a1c4ea969b34
-function _sys_mem_check(limit::Float64) 
-# as of percentage of total memory
-	
-	tot = Base.Sys.total_memory()
-	free = Base.Sys.free_memory()
-	
-	_free_mem_ratio = free/tot
-	_free_below_limit = (_free_mem_ratio <= limit) ? true : false
-	_free_mb = free / 1024^2
-
-	return round(Int, _free_mb), round(_free_mem_ratio*100, digits=2), _free_below_limit
-
-end
-
-# ╔═╡ 61d75e9e-b2d3-4551-947b-e8acc11e2eeb
-begin
-
-const __last_cleanup = [now()]
-const __cleanup_interval = Hour(2)
-const __mem_thresh::Float64 = 0.04 # % of free memory over total
-
-
-function _mem_cleanup!(force = false) # called by game_runner
-
-	free_mb, free_mem_p, mem_limit_hit = _sys_mem_check(__mem_thresh)
-	time_diff = now() - __last_cleanup[1]
-
-	
-    if force || (time_diff > __cleanup_interval || mem_limit_hit)
-
-		_mem_log = "> MEM CLEANUP | free: $free_mb MB [$(free_mem_p) %] | last run: $(time_diff |> canonicalize) ago"
-		println(_mem_log)
-		@info _mem_log # comment out for deployment
-
-		# games log 
-		try 
-			lock(games_lock)
-			
-			# -> delete completed games older than 1hr
-			g_ids_done = [ 	k for (k,v) in games_log_dict if 
-							v[:identity][:status] == GS_completed && 
-							v[:identity][:end_dateTime] <= (now() - Hour(1)) ]
-	
-			# -> delete games older than a week, regardless of status
-			g_ids_zombie = [k for (k,v) in games_log_dict if 
-							v[:identity][:init_dateTime] <= (now() - Day(7)) ]
-	
-			foreach(k -> delete!(games_log_dict, k), union(g_ids_done, g_ids_zombie))
-
-		catch e 
-			@error "ERROR - mem cleanup, $e"
-			e |> throw
-		finally
-			unlock(games_lock)
-		end
-
-		# wipe messages logs
-		lock(msg_lock)
-			ws_msg_log |> empty!
-			ws_msg_log_raw |> empty!
-		unlock(msg_lock)
-
-		# run garbage collector	
-		GC.gc(true)
-
-		# log last cleanup run time
-		global __last_cleanup[1] = now() # log 
-		
-    end
-end
 
 end
 
@@ -1995,9 +2009,6 @@ function get_ws_handler(game_id::String, _is_originator::Bool)
 
 end
 
-# ╔═╡ 70b479c1-9613-4b8c-a325-b09aab0211f7
-get_ws_handler("RQSU9J", true)
-
 # ╔═╡ b5c7295e-c464-4f57-8556-c36b9a5df6ca
 function set_turn_closed!(game_code::String, turn_no::Int)
 
@@ -2029,7 +2040,7 @@ function advance_turn!(game_code::String, completed_turn_no::Int)::Dict
 
 	if _current_turn_no != completed_turn_no
 
-		error("ERROR - fn advance_turn - current and completed turn don't match")
+		@error "ERROR - fn advance_turn - current and completed turn don't match"
 
 	else
 
@@ -2088,8 +2099,8 @@ function is_game_vs_ai(game_id::String)::Bool
 	
 	try
 		return games_log_dict[game_id][:identity][:game_type] == :h_vs_ai
-	catch
-		println("ERROR in is_game_vs_ai check: game code $game_id not found")
+	catch e
+		@error "ERROR in is_game_vs_ai check: game code $game_id not found, $e"
 		return false
 	end
 
@@ -2101,8 +2112,9 @@ function is_rings_setup_random(game_id::String)::Bool
 	
 	try
 		return games_log_dict[game_id][:identity][:random_rings] # true/false
-	catch
-		error("ERROR in is_game_vs_ai check: game code $game_id not found") |> throw
+	catch e
+		@error "ERROR in is_game_vs_ai check: game code $game_id not found, $e"
+		e |> throw
 	end
 
 end
@@ -2213,7 +2225,7 @@ function edit_player_score!(game_id::String, player_id::String, new_score::Int)
 			return games_log_dict[game_id][:players][key]
 	
 	catch e
-		error("ERROR - while increasing $player_id score for game $game_id $e")
+		@error "ERROR - while increasing $player_id score for game $game_id, $e"
 	finally
 		unlock(games_lock)
 	end
@@ -2269,7 +2281,7 @@ function set_gameStatus!(game_id::String, status::Symbol)
 		try
 			lock(games_lock)
 				games_log_dict[game_id][:identity][:status] = status
-				println("Game $game_id -> $(status)")
+				@info "Game $game_id -> $(status)"
 		catch e 
 			e |> throw
 		finally 
@@ -2475,7 +2487,7 @@ function get_first_maxL(set::Set)
 		fm_id = findfirst( v -> length(v) == maximum(vec .|> length), vec)
 		return @inbounds vec[fm_id]
 	else
-		error("ERROR - get_first_maxL expects a non-empty input")
+		@error "ERROR - get_first_maxL expects a non-empty input"
 	end
 
 end
@@ -2488,7 +2500,7 @@ function get_first_maxL(vec::Vector)
 		fm_id = findfirst( v -> length(v) == maximum(vec .|> length), vec)
 		return @inbounds vec[fm_id]
 	else
-		error("ERROR - get_first_maxL expects a non-empty input")
+		@error "ERROR - get_first_maxL expects a non-empty input"
 	end
 
 end
@@ -2518,7 +2530,7 @@ function get_hScoring_sc(tree, ref_sc)::Dict{Symbol, CartesianIndex}
 		return ref_sc[h_sc_index]
 
 	catch e
-		@error("ERROR in get_hScoring_sc, no scenario found, $e")
+		@error "ERROR in get_hScoring_sc, no scenario found, $e"
 		e |> throw
 	end
 
@@ -3125,7 +3137,6 @@ try
 	save_newGame!(new_game_data)
 
 	@info "LOG - New game initialized - Game ID $game_id"
-	println("LOG - New game initialized - Game ID $game_id")
 	return game_id
 
 
@@ -3167,9 +3178,6 @@ function fn_new_game_vs_human(ws, msg)
 	end
 
 end
-
-# ╔═╡ b1b9e9fb-ce76-462a-9c12-fdfe3dd6433d
-gen_newGame()
 
 # ╔═╡ 32307f96-6503-4dbc-bf5e-49cf253fbfb2
 function fn_new_game_vs_server(ws, msg)
@@ -3273,7 +3281,7 @@ function gen_new_clientPkg(game_id::String, nx_player_id::String)
 	save_new_clientPkg!(game_id, _cli_pkg)
 
 
-	println("LOG - New client pkg created for game: $game_id")
+	@info "LOG - New client pkg created for game: $game_id"
 	
 	
 end
@@ -3303,9 +3311,8 @@ function fn_nextPlaying_payload(game_code::String)
 		return _pkg::Dict
 
 	catch e
-
-		error("ERROR generating payload for next move, $e")
-
+		@error "ERROR generating payload for next move, $e"
+		e |> throw
 	end
 
 end
@@ -3367,7 +3374,7 @@ function update_serverStates!(_game_code, _player_id, turn_recap, ai_play = fals
 		push!(games_log_dict[_game_code][:client_delta], reshape_out_fields(new_gs_sim))
 	unlock(games_lock)
 	
-	println("LOG - Server game state and delta updated")
+	@info "LOG - Server game state and delta updated"
 
 
 end
@@ -3440,7 +3447,7 @@ function find_treepotIndex(gs_id::Dict, treepots::Vector)::Int
 
 	# throw error if not found - it shouldn't happen
 	if isnothing(treepot_index) 
-		error("ERROR - Treepot index for $gs_id can't be found")
+		@error "ERROR - treepot_index for $gs_id can't be found"
 	else
 		return treepot_index
 	end
@@ -3800,7 +3807,7 @@ try
 	_runtime::Int = (now() - _time_start).value
 	_expl_rate::Int = (num_px_moves == max_i == 0) ? 0 : round(max_i/num_px_moves*100)
 
-	println("LOG - Server turn, $__pick_txt pick - runtime: $(_runtime)ms - expl.rate: $(_expl_rate)% [ $num_px_moves ] - pruned: $num_pruned_moves")
+	@info "LOG - Server turn, $__pick_txt pick - runtime: $(_runtime)ms - expl.rate: $(_expl_rate)% [ $num_px_moves ] - pruned: $num_pruned_moves"
 	
 	return turn_recap
 
@@ -3858,10 +3865,6 @@ function game_runner(msg)
 # this function takes care of orchestrating messages and running the game
 # scenario: a game has been created and one or both players have joined
 # players may have made or not a move, and asking to advance the game
-
-	# check if necessary to reduce mem pressure
-	# runs once every 2hrs or when available memory < 4% of total
-	_mem_cleanup!()
 	
 	# retrieve game and caller move details
 	_msg_code = msg[:msg_code]
@@ -3938,7 +3941,7 @@ function game_runner(msg)
 				PLAY_payload = deepcopy(END_payload)
 				WAIT_payload = deepcopy(END_payload)
 
-				println("LOG - Game $_game_code completed")
+				@info "LOG - Game $_game_code completed"
 
 			end
 			
@@ -3959,7 +3962,7 @@ function game_runner(msg)
 
 			if is_human_playing_next(_game_code) # human plays current turn
 				
-				println("SRV - HUMAN plays next, passing on delta")
+				@info "SRV - HUMAN plays next, passing on delta"
 
 				# add turn information
 				setindex!(PLAY_payload, get_last_turn_details(_game_code)[:turn_no], :turn_no)
@@ -3969,7 +3972,7 @@ function game_runner(msg)
 				
 			else # AI plays current turn
 				
-				println("LOG - Server plays")
+				@info "LOG - Server plays"
 
 				if end_check[:end_flag] # AI loses by score or human resigned
 
@@ -3991,7 +3994,7 @@ function game_runner(msg)
 					# re-check if last AI play ended game
 					end_check = check_update_game_end!(_game_code)
 					if end_check[:end_flag]
-						println("LOG - Game $_game_code completed")
+						@info "LOG - Game $_game_code completed"
 					end
 				
 					if end_check[:end_flag] # AI beats human w/ last move
@@ -4092,7 +4095,7 @@ function fn_advance_game(ws, msg)
 
 	catch e
 
-		println("ERROR in fn_advance_game - $e")
+		@error "ERROR in fn_advance_game - $e"
 		stacktrace(catch_backtrace())
 	end
 end
@@ -4180,7 +4183,7 @@ function start_ws_server()
 
 
 	# start new server (it spawns its on task)
-    ws_server = WebSockets.listen!(ws_ip, ws_port; verbose = true) do ws
+    ws_server = WebSockets.listen!(ws_ip, ws_port) do ws
 
 		for msg in ws
 
@@ -4230,37 +4233,6 @@ function start_ws_server()
 	
 end
 
-# ╔═╡ 91c35ba0-729e-4ea9-8848-3887936a8a21
-# this function is mostly needed because due to the reactive nature of Pluto,
-# anytime we change something in the child functions (parameters) the ws server is initiated again
-# so we're killing the previous one to avoid errors (listening on same ip/port)
-	
-function reactive_start_server(ws_array, _msg_log, _msg_log_OG)
-
-	# start websocket server if there's none
-	if isempty(ws_array)
-
-		start_ws_server(ws_array, _msg_log, _msg_log_OG)
-
-	# otherwise, close all open ones existing and start a new one
-	else
-
-		# check task status 
-		_open_ws = filter(ws -> !istaskdone(ws.task), ws_array)
-		
-		for ws in _open_ws
-			HTTP.forceclose(ws)
-			println("WebSocket server $(objectid(ws.task)) STOP at $(now())")
-		end
-		
-		
-		sleep(0.025)
-		start_ws_server(ws_array, _msg_log, _msg_log_OG)
-		
-	end
-
-end
-
 # ╔═╡ b1e9aafc-6473-4114-a5d5-b0c3114eab7d
 function start_ws_watchdog()
 # this function is mostly needed due to the reactive nature of Pluto,
@@ -4281,12 +4253,14 @@ function start_ws_watchdog()
 	# start new watchdog
 	watchdog_task = @spawn try 
 
-			@info "LOG - New watchdog started: $watchdog_task"
-
 			#ws_array |> empty!
 
 			while true
 				try
+
+					# check if necessary to reduce memory pressure
+					# runs once every 2hrs or when available_memory < threshold
+					_mem_cleanup!() # could be moved to separate task
 				
 					# start websocket server if there's none or they're all done/closed
 					if isempty(ws_array) || all(ws -> istaskdone(ws.task), ws_array) || all(ws -> !isopen(ws.listener.server), ws_array)
@@ -4318,6 +4292,7 @@ function start_ws_watchdog()
 		end
     
     # save watchdog task reference
+	@info "LOG - New watchdog started: $watchdog_task"
     push!(ws_watchdog, watchdog_task)
 
 end
@@ -4327,8 +4302,8 @@ start_ws_watchdog()
 
 # ╔═╡ 24185d12-d29c-4e72-a1de-a28319b4d369
 # make it wait forever when running as a script
-# (as this cell is not wrapped in begin/end, it's never executed in pluto, and so it doesn't hang the main thread)
-println("> Service running")
+# this cell is not wrapped in begin/end, and so it's never executed in pluto (it would otherwise make main thread hang)
+@info "> Service started"
 wait(Condition())
 
 # ╔═╡ Cell order:
@@ -4403,29 +4378,22 @@ wait(Condition())
 # ╟─439903cb-c2d1-49d8-a5ef-59dbff96e792
 # ╟─f86b195e-06a9-493d-8536-16bdcaadd60e
 # ╟─466eaa12-3a55-4ee9-9f2d-ac2320b0f6b1
+# ╠═617f414a-f8c1-443e-bdd5-d17d92557a7d
+# ╟─69152551-c381-42f0-9ef6-a1c4ea969b34
+# ╟─61d75e9e-b2d3-4551-947b-e8acc11e2eeb
 # ╟─b170050e-cb51-47ec-9870-909ec141dc3d
 # ╠═c9233e3f-1d2c-4f6f-b86d-b6767c3f83a2
 # ╠═3eb3a140-0065-447a-a95a-5b919868098d
 # ╠═00094688-1b11-448c-9b09-4f2423cdcec1
 # ╠═691404a6-53bc-4340-a750-636fe219f633
 # ╠═1160c8c0-8a90-4c89-898f-328749611a76
-# ╟─91c35ba0-729e-4ea9-8848-3887936a8a21
+# ╠═279c87c4-f965-44ac-bd86-d45088166afa
 # ╠═0bb77295-be29-4b50-bff8-f712ebe08197
-# ╠═7042a7f7-e130-4601-a5f9-1e486da36a9e
-# ╠═a80e69bc-ea79-4ba0-898d-5989dc754a2e
-# ╠═c0b2b18a-f023-42e8-98df-f2fa45b618f8
-# ╠═c517cc4e-b605-4a2b-a445-993b82dacf9f
 # ╠═721547b0-7be1-41d6-bffe-cb82a5c294cd
-# ╠═ba840e33-9e18-478b-9d51-aa196e7bf75e
-# ╠═9a9ded0d-cfd8-4b2f-a849-6a30bcccef9d
-# ╠═70b479c1-9613-4b8c-a325-b09aab0211f7
-# ╠═046d983f-5b37-44ed-8ec8-ef9e53feca4d
-# ╠═2fac931f-5e0d-4525-adc4-62e88a2fbb2d
-# ╠═cdba6c7c-13d1-45d4-9fa6-52c8b05ecfc7
-# ╠═15704701-8faa-4212-a506-1f4d7ec15a9e
-# ╠═f936af7d-c2a6-47c0-9e14-eae6b934ee1e
-# ╟─7c026677-5c44-4a12-99a4-2d1228e31795
+# ╠═9b726652-e1df-4c9e-b159-afbf74d9e97b
+# ╟─dfcd4ee6-8242-48a8-b2c0-99386739cf2d
 # ╟─5ff005dd-2347-4dc3-a24f-42cb576822fc
+# ╟─7c026677-5c44-4a12-99a4-2d1228e31795
 # ╟─80fcd730-a945-4057-9617-de88425128fe
 # ╟─b1e9aafc-6473-4114-a5d5-b0c3114eab7d
 # ╟─d5239071-d71a-4e56-a938-5051e23a07de
@@ -4436,14 +4404,10 @@ wait(Condition())
 # ╟─064496dc-4e23-4242-9e25-a41ddbaf59d1
 # ╟─28ee9310-9b7d-4169-bae4-615e4b2c386e
 # ╟─a6c68bb9-f7b4-4bed-ac06-315a80af9d2e
-# ╠═b1b9e9fb-ce76-462a-9c12-fdfe3dd6433d
-# ╠═cc1a5948-d6d5-4b9e-8731-85b7eb7e601d
 # ╟─32307f96-6503-4dbc-bf5e-49cf253fbfb2
 # ╟─ac87a771-1d91-4ade-ad39-271205c1e16e
 # ╟─ca346015-b2c9-45da-8c1e-17493274aca2
 # ╟─88616e0f-6c85-4bb2-a856-ea7cee1b187d
-# ╟─69152551-c381-42f0-9ef6-a1c4ea969b34
-# ╟─61d75e9e-b2d3-4551-947b-e8acc11e2eeb
 # ╟─a7b92ca8-8a39-4332-bab9-ed612bf24c17
 # ╟─384e2313-e1c7-4221-8bcf-142b0a49bff2
 # ╟─5d6e868b-50a9-420b-8533-5db4c5d8f72c

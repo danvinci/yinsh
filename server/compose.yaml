@@ -7,9 +7,9 @@
 services:
   
   # NGINX as reverse proxy
-  nginx:
-    image: nginx:alpine
+  nginx_proxy:
     container_name: nginx_proxy
+    image: nginx:alpine
     volumes:
       - ./proxy/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./data/frontend:/var/frontend
@@ -32,10 +32,10 @@ services:
 
 
   # yinsh service
-  backend: 
+  yinsh_server: 
+    container_name: yinsh_server
     build:
       context: ./yinsh_server
-    container_name: yinsh_server
     logging:
       driver: "local"
       options:
