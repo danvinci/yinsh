@@ -300,12 +300,12 @@ function RingsMode_Option() {
       when={randomRings()}
       fallback={
         <div class="game_opt_item game_opt_item_bottom_space" onClick={toggle_randomRings}>
-          <img class="game_opt" src={manual} height="28px" width="28px"></img>
+          <img class="game_opt" src={manual} height="33px" width="33px"></img>
           <span class="game_opt">Manual setup</span>
         </div>
       }>
         <div class="game_opt_item game_opt_item_bottom_space" onClick={toggle_randomRings}>
-          <img class="game_opt" src={random} height="28px" width="28px"></img>
+          <img class="game_opt" src={random} height="33px" width="33px"></img>
           <span class="game_opt">Random setup</span>
         </div>
       </Show>  
@@ -331,19 +331,19 @@ function PlayerColor_Option() {
       <Switch>
         <Match when={playerColor() === "random"}>
           <div class="game_opt_item game_opt_item_bottom_space" onClick={rotateColor}>
-            <img class="game_opt" src={random_color} height="28px" width="28px"></img>
+            <img class="game_opt" src={random_color} height="33px" width="33px"></img>
             <span class="game_opt">Random color</span>
           </div>
         </Match>
         <Match when={playerColor() === "black"}>
           <div class="game_opt_item game_opt_item_bottom_space" onClick={rotateColor}>
-            <img class="game_opt" src={black_color} height="28px" width="28px"></img>
+            <img class="game_opt" src={black_color} height="33px" width="33px"></img>
             <span class="game_opt">Black</span>
           </div>
         </Match>
         <Match when={playerColor() === "white"}>
           <div class="game_opt_item game_opt_item_bottom_space" onClick={rotateColor}>
-            <img class="game_opt" src={white_color} height="28px" width="28px"></img>
+            <img class="game_opt" src={white_color} height="33px" width="33px"></img>
             <span class="game_opt">White</span>
           </div>
         </Match>
@@ -392,12 +392,12 @@ function SoundSettings() {
       when={sound()}
       fallback={
         <div class="settings_item set_off item_bottom_space" onClick={toggle_sound}>
-          <img class="set_img set_off" src={svg_sound_OFF} height="28px" width="28px"></img>
+          <img class="set_img set_off" src={svg_sound_OFF} height="33px" width="33px"></img>
           <span class="set_off">Sound effects OFF</span>
         </div>
       }>
         <div class="settings_item set_on item_bottom_space" onClick={toggle_sound}>
-          <img class="set_img set_on" src={svg_sound_ON} height="28px" width="28px"></img>
+          <img class="set_img set_on" src={svg_sound_ON} height="33px" width="33px"></img>
           <span class="set_on">Sound effects ON</span>
         </div>
       </Show>  
@@ -428,12 +428,12 @@ function RingsCuesSettings() {
       when={rings_cues()}
       fallback={
         <div class="settings_item set_off item_bottom_space" onClick={toggle_rings_cues}>
-          <img class="set_img set_off" src={rings_cues_OFF} height="28px" width="28px"></img>
+          <img class="set_img set_off" src={rings_cues_OFF} height="33px" width="33px"></img>
           <span class="set_off">Rings visual cues OFF</span>
         </div>
       }>
         <div class="settings_item sfx_on item_bottom_space" onClick={toggle_rings_cues}>
-          <img class="set_img set_on" src={rings_cues_ON} height="28px" width="28px"></img>
+          <img class="set_img set_on" src={rings_cues_ON} height="33px" width="33px"></img>
           <span class="set_on">Rings visual cues ON</span>
         </div>
       </Show>  
@@ -464,12 +464,12 @@ function LegalMovesCuesSettings() {
       when={lm_cues()}
       fallback={
         <div class="settings_item set_off" onClick={toggle_lm_cues}>
-          <img class="set_img set_off" src={moves_cues_OFF} height="28px" width="28px"></img>
+          <img class="set_img set_off" src={moves_cues_OFF} height="33px" width="33px"></img>
           <span class="set_off">Moves visual cues OFF</span>
         </div>
       }>
         <div class="settings_item set_on" onClick={toggle_lm_cues}>
-          <img class="set_img set_on" src={moves_cues_ON} height="28px" width="28px"></img>
+          <img class="set_img set_on" src={moves_cues_ON} height="33px" width="33px"></img>
           <span class="set_on">Moves visual cues ON</span>
         </div>
       </Show>  

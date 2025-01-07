@@ -7,11 +7,11 @@ node_modules
 # macOS artifact
 .DS_Store
 
-# temp storage, not used now 
+# temp storage
 *.jld2
 
 # profiling data 
 *.pb.gz
 
-# certificates in /certs must be copied to the server separately for NGiNX (not in repo)
+# certificates
 *.pem

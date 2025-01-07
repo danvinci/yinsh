@@ -14,7 +14,7 @@ body, html {
     header {
         display: grid;
         grid-template-columns: 1fr max-content;
-        margin: 21px;
+        margin-top: 25px;
         margin-left: 4%;
         margin-right: 5%;
         align-items: center;
@@ -27,7 +27,7 @@ body, html {
             margin-top: 0px;
             margin-bottom: 0px;
             font-weight: 500;
-            font-size: 1.35rem;
+            font-size: 1.6rem;
             display: inline-block;
             cursor: pointer;
         }
@@ -43,14 +43,15 @@ body, html {
                 grid-template-columns: auto auto;
                 text-decoration: none;
                 align-items: center;
-                margin-right: 20px;
+                margin-left: 10px;
+                margin-right: 10px;
 
             }
 
                 img.header_link_img {
-                    height: 20px;
-                    width: 20px;
-                    margin-right: 4px;
+                    height: 24px;
+                    width: 24px;
+                    margin-right: 5px;
                     filter: opacity(50%);
                     transition: all .1s ease-in-out;
                 }
@@ -119,8 +120,8 @@ body, html {
                 display: grid;
                 grid-template-rows: auto 3fr 1fr;
 
-                margin-right: 5%;
-                margin-left: 0%;
+                margin-right: 0%;
+                margin-left: 10%;
                 padding-top: 20%;
                 padding-bottom: 25%;
 
@@ -142,11 +143,11 @@ body, html {
                     border-style:solid;
                     border-color: rgb(250, 250, 250);
                     
-                    padding: 7px;
-                    margin-bottom: 8px;
-                    border-radius: 8px;
+                    padding: 8px;
+                    margin-bottom: 10px;
+                    border-radius: 10px;
                 
-                    height: 65px;
+                    height: 75px;
                     
                     font-size: small;
                     white-space: pre-wrap;
@@ -154,6 +155,7 @@ body, html {
                     line-height: 0.95;
 
                     font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
+                    font-size: 15px;
 
                     color: rgb(170, 170, 170);
 
@@ -184,7 +186,7 @@ body, html {
                         border-style: solid;
                         color:rgb(249, 249, 249);
                         width: 90%;
-                        margin-bottom: 15px;
+                        margin-bottom: 18px;
                     }
         
                     button {
@@ -194,17 +196,17 @@ body, html {
                         
                         color: white;
                         
-                        border-radius: 6px;
-                        border-width: 3px;
+                        border-radius: 7px;
+                        border-width: 4px;
 
-                        padding: 8px 0px;
-                        margin-bottom: 8px;
+                        padding: 9px 0px;
+                        margin-bottom: 10px;
 
                         box-sizing: border-box;
                         width: 12vw; /* generic rule we overwrite later */
 
                         font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
-                        font-size: 12px;
+                        font-size: 15px;
                         
                         transition: all .1s ease-in-out;
 
@@ -215,10 +217,10 @@ body, html {
                         height: 6vh;
                         width: 10vw;
 
-                        border-radius: 11px;
-                        border-width: 4px;
+                        border-radius: 13px;
+                        border-width: 5px;
 
-                        font-size: 16px;
+                        font-size: 19px;
                     }
 
                     button:hover:enabled {
@@ -236,13 +238,13 @@ body, html {
                         color: rgb(173, 171, 171);
 
                         width: max-content;
-                        height: 30px;
+                        height: 36px;
 
                         padding: 0px;
                         margin: 0px;
 
                         font-weight: 600;
-                        font-size: 23px;
+                        font-size: 27px;
 
                     }
 
@@ -269,19 +271,19 @@ body, html {
 
                             border-color: rgb(206, 206, 206);
                             border-style: dashed;
-                            border-radius: 3px;
+                            border-radius: 4px;
 
-                            margin-bottom: 7px;
+                            margin-bottom: 9px;
 
                             box-sizing: border-box;
                             width: 90%;
                             /*height: calc(100% - 2px);*/
-                            padding: 5px;
+                            padding: 6px;
 
                             font-family: 'Roboto Mono', monospace;
                             font-weight: 600;
 
-                            font-size: 12px;
+                            font-size: 14px;
                             color: rgb(109, 109, 109);
 
                         }
@@ -291,17 +293,17 @@ body, html {
 
                         border-color: rgb(206, 206, 206);
                         border-style: solid;
-                        border-radius: 3px;
+                        border-radius: 4px;
                     }
 
                     button.exit_button {
                         height: 6vh;
                         width: 10vw;
 
-                        border-radius: 11px;
-                        border-width: 4px;
+                        border-radius: 13px;
+                        border-width: 5px;
 
-                        font-size: 16px;
+                        font-size: 19px;
 
                         background-color: rgb(235, 235, 235);
                         border-color: rgb(245, 245, 245);
@@ -326,8 +328,8 @@ body, html {
                         border-color: rgb(237, 236, 236);
 
                         width: 6vw;
-                        margin-left:5px;
-                        margin-right:5px;
+                        margin-left:7px;
+                        margin-right:7px;
                     }
 
                         button.exit_button_back:hover {
@@ -339,22 +341,22 @@ body, html {
                     button.exit_button_confirm {
 
                         width: 6vw;
-                        margin-left:5px;
-                        margin-right:5px;
+                        margin-left:7px;
+                        margin-right:7px;
 
                     }
 
                     span.exit_game_txt{
 
                         font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
-                        font-size: 13px;
+                        font-size: 15px;
                         color: rgb(126, 126, 126);
                     }
 
                 /* Block for game options */
                 div.game_options_wrapper {
                     
-                    padding-left: 15px;
+                    padding-left: 20px;
                     box-sizing: border-box;
                 }
 
@@ -364,7 +366,7 @@ body, html {
                         grid-template-columns: max-content max-content;
                         align-items: center;
 
-                        font-size: 12px;
+                        font-size: 14px;
                         font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
 
                         cursor: default;
@@ -372,20 +374,7 @@ body, html {
                     }
 
                     div.game_opt_item_bottom_space {
-                        margin-bottom: 0.3rem;
-                    }
-
-                    p.game_opt_title {
-                        color: rgb(87, 87, 87);
-                        font-size: 12px;
-                        font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
-
-                    }
-
-                    p.game_opt_subtitle {
-                        color: rgb(140, 140, 140);
-                        font-size: 12px;
-                        font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
+                        margin-bottom: 0.4rem;
                     }
 
                     /*
@@ -400,9 +389,9 @@ body, html {
                         }
 
                     img.game_opt{
-                        height: 28px;
-                        width: 28px;
-                        margin-right: 4px;
+                        height: 33px;
+                        width: 33px;
+                        margin-right: 5px;
                         transition: all .1s ease-in-out; 
                         filter: opacity(70%)
                     }
@@ -426,7 +415,7 @@ body, html {
                         grid-template-columns: max-content max-content;
                         align-items: center;
 
-                        font-size: 12px;
+                        font-size: 14px;
                         font-family: 'Rubik', 'Roboto', 'Open Sans', sans-serif;
 
                         cursor: default;
@@ -434,13 +423,13 @@ body, html {
                     }
 
                     div.item_bottom_space {
-                        margin-bottom: 0.3rem;
+                        margin-bottom: 0.4rem;
                     }
 
                     img.set_img {
-                        height: 28px;
-                        width: 28px;
-                        margin-right: 4px;
+                        height: 33px;
+                        width: 33px;
+                        margin-right: 5px;
                     }
 
                     /* setting transition time equal for both img and span */

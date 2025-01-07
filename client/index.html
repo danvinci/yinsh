@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv = "Content-Security-Policy" content="default-src 'self'; script-src 'self' *.cloudflareinsights.com https://*.posthog.com 'unsafe-inline' blob: ; connect-src 'self' ws://localhost:6091 wss://yinsh.net/api https://*.posthog.com ; img-src 'self' https://*.posthog.com; font-src 'self' https://fonts.gstatic.com https://*.posthog.com ; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.posthog.com; media-src 'self' https://*.posthog.com; ">
+    <meta http-equiv = "Content-Security-Policy" content="default-src 'self'; script-src 'self' *.cloudflareinsights.com https://*.posthog.com 'unsafe-inline' blob: ; connect-src 'self' ws://localhost:6091 ws://localhost:80/api wss://yinsh.net/api https://*.posthog.com ; img-src 'self' https://*.posthog.com; font-src 'self' https://fonts.gstatic.com https://*.posthog.com ; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.posthog.com; media-src 'self' https://*.posthog.com; ">
     
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
@@ -64,17 +64,17 @@
         <!-- fixing height/width for svg necessary to avoid size-adj on load 800px -> normal -->
 
         <a class="header_link" href="http://www.gipf.com/yinsh/rules/rules.html" target="_blank">
-          <img class="header_link_img header_rules" src="/src/assets/book.svg"  height="20px" width="20px">
+          <img class="header_link_img header_rules" src="/src/assets/book.svg"  height="24px" width="24px">
           <span class="header_link_text" >Rules</span>
         </a>
 
         <a class="header_link" href="https://github.com/danvinci/yinsh/" target="_blank">
-          <img class="header_link_img header_github" src="/src/assets/ico_github.svg" height="20px" width="20px">
+          <img class="header_link_img header_github" src="/src/assets/ico_github.svg" height="24px" width="24px">
           <span class="header_link_text">GitHub</span>
         </a>
 
         <a class="header_link" href="https://ko-fi.com/danvinci" target="_blank">
-          <img class="header_link_img header_support" src="/src/assets/seedling.svg"  height="20px" width="20px">
+          <img class="header_link_img header_support" src="/src/assets/seedling.svg"  height="24px" width="24px">
           <span class="header_link_text">Support</span>
         </a>
 
