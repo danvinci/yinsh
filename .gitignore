@@ -1,6 +1,10 @@
 # NPM environment
 node_modules
 
+# folders not bein versioned
+client/dist/
+docs/
+
 # VS code settings
 **/.vscode/
 
