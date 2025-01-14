@@ -6,6 +6,7 @@ When I started working on this project, I wanted to challenge myself in building
 
 &nbsp;
 
+
 ### Game rules
 - The game starts with 5 rings placed by each player.
 - Each player, in their own turn, can activate one of their rings by placing a same-color marker in it.
@@ -18,8 +19,12 @@ When I started working on this project, I wanted to challenge myself in building
 - More details can be found on the [rules webpage](https://www.gipf.com/yinsh/rules/rules.html) from the game inventor.
 
 &nbsp;
+<img width="1902" alt="setup" src="https://github.com/user-attachments/assets/3e37a8e4-5f45-4d72-b9f7-4d8064e32abd" />
 
-![yinsh_play_server](https://github.com/danvinci/yinsh/assets/15657499/6034f54b-4b22-4559-ad0c-8ec9fd2ad4d9)
+<img width="1901" alt="first_move" src="https://github.com/user-attachments/assets/ae12ae5e-0093-41ea-88a3-bc3b8d0f2742" />
+
+https://github.com/user-attachments/assets/4a56eeb7-40ad-4ef1-90dd-a9da41e1731e
+
 
 &nbsp;
 
