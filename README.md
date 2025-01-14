@@ -1,77 +1,85 @@
 # YINSH
 
-Yinsh is an abstract strategy board game for two players, created by [Kris Burm](https://en.wikipedia.org/wiki/Kris_Burm). It is played on a hexagonal board where players place rings of their color. The objective is to create rows of five markers of the same color, while removing rings from the board to keep track of the score. Rings can only be moved when 'activated' by placing a same-color marker, which is left behind when the ring moves. 
+Yinsh is an abstract strategy board game for two players, created by [Kris Burm](https://en.wikipedia.org/wiki/Kris_Burm). 
+It's played on a hexagonal board, where players place rings of their color. The objective is to create rows of five markers of the same color, while removing rings to keep track of the score. 
+Just visit [yinsh.net](https://yinsh.net/) to start playing. 
 
-When I started working on this project, I wanted to challenge myself in building it, and create an experience that doesn't require sign-ups: anyone can go to [yinsh.net](https://yinsh.net/) and start playing. This implementation supports any multiple-scoring cases, and handles pre-move scoring when opposite-color rows have been formed by the opponent.
+&nbsp;
+
+
+### Building & Learning
+I built this as a way to challenge myself, and create something complete yet minimal and intuitive - no accounts needed, just gameplay. 
+Using minimal dependencies, I designed each part of the experience from the ground up: from drawing the board and UI elements to guide gameplay, to handling tricky scoring cases and building an adversarial AI. 
+Starting with some working knowledge of Julia and JavaScript, I picked up everything else along the way.
 
 &nbsp;
 
 
-### Game rules
-- The game starts with 5 rings placed by each player.
-- Each player, in their own turn, can activate one of their rings by placing a same-color marker in it.
-- An activated ring can the be moved, but only in straight lines.
-- Rings can't move over other rings.
-- Rings can move over markers, but must stop at the first empty slot right after.
-- Once a ring is placed, all the hovered markers flip - changing their color.
-- If a player gets five markers in a row of their color, they can remove them - as well as one of their rings to mark the score.
-- The first to recover three rings wins - or just one ring in the 'quick version' variant of the game.
-- More details can be found on the [rules webpage](https://www.gipf.com/yinsh/rules/rules.html) from the game inventor.
+### Quick Start
+- Play against the AI, or invite a friend
+- For two-player games: get a game ID code and share it with your opponent
+- Pick between random or manual rings setup
 
 &nbsp;
+
+
+### How to play
+- Each player gets 5 rings
+- On your turn: place a marker in one of your rings to activate it, then move that ring
+- Rings can only move in straight lines
+- Rings can't move over other rings
+- Rings can move over markers, but must stop at the first empty slot right after 
+- Moving a ring over markers will flip all the markers they pass over - changing their color
+- Form rows of 5 markers to score: remove the row and one of your rings to mark the score
+- The first to remove 3 rings wins (or just 1 ring in quick mode)
+- More details on the [rules webpage](https://www.gipf.com/yinsh/rules/rules.html) from the game inventor
+
+&nbsp;
+
 <img width="1902" alt="setup" src="https://github.com/user-attachments/assets/3e37a8e4-5f45-4d72-b9f7-4d8064e32abd" />
+
+&nbsp;
 
 <img width="1901" alt="first_move" src="https://github.com/user-attachments/assets/ae12ae5e-0093-41ea-88a3-bc3b8d0f2742" />
 
+&nbsp;
+
 https://github.com/user-attachments/assets/4a56eeb7-40ad-4ef1-90dd-a9da41e1731e
 
+&nbsp; 
+
+### Technical Stack
+- Frontend: JavaScript + Canvas + SolidJS
+- Backend: Julia (including the adversarial AI, a minimax heuristic at depth-2)
+- Deployment: Docker & NGiNX on a Hetzner VM + Cloudflare
 
 &nbsp;
-
-### How to play
-The game can be played against the server, or in two-players mode:
-- Play > Invite a friend
-- Copy the game ID code from the text console
-- Pass it to the other player, that will use it to join 
-
-&nbsp;
-
-### Technical bits
-I've built it using:
-- JavaScript and the Canvas API for the game interface
-- SolidJS for the navigation UI
-- Julia for everything that runs server-side, including the adversarial 'AI': a minimax heuristic at depth-2
-- Deployed using Docker, behind Cloudflare, at [yinsh.net](https://yinsh.net/)
 
 
 ### Improvement ideas
-- Add support for touch events (enable to play on tablets)
-- Make use of a (low-latency) database server-side (Redis/RocksDB?)
+- Dark mode
+- Smarter adversarial AI
+- Support for mobile/tablet
+- User authentication & game history
 - Add a join by invite link functionality
 - Replay/navigate game history in client 
-- Make a mobile/tablet/app version
-- Performance optimizations in server play
-- Make anything exchanged with the client a parameter (eg. ids of markers/players/rings)
-- Cleaner implementation of game_runner function
-- Simplify state handling in interaction code
-- Adding quick game option (first to score wins)
-- Dark mode
-- Play with strangers / match-making
+- Add quick game option (first to score wins)
+- Play with strangers / match-making / tournaments
 - New end-game animations
-- Smarter adversarial AI
-- Got any? Feel free to share, just open an issue on this repo!
+
+Got any? Just open an issue on this repo!
 
 &nbsp;
 
 ### Credits
-- Sounds (CC0 licensed) sourced from [freesound](https://freesound.org/)
-- (some) icons (CC0 licensed) sourced from [SVGrepo](https://www.svgrepo.com/)
+- Sounds sourced from [freesound](https://freesound.org/) (CC0)
+- (some) icons sourced from [SVGrepo](https://www.svgrepo.com/) (CC0)
 - Julia [repo](https://github.com/JuliaLang/julia)
 - Pluto.jl [repo](https://github.com/fonsp/Pluto.jl)
 - HTTP.jl [repo](https://github.com/JuliaWeb/HTTP.jl)
 - JSON3.jl [repo](https://github.com/quinnj/JSON3.jl)
 - Solid JS [repo](https://github.com/solidjs/solid)
-
 &nbsp;
+
 ### License
-This work is open-source and licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) - no commercial use is allowed.
+This work is open-source and licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) - commercial use is not allowed.
