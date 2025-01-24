@@ -79,6 +79,10 @@ export function UserText() {
 // game setup controls should be different if game is in progress (eg. resign/abandon game)
 export function GameSetup() {
 
+  // preload icons to avoid flashing at first (nested) component load
+  onMount(() => {[manual, random].forEach(src => new Image().src = src);});
+  onMount(() => {[random_color, black_color, white_color].forEach(src => new Image().src = src);});
+
   // flag for keeping track if game is ongoing or not (changes controls mode)
   const [game_inProgress, set_game_inProgress] = createSignal(false);
   //const toggle_gameInProgress = () => set_gameInProgress(!gameInProgress()); // called by event from core (?)
@@ -291,9 +295,6 @@ const toggle_randomRings = () => set_randomRings(!randomRings());
 // component for ring settings on/off
 function RingsMode_Option() {
 
-  // preload icons to avoid flashing
-  onMount(() => {[manual, random].forEach(src => new Image().src = src);});
-
   return (
     <div class="">
       <Show
@@ -322,9 +323,6 @@ const rotateColor = () => {
 
 // component for ring settings on/off
 function PlayerColor_Option() {
-
-  // preload icons to avoid flashing
-  onMount(() => {[random_color, black_color, white_color].forEach(src => new Image().src = src);});
 
   return (
     <div class="">
@@ -356,6 +354,11 @@ function PlayerColor_Option() {
 ///// SETTINGS BLOCK
 export function Settings(){
 
+  // preload icons
+  onMount(() => {[svg_sound_ON, svg_sound_OFF].forEach(src => new Image().src = src);});
+  onMount(() => {[rings_cues_ON, rings_cues_OFF].forEach(src => new Image().src = src);});
+  onMount(() => {[moves_cues_ON, moves_cues_OFF].forEach(src => new Image().src = src);});
+
   return(
     <div class="component_settings_wrapper">
       <SoundSettings></SoundSettings>
@@ -370,9 +373,6 @@ export function Settings(){
 
 // component for sounds on/off
 function SoundSettings() {
-
-  // preload icons to avoid flashing
-  onMount(() => {[svg_sound_ON, svg_sound_OFF].forEach(src => new Image().src = src);});
 
   const [sound, set_sound] = createSignal(true); 
   
@@ -407,9 +407,6 @@ function SoundSettings() {
 // component for rings cues on/off
 function RingsCuesSettings() {
 
-  // preload icons to avoid flashing
-  onMount(() => {[rings_cues_ON, rings_cues_OFF].forEach(src => new Image().src = src);});
-
   const [rings_cues, set_rings_cues] = createSignal(true); 
   
   // toggle that calls functions exported by this module
@@ -442,9 +439,6 @@ function RingsCuesSettings() {
 
 // component for legal moves cues on/off
 function LegalMovesCuesSettings() {
-
-  // preload icons to avoid flashing
-  onMount(() => {[moves_cues_ON, moves_cues_OFF].forEach(src => new Image().src = src);});
 
   const [lm_cues, set_lm_cues] = createSignal(true); 
   
