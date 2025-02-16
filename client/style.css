@@ -25,7 +25,7 @@ body, html {
 .game_main {
     height: 100%;
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: 7fr 2fr;
     margin: 20px 5% 0 1%;
     background-color: white;
 }
@@ -99,16 +99,16 @@ header {
 
 /* side panel */
 .side_panel {
-    display: grid;
-    grid-template-rows: auto 3fr 1fr;
-    margin-right: 0;
-    margin-left: 10%;
-    row-gap: 10px;
-    align-items: center;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    row-gap: 10px;      
+    overflow-y: auto; 
 }
 
 /* mobile-first adjustments */
-@media (max-width: 768px) {
+@media (max-aspect-ratio: 1) {
 
     header {
         margin: 20px 5% 0 4%;
@@ -135,18 +135,19 @@ header {
     div.canvas_parent {
         min-height: 250px;
         width: 100%;
-        aspect-ratio: 1.1;
+        aspect-ratio: 1.18;
         flex-shrink: 1;
     }
 
     .side_panel {
+        display: flex;
+        flex-direction: column;
         flex-grow: 1;
         overflow-y: auto; 
         row-gap: 3px;             
-        padding: 5px 0;           
-        margin-left: 3%;          
-        align-items: start;
-        margin: 0;
+        padding: 5px 0;                 
+        align-items: center;
+        justify-content: space-evenly;
         padding: 0 10px;
     }
 
@@ -154,11 +155,16 @@ header {
         height: 20px !important;
         min-height: 20px;
         padding: 4px 4px 6px 4px;                             
-        margin: 5px 0;
+        width: 90%;
     }
 
-    .game_controls {
-        row-gap: 4px;    
+    div.game_controls {
+        row-gap: 8px;
+        margin-bottom: 10px;    
+    }
+
+    div.game_options_wrapper {
+        padding-left: 0px;
     }
 
     .component_settings_wrapper {
@@ -166,7 +172,7 @@ header {
         justify-content: center;
         flex-wrap: wrap;
         margin: 0 auto;
-        padding: 0 10px;
+        padding: 0px;
         column-gap: 10px;
     }
 
@@ -177,9 +183,44 @@ header {
 
     button {
         width: auto;       
-        min-width: 120px;
+        min-width: 140px;
         height: 36px;
-        padding: 0 15px;
+        line-height: 15px;
+        font-size: 15px !important; /* (36px - 2*3px border)/2 -> need to account for border*/
+        border-radius: 7px;
+        border-width: 3px !important;
+    }
+
+    button.play_btn, button.exit_button {
+        width: auto;
+        min-width: 120px; 
+        height: 40px !important;
+        line-height: 17px;
+        font-size: 18px !important;
+        border-radius: 7px;
+        margin-top: 10px;
+    }
+
+    button.back_nav_btn {
+        font-size: 25px !important;
+        height: auto;
+        user-select: none;
+        padding: 8px 0 0 0;
+        border-width: 0px !important;
+    }
+
+    .join_input_txt_class {
+        width: 97% !important;
+        font-size: 13px !important;
+    }
+
+    hr.menu_line {
+        margin: 0 0 5px 0;
+    }
+
+    img.game_opt {
+        height: 30px !important;
+        width: 30px !important;
     }
 
     img.set_img {
@@ -189,19 +230,6 @@ header {
 
     .header_link {
         margin: 0 5px;
-    }
-}
-
-/* desktop overrides */
-@media (min-width: 768px) {
-
-    .game_main {
-        grid-template-columns: 7fr 2fr;
-    }
-
-    .side_panel {
-        padding-top: 20%;
-        padding-bottom: 25%;
     }
 }
 
@@ -249,6 +277,7 @@ button {
     background-color: var(--color-primary);
     color: white;
     border-radius: 7px;
+    border-width: 4px;
     padding: 9px 0;
     box-sizing: border-box;
     width: 12vw;
@@ -272,7 +301,7 @@ button:disabled {
     height: 6vh;
     width: 10vw;
     border-radius: 13px;
-    border-width: 5px;
+    border-width: 4px;
     font-size: 19px;
 }
 
@@ -286,7 +315,7 @@ button:disabled {
     margin: 0;
     font-weight: 500;
     font-size: 27px;
-    user-select: none
+    user-select: none;
 }
 
 button.back_nav_btn:hover {
@@ -301,7 +330,7 @@ button.exit_button {
     height: 6vh;
     width: 10vw;
     border-radius: 13px;
-    border-width: 5px;
+    border-width: 4px;
     font-size: 19px;
     background-color: rgb(235, 235, 235);
     border-color: rgb(245, 245, 245);
