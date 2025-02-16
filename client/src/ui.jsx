@@ -1,5 +1,5 @@
 import { createSignal, Show, Switch, Match, createResource, createEffect, on, onMount, onCleanup } from "solid-js";
-import { init_game_fromServer, draw_empty_game_board } from "./core.js";
+import { init_game_fromServer, draw_empty_game_board, window_resize_handler } from "./core.js";
 import { enableSound, disableSound } from "./sound.js";
 import { enableRingsCues, disableRingsCues } from "./data.js";
 import { enableLegalMovesCues, disableLegalMovesCues } from "./data.js";
@@ -28,8 +28,19 @@ export function GameCanvas() {
   // canvas component
   // auto-sizes based on size of outer container div -> div is already in place when component is rendering
   
-  // paint empty canvas after canvas elem rendering is done
-  onMount(() => {draw_empty_game_board()}); 
+  // paint empty canvas at component mount
+  onMount(() => {
+    
+    draw_empty_game_board();
+
+    // listen to changes in parent
+    const resizeObserver = new ResizeObserver(window_resize_handler);
+    resizeObserver.observe(document.querySelector('.canvas_parent'));
+    
+    // window resizing -> canvas and object adjustments
+    window.addEventListener('resize', window_resize_handler);
+
+  }); 
 
   return (
     <canvas id="canvas"></canvas>
@@ -212,7 +223,7 @@ export function GameSetup() {
             fallback={<button type="button" class="exit_button" onClick={toggle_exitGame}>Resign</button>}
           >
             <span class="exit_game_txt">Are you sure?</span>
-            <hr></hr>
+            <hr class="menu_line"></hr>
             <div class="exit_game_div">
               <button type="button" class="exit_button_back" onClick={toggle_exitGame}>No</button>
               <button type="button" class="exit_button_confirm" onClick={fn_game_exited_by_user}>Yes</button>

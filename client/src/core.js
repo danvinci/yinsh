@@ -62,9 +62,6 @@ import { ringDrop_playSound, markersRemoved_player_playSound, markersRemoved_opp
     export const GS_progress_game = 'progress_game' // normal gameplay
     export const GS_completed = 'completed'
 
-    // window resizing -> canvas and object adjustments
-    window.addEventListener('resize', window_resize_handler);
-
     // game termination by user (via UI)
     core_et.addEventListener('game_exited', resign_game_handler, false);
 
@@ -90,7 +87,7 @@ export function draw_empty_game_board() {
 }
 
 // window resizing -> impacts canvas, board, and objects (via drawing constants)
-function window_resize_handler() {
+export function window_resize_handler() {
 
     // if move is in-progress -> drop ring in place, to avoid weird stuff, due to rings re-ordering in array while last should be the one moving
     // important to be called before objects are re-initialized
@@ -358,8 +355,9 @@ async function server_actions_handler (event) {
         disableInteraction(); // a bit redundant, is disabled by default
         console.log(`USER - Wait for your opponent.`); 
 
-        ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Wait for your opponent` }));
-
+        if (get_current_turn_no() > 1){
+            ui_et.dispatchEvent(new CustomEvent('new_user_text', { detail: `Wait for your opponent` }));
+        };
 
     // GAME OVER
     } else if (next_action_code == CODE_action_end_game) { // handling case of winning/losing game
