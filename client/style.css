@@ -26,7 +26,7 @@ body, html {
     height: 100%;
     display: grid;
     grid-template-columns: 7fr 2fr;
-    margin: 1.5vh 4.5vw 0 1vw;
+    margin: 1.5vh 5vw 0 1vw;
     background-color: white;
 }
 
@@ -34,7 +34,7 @@ body, html {
 header {
     display: grid;
     grid-template-columns: 1fr max-content;
-    margin: 2.5vh 4.5vw 0 4vw;
+    margin: 2.5vh 5vw 0 4vw;
     align-items: center;
     font-family: var(--font-family-base);
 }
@@ -116,6 +116,14 @@ header {
 
     .header_title {
         font-size: 1.5rem;
+    }
+
+    .game_main {
+        margin: 0vh 4vw 0 1vw;
+    }
+
+    header {
+        margin: 2.5vh 4vw 0 4vw;
     }
     
     .side_panel {
