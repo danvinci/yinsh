@@ -59,7 +59,6 @@ https://github.com/user-attachments/assets/4a56eeb7-40ad-4ef1-90dd-a9da41e1731e
 ### Improvement ideas
 - Dark mode
 - Smarter adversarial AI
-- Support for mobile/tablet
 - User authentication & game history
 - Add a join by invite link functionality
 - Replay/navigate game history in client 
